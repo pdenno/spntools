@@ -26,9 +26,7 @@
   (let [mark (get-initial-marking pl)]
     {:id (get-id pl)
      :pid (swap! +pid-cnt+ inc)
-     :initial-marking mark
-     ;:marking mark
-     }))
+     :initial-marking mark}))
 
 (defn get-rate [tr]
     (when-let [str (-> (filter #(= :rate (:tag %)) (:content tr)) first :content first :content first)]
@@ -66,15 +64,13 @@
     (assoc ?m :arcs (vec (map essential-arc (:arcs ?m))))
     (dissoc ?m :raw)))
 
+;;;======== Above PNML reading stuff belongs elsewhere.=================================
+
 (defn initial-marking
   [pn]
   (vec (map :initial-marking (sort #(< (:pid %1) (:pid %2)) (:places pn)))))
 
-#_(defn marking
-  [pn]
-    (vec (map :marking (sort #(< (:pid %1) (:pid %2)) (:places pn)))))
-
-;;; POD maybe memoize something that doesn't get the pn. 
+;;; POD maybe memoize to something that doesn't get the pn. 
 (defn tid2obj
   [pn tid]
   (some #(when (= (:tid %) tid) %) (:transitions pn)))
@@ -143,7 +139,7 @@
 
 ;;; A links between markings are the *multiple possible* transitions from the source
 ;;; marking. Therefore, uniqueness of the link is specified as the marking at the tail
-;;; and the transition taken. Links look like [marking transition]. 
+;;; and the transition taken. Links look like [marking tid]. 
 ;;; The target marking is completely specified by the source and the transition. 
 (defn pick-link
   "Pick a link that hasn't been visited."
@@ -172,7 +168,7 @@
           (recur (:to next) (conj graph next)))
       graph)))
 
-(def machine2-example
+(def two-machine-example
   {:places
    [{:id :free-buffer-spots, :initial-marking 3}
     {:id :full-buffer-spots, :initial-marking 0}
