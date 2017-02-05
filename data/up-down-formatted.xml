@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<pnml>
+  <net id="Net-One" type="P/T net">
+    <token id="Default" enabled="true" red="0" green="0" blue="0"/>
+    <place id="down">
+      <graphics>
+        <position x="434.0" y="138.0"/>
+      </graphics>
+      <name>
+        <value>down</value>
+        <graphics>
+          <offset x="72.0" y="20.0"/>
+        </graphics>
+      </name>
+      <initialMarking>
+        <value>Default,0</value>
+        <graphics>
+          <offset x="0.0" y="0.0"/>
+        </graphics>
+      </initialMarking>
+      <capacity>
+        <value>0</value>
+      </capacity>
+    </place>
+    <place id="up">
+      <graphics>
+        <position x="215.0" y="132.0"/>
+      </graphics>
+      <name>
+        <value>up</value>
+        <graphics>
+          <offset x="-18.0" y="16.0"/>
+        </graphics>
+      </name>
+      <initialMarking>
+        <value>Default,1</value>
+        <graphics>
+          <offset x="0.0" y="0.0"/>
+        </graphics>
+      </initialMarking>
+      <capacity>
+        <value>0</value>
+      </capacity>
+    </place>
+    <transition id="come-up">
+      <graphics>
+        <position x="325.0" y="193.0"/>
+      </graphics>
+      <name>
+        <value>come-up</value>
+        <graphics>
+          <offset x="-5.0" y="35.0"/>
+        </graphics>
+      </name>
+      <orientation>
+        <value>0</value>
+      </orientation>
+      <rate>
+        <value>0.9</value>
+      </rate>
+      <timed>
+        <value>true</value>
+      </timed>
+      <infiniteServer>
+        <value>false</value>
+      </infiniteServer>
+      <priority>
+        <value>1</value>
+      </priority>
+    </transition>
+    <transition id="go-down">
+      <graphics>
+        <position x="327.0" y="69.0"/>
+      </graphics>
+      <name>
+        <value>go-down</value>
+        <graphics>
+          <offset x="37.0" y="-23.0"/>
+        </graphics>
+      </name>
+      <orientation>
+        <value>0</value>
+      </orientation>
+      <rate>
+        <value>0.1</value>
+      </rate>
+      <timed>
+        <value>true</value>
+      </timed>
+      <infiniteServer>
+        <value>false</value>
+      </infiniteServer>
+      <priority>
+        <value>1</value>
+      </priority>
+    </transition>
+    <arc id="come-up to up" source="come-up" target="up">
+      <graphics/>
+      <inscription>
+        <value>Default,1</value>
+        <graphics/>
+      </inscription>
+      <tagged>
+        <value>false</value>
+      </tagged>
+      <arcpath id="000" x="331" y="205" curvePoint="false"/>
+      <arcpath id="001" x="239" y="151" curvePoint="false"/>
+      <type value="normal"/>
+    </arc>
+    <arc id="down to come-up" source="down" target="come-up">
+      <graphics/>
+      <inscription>
+        <value>Default,1</value>
+        <graphics/>
+      </inscription>
+      <tagged>
+        <value>false</value>
+      </tagged>
+      <arcpath id="000" x="432" y="157" curvePoint="false"/>
+      <arcpath id="001" x="341" y="205" curvePoint="false"/>
+      <type value="normal"/>
+    </arc>
+    <arc id="go-down to down" source="go-down" target="down">
+      <graphics/>
+      <inscription>
+        <value>Default,1</value>
+        <graphics/>
+      </inscription>
+      <tagged>
+        <value>false</value>
+      </tagged>
+      <arcpath id="000" x="343" y="81" curvePoint="false"/>
+      <arcpath id="001" x="433" y="141" curvePoint="false"/>
+      <type value="normal"/>
+    </arc>
+    <arc id="up to go-down" source="up" target="go-down">
+      <graphics/>
+      <inscription>
+        <value>Default,1</value>
+        <graphics/>
+      </inscription>
+      <tagged>
+        <value>false</value>
+      </tagged>
+      <arcpath id="000" x="239" y="136" curvePoint="false"/>
+      <arcpath id="001" x="333" y="81" curvePoint="false"/>
+      <type value="normal"/>
+    </arc>
+  </net>
+</pnml>
