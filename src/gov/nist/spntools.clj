@@ -111,6 +111,10 @@
    (read-pnml "data/two-machine-formatted.xml")
    [:free-buffer-spots :full-buffer-spots :m1-busy :m1-idle :m2-busy :m2-idle]))
 
+(def pn2 (read-pnml "data/marsan69.xml"))
+;(calc-reachability pn2)
+;(pipe-format @+graph+ pn2 (make-name-map @+graph+)))
+
 (def pn1-state-names {[3 0 0 1 0 1] :s0,
                       [3 0 1 0 0 1] :s01,
                       [2 1 0 1 0 1] :s02,
@@ -140,6 +144,13 @@
   (as-> graph ?g
     (filter #(= (:source %) mark) ?g)
     (map #(vector (get name-map (:target %)) (:trans %)) ?g)))
+
+(defn make-name-map
+  [graph]
+  (let [cnt (atom 0)]
+    (reduce (fn [m link] (assoc m (:source link) (keyword (str "S" (swap! cnt inc)))))
+            {}
+            graph)))
 
   
 ;;; Reorganize from individual firings to indexed by state with transitions to and from.
