@@ -54,8 +54,8 @@
   (filter #(fireable? pn mark %) (map :tid (:transitions pn))))
 
 (defn immediate?
-  [tn]
-  (= :immediate (:type tn)))
+  [pn id]
+  (= :immediate (:type (id2transition pn id))))
 
 (defn mark-at-link-head
   "Return the mark that is at the head of the argument link."
@@ -86,8 +86,7 @@
          (let [tr (tid2obj pn (second l))]
            {:source marking
             :trans (:id tr)
-            :target (mark-at-link-head pn l)
-            :type (if (immediate? tr) :vanishing :tangible)}))
+            :target (mark-at-link-head pn l)}))
        (filter (fn [link] (not-any? (fn [vis] (= link vis)) @+visited-links+))
                (map (fn [tid] (list marking tid)) (fireables pn marking)))))
 
@@ -112,42 +111,65 @@
    (read-pnml "data/two-machine-formatted.xml")
    [:free-buffer-spots :full-buffer-spots :m1-busy :m1-idle :m2-busy :m2-idle]))
 
-(def pn-pipe-name {[3 0 0 1 0 1] :s0,
-                   [3 0 1 0 0 1] :s01,
-                   [2 1 0 1 0 1] :s02,
-                   [3 0 0 1 1 0] :s03,
-                   [2 1 1 0 0 1] :s04,
-                   [3 0 1 0 1 0] :s05,
-                   [2 1 0 1 1 0] :s06,
-                   [2 1 1 0 1 0] :s07,
-                   [1 2 0 1 1 0] :s08,
-                   [1 2 1 0 1 0] :s09,
-                   [1 2 1 0 0 1] :s10,
-                   [0 3 0 1 1 0] :s11,
-                   [0 3 1 0 1 0] :s12,
-                   [0 3 1 0 0 1] :s13})
-                   
+(def pn1-state-names {[3 0 0 1 0 1] :s0,
+                      [3 0 1 0 0 1] :s01,
+                      [2 1 0 1 0 1] :s02,
+                      [3 0 0 1 1 0] :s03,
+                      [2 1 1 0 0 1] :s04,
+                      [3 0 1 0 1 0] :s05,
+                      [2 1 0 1 1 0] :s06,
+                      [2 1 1 0 1 0] :s07,
+                      [1 2 0 1 1 0] :s08,
+                      [1 2 1 0 1 0] :s09,
+                      [1 2 1 0 0 1] :s10,
+                      [0 3 0 1 1 0] :s11,
+                      [0 3 1 0 1 0] :s12,
+                      [0 3 1 0 0 1] :s13,
+                      #_[0 3 0 1 0 1] #_:bogus})
 
+(defn markings2source
+  "Return source state names and transitions that are sources of the argument marking."
+  [mark graph name-map]
+  (as-> graph ?g
+    (filter #(= (:target %) mark) ?g)
+    (map #(vector (get name-map (:source %)) (:trans %)) ?g)))
+
+(defn markings2target
+  "Return source state names and transitions that are sources of the argument marking."
+  [mark graph name-map]
+  (as-> graph ?g
+    (filter #(= (:source %) mark) ?g)
+    (map #(vector (get name-map (:target %)) (:trans %)) ?g)))
+
+  
+;;; Reorganize from individual firings to indexed by state with transitions to and from.
+;;; Also, use name-map to rename states (currently markings) to names used in Pipe (S1, S2, etc.). 
 (defn pipe-format
   "Reorganize the graph data into pipe format."
-  [graph name-map]
-  (as-> graph ?g
-   (group-by :source ?g)
-   (reduce-kv (fn [m k v]
-                (as-> m ?m
-                  (assoc ?m k (reduce (fn [mm in]
-                                        (as-> mm ?mm
-                                          (update ?mm :edges-to conj [(get name-map (:source in))
-                                                                      (:trans in)])
-                                          (update ?mm :edges-from conj [(get name-map k)])
-                                          (assoc ?mm :marking k)))
-                                      {:edges-to [] :edges-from []}
-                                      v))
-                  (assoc ?m (get name-map k) (get ?m k))
-                  (dissoc ?m k)))
-              ?g
-              ?g)
-   (into (sorted-map) (zipmap (keys ?g) (vals ?g)))))
+  [graph pn name-map]
+  (let [init-marking (initial-marking pn)]
+    (as-> graph ?g
+      (group-by :source ?g)
+      (reduce-kv (fn [m k v]
+                   (as-> m ?m
+                     (assoc ?m k (reduce (fn [state in]
+                                           (as-> state ?s
+                                             (assoc ?s :edges-from (markings2source k graph name-map))
+                                             (assoc ?s :edges-to   (markings2target k graph name-map))
+                                             (assoc ?s :marking k)
+                                             (if (= init-marking k) (assoc ?s :initial-marking :true) ?s)
+                                             (assoc ?s :type
+                                                    (if (some #(immediate? pn (second %)) (:edges-to ?s))
+                                                      :vanishing
+                                                      :tangible))))
+                                         {}
+                                         v))
+                     (assoc ?m (get name-map k) (get ?m k))
+                     (dissoc ?m k)))
+                 ?g
+                 ?g)
+;   (filter (fn [[_ m]] (not (every? #(immediate? pn (second %)) (:edges-to m)))) ?g)
+      (into (sorted-map) (zipmap (keys ?g) (vals ?g))))))
                  
                
                
