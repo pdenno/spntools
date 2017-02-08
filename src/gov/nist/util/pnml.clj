@@ -24,7 +24,7 @@
 (defn essential-place
   [pl]
   (let [mark (get-initial-marking pl)]
-    {:id (get-id pl)
+    {:name (get-id pl)
      :pid (swap! +pid-cnt+ inc)
      :initial-marking mark}))
 
@@ -36,7 +36,7 @@
   [tr]
   (let [timed? (when-let [str (-> (filter #(= :timed (:tag %)) (:content tr)) first :content first :content first)]
                  (read-string str))]
-    {:id (get-id tr)
+    {:name (get-id tr)
      :tid (swap! +tid-cnt+ inc)
      :type (if timed? :exponential :immediate)
      :rate (get-rate tr)}))
