@@ -2,6 +2,14 @@
   (:require [clojure.data.xml :as xml :refer (parse-str)]
             [clojure.pprint :refer (cl-format pprint)]))
 
+(defn ppp []
+  (binding [clojure.pprint/*print-right-margin* 120]
+    (pprint *1)))
+
+(defn ppprint [arg]
+  (binding [clojure.pprint/*print-right-margin* 120]
+    (pprint arg)))
+
 (defn get-id [obj]
   (-> obj :attrs :id keyword))
 
@@ -46,6 +54,12 @@
   {:aid (swap! +aid-cnt+ inc)
    :source (-> ar :attrs :source keyword)
    :target (-> ar :attrs :target keyword)
+   :type (as-> ar ?m
+           (:content ?m)
+           (some #(when (= (:tag %) :type) %) ?m)
+           (:attrs ?m)
+           (:value ?m)
+           (keyword ?m))
    :multiplicity 1}) ; POD
 
 (defn read-pnml

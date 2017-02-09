@@ -1,7 +1,7 @@
 (ns gov.nist.spntools
   (:require [clojure.data.xml :as xml :refer (parse-str)]
             [clojure.pprint :refer (cl-format pprint pp)]
-            [gov.nist.spntools.util.pnml :refer (read-pnml reorder-marking)]))
+            [gov.nist.spntools.util.pnml :refer (read-pnml reorder-marking ppp ppprint)]))
 
 (defn initial-marking
   [pn]
@@ -184,11 +184,13 @@
 ;;;==========================================================================
 ;;; GSPN --> SPN
 ;;;==========================================================================
-(declare split2spn find-splits)
+(declare split2spn find-splits join2spn find-joins eliminate-pn add-pn)
 (defn gspn2spn [pn]
   (->
-   (split2spn pn)))
-;;;;   === ===  trans-in [multiple]
+   (split2spn pn)
+   (join2spn pn)))
+
+;;;    === ===  trans-in [multiple]
 ;;;     | |  place-ins [multiple]
 ;;;     V_V
 ;;;    (   ) place
@@ -199,6 +201,18 @@
 ;;;   XXXXXXX    imm
 ;;;    |   |  outs
 ;;;   (_) (_)    places-out
+(defn split-binds
+  "Return a map identifying a set of things involved in the pattern shown above."
+  [pn imm]
+  (let [arcs (:arcs pn)]
+    (as-> {} ?b
+      (assoc ?b :imm-name (:name imm))
+      (assoc ?b :imm-in (some #(when (= (:imm-name ?b) (:target %)) %) arcs))
+      (assoc ?b :outs (filter #(= (:source %) (:imm-name ?b)) arcs))
+      (assoc ?b :places-out (map #(name2place pn %) (map :target (:outs ?b))))
+      (assoc ?b :place (name2place pn (:source (:imm-in ?b))))
+      (assoc ?b :place-ins (filter #(= (:target %) (:name (:place ?b))) arcs))
+      (assoc ?b :trans-in (map #(name2transition pn (:source %)) (:place-ins ?b))))))
 
 (defn split2spn
   "Eliminate IMMs that have outbound arcs to multiple places and a single inbound arc."
@@ -206,31 +220,25 @@
   (let [arcs (:arcs pn)
         new-cnt (atom 0)]
     (reduce (fn [pn imm]
-              (let [imm-name (:name imm)
-                    imm-in (some #(when (= imm-name (:target %)) %) arcs)
-                    outs (filter #(= (:source %) imm-name) arcs)
-                    places-out (map #(name2place pn %) (map :target outs))
-                    place (name2place pn (:source imm-in))
-                    place-ins (filter #(= (:target %) (:name place)) arcs)
-                    trans-in (map #(name2transition pn (:source %)) place-ins)]
+              (let [b (split-binds pn imm)]
                 (as-> pn ?pn
-                  (assoc ?pn :transitions (remove #(= % imm) (:transitions ?pn)))
-                  (assoc ?pn :places (remove #(= % place) (:places ?pn)))
-                  (assoc ?pn :arcs (remove #(= % imm-in) (:arcs ?pn)))
-                  (assoc ?pn :arcs (reduce (fn [arcs o] (remove #(= o %) arcs)) (:arcs ?pn) place-ins))
-                  (assoc ?pn :arcs (reduce (fn [arcs o] (remove #(= o %) arcs)) (:arcs ?pn) outs))
+                  (eliminate-pn ?pn imm)
+                  (eliminate-pn ?pn (:place b))
+                  (eliminate-pn ?pn (:imm-in b))
+                  (reduce (fn [pn ar] (eliminate-pn pn ar)) ?pn (:place-ins b))
+                  (reduce (fn [pn ar] (eliminate-pn pn ar)) ?pn (:outs b))
                   ;; Add arcs from all the trans-in to each of the places-out
                   ;; Each place-out gets as many inbound arcs as there are places-in.
-                  (assoc ?pn :arcs
-                         (reduce (fn [arcs [t-in p-out]]
-                                   (conj arcs {:aid (keyword (str "spl" (swap! new-cnt inc)))
+                  (reduce (fn [pn [t-in p-out]]
+                                   (add-pn pn {:aid (keyword (str "spl" (swap! new-cnt inc)))
                                                :source (:name t-in) :target (:name p-out)
-                                               :multiplicity -1}))
-                                 (:arcs ?pn)
-                                 (for [t-in trans-in, p-out places-out] (vector t-in p-out)))))))
+                                               :multiplicity 1})) ; POD fix this (not necessarily 1?) 
+                          ?pn
+                          (for [t-in (:trans-in b),
+                                p-out (:places-out b)]
+                            (vector t-in p-out))))))
             pn
             (find-splits pn))))
-
 
 (defn find-splits
   "Return IMMs that have multiple outbound arcs and a single inbound arc."
@@ -242,6 +250,94 @@
                      (> (count (filter (fn [ar] (= (:source ar) tr-name)) arcs)) 1)
                      (= (count (filter (fn [ar] (= (:target ar) tr-name)) arcs)) 1))))
             (:transitions pn))))
+
+;;;    |      |     top-ins   
+;;;    V      V
+;;;   ===    ===    trans [multiple]
+;;;    |      |     places-ins [multiple]
+;;;   _V_    _V_
+;;;  (   )  (   )    iplaces   [Keep]
+;;;   ---    ---
+;;;    |      |
+;;;    |      |     imm-ins 
+;;;    V      V
+;;;   XXXXXXXXXX    imm
+;;;      |   place-out-in
+;;;     _V_    
+;;;    (___)   place-out      [Keep]
+(defn join-binds
+  "Return a map identifying a set of things involved in the pattern shown above."
+  [pn imm]
+  (let [arcs (:arcs pn)
+        trs (:transitions pn)
+        places (:places pn)
+        new-cnt (atom 0)]
+    (as-> {} ?b
+      (assoc ?b :imm-name (:name imm))
+      (assoc ?b :imm-ins (filter #(= (:imm-name ?b) (:target %)) arcs))
+      (assoc ?b :places* (map :source (:imm-ins ?b)))
+      (assoc ?b :iplaces (map #(name2place pn %) (:places* ?b)))
+      (assoc ?b :places-ins (filter (fn [ar] (some #(= (:target ar) %) (:places* ?b))) arcs))
+      (assoc ?b :trans (filter #(some (fn [pl] (= (:name %) (:source pl))) (:places-ins ?b)) trs))
+      (assoc ?b :top-ins (filter #(some (fn [tr] (= (:name tr) (:target %))) (:trans ?b)) arcs))
+      (assoc ?b :place-out-in (some #(when (= (:source %) (:imm-name ?b)) %) arcs))
+      (assoc ?b :place-out (some #(when (= (:name %) (:target (:place-out-in ?b))) %) places)))))
+
+(defn join2spn
+  "Eliminate IMMs that have outbound arcs to multiple places and (a single???) inbound arc."
+  [pn]
+  (let [arcs (:arcs pn)
+        trs (:transitions pn)
+        places (:places pn)
+        new-cnt (atom 0)]
+    (reduce (fn [pn imm]
+              (let [binds (join-binds pn imm)]
+                (as-> pn ?pn
+                  (eliminate-pn ?pn imm)
+                  (reduce (fn [pn ar] (eliminate-pn pn ar)) ?pn (:top-ins b))
+                  (reduce (fn [pn tr] (eliminate-pn pn tr)) ?pn (:trans b))
+                  (reduce (fn [pn ar] (eliminate-pn pn ar)) ?pn (:places-ins b))
+                  (reduce (fn [pn ar] (eliminate-pn pn ar)) ?pn (:imm-ins b))
+                  (eliminate-pn ?pn (:place-out-in b))
+                
+            pn
+            (find-joins pn))))))
+
+(defn find-joins
+  "Return IMMs that have multiple inbound arcs."
+  [pn]
+  (let [arcs (:arcs pn)]
+    (filter (fn [tr]
+              (let [tr-name (:name tr)]
+                (and (immediate? pn tr-name)
+                     (> (count (filter (fn [ar] (= (:target ar) tr-name)) arcs)) 1))))
+            (:transitions pn))))
+
+;;; ---- Utils ---------------
+(defn eliminate-pn
+  "Transform the PN graph by eliminating the argument element."
+  [pn elem]
+  (cond (:pid elem) ; It is a place.
+        (assoc pn :places (remove #(= % elem) (:places pn)))
+        (:tid elem) ; It is a transition
+        (assoc pn :transitions (remove #(= % elem) (:transitions pn)))
+        (:aid elem) ; It is an arc
+        (assoc pn :arcs (remove #(= % elem) (:arcs pn)))))
+
+(defn add-pn
+  "Transform the PN graph by adding the argument element."
+  [pn elem]
+  (cond (:pid elem) ; It is a place.
+        (assoc pn :places (conj (:places pn) elem))
+        (:tid elem) ; It is a transition
+        (assoc pn :transitions (conj (:transitions pn) elem))
+        (:aid elem) ; It is an arc
+        (assoc pn :arcs (conj (:arcs pn) elem))))
+
+        
+
+
+
                       
                  
   
