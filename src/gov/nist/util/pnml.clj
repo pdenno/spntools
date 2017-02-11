@@ -25,6 +25,19 @@
       (when-let [match (re-matches #"Default,(.\d*)" str)]
         (read-string (nth match 1))))))
 
+(defn get-multiplicity [ar]
+  (let [str
+        (-> (filter #(= :inscription (:tag %)) (:content ar))
+            first 
+            :content
+            first 
+            :content
+            first)]
+    (when (string? str)
+      (when-let [match (re-matches #"Default,(.\d*)" str)]
+        (read-string (nth match 1))))))
+
+
 (def +pid-cnt+ (atom 0))
 (def +tid-cnt+ (atom 0))
 (def +aid-cnt+ (atom 0))
@@ -60,7 +73,7 @@
            (:attrs ?m)
            (:value ?m)
            (keyword ?m))
-   :multiplicity 1}) ; POD
+   :multiplicity (get-multiplicity ar)}) 
 
 (defn read-pnml
   "Return a map providing the useful elements of a PNML file.
