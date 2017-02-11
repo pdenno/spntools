@@ -185,7 +185,7 @@
 ;;;==========================================================================
 ;;; GSPN --> SPN
 ;;;==========================================================================
-(declare split2spn find-splits join2spn find-joins eliminate-pn add-pn make-join-trans)
+(declare split2spn find-splits eliminate-pn add-pn)
 (defn gspn2spn [pn]
   (->
    (split2spn pn)
@@ -252,6 +252,7 @@
                      (= (count (filter (fn [ar] (= (:target ar) tr-name)) arcs)) 1))))
             (:transitions pn))))
 
+(declare join2spn join-unique-trans make-join-trans strip-name new-name new-name-ahead)
 ;;;    |      |     top-ins   
 ;;;    V      V
 ;;;   ===    ===    trans [multiple]
@@ -266,6 +267,36 @@
 ;;;      |   place-out-in
 ;;;     _V_    
 ;;;    (___)   place-out      [Keep]
+(defn join-unique-trans
+  "Return a collection of arcs and transitions for owner (which names an iplace)."
+  [binds owner]
+  (let [others (remove #(= % owner) (:places* binds))
+        iplace (some #(when (= (:name %) owner) %) (:iplaces binds))]
+    (loop [in-front 0
+           accum []]
+      (if (> in-front (count others))
+        accum
+        (cond
+          (= in-front 0)
+          (recur (inc in-front)
+                 (conj accum {:name (new-name owner "-first")
+                              :receive-inhibitors others
+                              :send-activator (:name iplace)}))
+          (= in-front (count others))
+          (recur (inc in-front)
+                 (conj accum {:name (new-name owner "-last")
+                              :receive-activators others
+                              :send-activator (:name (:place-out binds))}))
+          :else
+          (recur (inc in-front)
+                 (reduce (fn [acc more] (into accum more))
+                         accum
+                         (map (fn [ahead]
+                                {:name (new-name-ahead owner ahead)
+                                 :receive-inhibitors ahead
+                                 :receive-activators (remove (fn [o] (some #(when (= o %) %) ahead)) others)
+                                 :send-activator (:name iplace)})
+                              (combo/combinations others in-front)))))))))
 
 (defn max-tid [pn]
   (apply max (map :tid (:transitions pn))))
@@ -298,44 +329,23 @@
 ;;; These combinations are the places behind you, back fill with those in front of you. 
 
 ;;; Naming convention for transitions: who is ahead of you?
+(defn strip-name
+  [key]
+  (str (str (subs (str key) 1))))
+
 (defn new-name
   "Return the string naming the keyword."
   [key suffix]
   (keyword (str (str (subs (str key) 1)) suffix)))
 
-
-;;; POD change from places to (:iplaces binds) once it works
-(defn unique-orders
-  "Return a collection of arcs and transitions for owner (which names a iplace)."
-  [binds owner]
-  (let [others (remove #(= % owner) (:places* binds))
-        iplace (some #(when (= (:name %) owner) %) (:iplaces binds))]
-    (loop [in-front 0
-           accum []]
-      (if (> in-front (count others))
-        accum
-        (cond
-          (= in-front 0)
-          (recur (inc in-front)
-                 (conj accum {:name (new-name owner "-first")
-                              :receive-inhibitors others
-                              :send-activator (:name (:iplace binds))}))
-          (= in-front (count others))
-          (recur (inc in-front)
-                 (conj accum {:name (new-name owner "-last")
-                              :recieve-activators others
-                              :send-activator (:name (:place-out binds))}))
-          :default
-          (recur (inc in-front)
-                 (reduce (fn [acc ahead]
-                           (conj acc {:name 
-
-
-
-                                 accum
-                           (combo/combinations others in-front))]
-                                
-                     
+(defn new-name-ahead
+  [owner ahead]
+  (new-name
+   owner
+   (str "--"
+        (apply str (interpose "|" (map strip-name ahead)))
+        "-before")))
+  
   
 
 
@@ -384,8 +394,13 @@
       (assoc ?b :place-out (some #(when (= (:name %) (:target (:place-out-in ?b))) %) places)))))
 
 
-; (def bbb (join-binds pn2 (first (find-joins pn2))))
-; (calc-join-trans pn2 bbb)
+;;; (def bbb (join-binds pn2 (first (find-joins pn2))))
+;;; (calc-join-trans pn2 bbb)
+
+;;; (def pn3 
+(def pn3 (read-pnml "data/join2.xml"))
+(def bbb (join-binds pn3 (first (find-joins pn2))))
+
 
 (defn find-joins
   "Return IMMs that have multiple inbound arcs."
