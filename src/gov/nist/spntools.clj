@@ -253,7 +253,7 @@
             (:transitions pn))))
 
 (declare join2spn join-unique-trans make-join-trans strip-name new-name new-name-ahead)
-;;;    |      |     top-ins   
+;;;    |      |     top-ins   -- These may include things from the iplaces!!!
 ;;;    V      V
 ;;;   ===    ===    trans [multiple]
 ;;;    |      |     places-ins [multiple]
@@ -267,10 +267,11 @@
 ;;;      |   place-out-in
 ;;;     _V_    
 ;;;    (___)   place-out      [Keep]
-(defn join-unique-trans
+(defn join-new-trans
   "Return a collection of arcs and transitions for owner (which names an iplace)."
   [binds owner]
-  (let [others (remove #(= % owner) (:places* binds))
+  (let [owner-t (:source (some #(when (= owner (:target %)) %) (:places-ins binds)))
+        others (remove #(= % owner) (:places* binds))
         iplace (some #(when (= (:name %) owner) %) (:iplaces binds))]
     (loop [in-front 0
            accum []]
@@ -289,69 +290,17 @@
                               :send-activator (:name (:place-out binds))}))
           :else
           (recur (inc in-front)
-                 (reduce (fn [acc more] (into accum more))
+                 (reduce (fn [acc more] (into acc more))
                          accum
                          (map (fn [ahead]
                                 {:name (new-name-ahead owner ahead)
                                  :receive-inhibitors ahead
                                  :receive-activators (remove (fn [o] (some #(when (= o %) %) ahead)) others)
+                                 :send-return (:name iplace) ; POD either this or next is wrong
                                  :send-activator (:name iplace)})
                               (combo/combinations others in-front)))))))))
 
-(defn max-tid [pn]
-  (apply max (map :tid (:transitions pn))))
-
-#_(defn join-trans-name
-  [trans-set owner other]
-  (keyword (str (subs (str (:name owner)) 1)
-                "-ord-"
-                (inc (.indexOf trans-set other)))))
-
-;;;  - If you are first, you inhibit everyone else, and you were inhibited by everyone else.
-;;;  - If you are last, everyone else was activated (arcs into you) and you arc-out to :place-out
-;;;  - If you are in the middle, you inhibit everyone behind you, but who you have behind you
-;;;    depends on who is ahead of you. To enumerate this scenario, select from all permuations
-;;;    those for which you are in that middle position.
-
-
-;;; For join reduction, you need separate logic for each permutation of 
-;;; the ordering where there is a choice of who is in front of you and who behind you.
-;;; (Thus no chioce if you are first or last; everyone is behind you and in front of you, respectively.)
-;;; I think the method of implmentation is to create equivalence classes with
-;;; sets of things in front of you and behind you using combinations. 
-;;; 
-;;;      - Receive activators from everyone in front of you. 
-;;;      - Receive inhibitors from everyone behind you.
-;;;      - Send activator to your target (if not last) or to the final target otherwise.
-
-
-;;; Looking at the set minus you, look at combinations for length, length-1, ... 0
-;;; These combinations are the places behind you, back fill with those in front of you. 
-
-;;; Naming convention for transitions: who is ahead of you?
-(defn strip-name
-  [key]
-  (str (str (subs (str key) 1))))
-
-(defn new-name
-  "Return the string naming the keyword."
-  [key suffix]
-  (keyword (str (str (subs (str key) 1)) suffix)))
-
-(defn new-name-ahead
-  [owner ahead]
-  (new-name
-   owner
-   (str "--"
-        (apply str (interpose "|" (map strip-name ahead)))
-        "-before")))
-  
-  
-
-
-  
-  
-  
+;;;(into [{:a 1} { :b 2}] '({:c 3} {:d 4}))
 (defn make-join-trans
   "Make a set of replacement transitions for each of the arguments. There are
    as many replacements in each set as there are transitions in the argument.
@@ -367,13 +316,7 @@
                          :order (.indexOf trans-set other)
                          :type :exponential}))
             []
-            (unique-orders (:places* binds)))))
-
-
-
-  
-
-
+            (join-new-trans (:places* binds)))))
 
 (defn join-binds
   "Return a map identifying a set of things involved in the pattern shown above."
@@ -393,13 +336,36 @@
       (assoc ?b :place-out-in (some #(when (= (:source %) (:imm-name ?b)) %) arcs))
       (assoc ?b :place-out (some #(when (= (:name %) (:target (:place-out-in ?b))) %) places)))))
 
+(defn max-tid [pn]
+  (apply max (map :tid (:transitions pn))))
 
+;;; Naming convention for transitions: who is ahead of you?
+(defn strip-name
+  [key]
+  (str (str (subs (str key) 1))))
+
+(defn new-name
+  "Return the string naming the keyword."
+  [key suffix]
+  (keyword (str (str (subs (str key) 1)) suffix)))
+
+(defn new-name-ahead
+  [owner ahead]
+  (new-name
+   owner
+   (str "--"
+        (apply str (interpose "&" (map strip-name ahead)))
+        "-before")))
+  
 ;;; (def bbb (join-binds pn2 (first (find-joins pn2))))
 ;;; (calc-join-trans pn2 bbb)
 
 ;;; (def pn3 
 (def pn3 (read-pnml "data/join2.xml"))
-(def bbb (join-binds pn3 (first (find-joins pn2))))
+(def bbb (join-binds pn3 (first (find-joins pn3))))
+
+(def pn4 (read-pnml "data/join3.xml"))
+(def bbb (join-binds pn4 (first (find-joins pn4))))
 
 
 (defn find-joins
