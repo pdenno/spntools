@@ -266,13 +266,12 @@
 ;;;   XXXXXXXXXX    imm
 ;;;      |   place-out-in
 ;;;     _V_    
-;;;    (___)   place-out      [Keep]
+;;;    (___)   place-bottom      [Keep]
 (defn join-new-trans
   "Return a collection of arcs and transitions for owner (which names an iplace)."
   [binds owner]
   (let [owner-t (:source (some #(when (= owner (:target %)) %) (:places-ins binds)))
-        others (remove #(= % owner) (:places* binds))
-        iplace (some #(when (= (:name %) owner) %) (:iplaces binds))]
+        others (remove #(= % owner) (:places* binds))]
     (loop [in-front 0
            accum []]
       (if (> in-front (count others))
@@ -281,26 +280,26 @@
           (= in-front 0)
           (recur (inc in-front)
                  (conj accum {:name (new-name owner "-first")
+                              :receive-top (:place-top binds)
                               :receive-inhibitors others
-                              :send-activator (:name iplace)}))
+                              :send-activator owner}))
           (= in-front (count others))
           (recur (inc in-front)
                  (conj accum {:name (new-name owner "-last")
+                              :receive-top (:place-top binds)
                               :receive-activators others
-                              :send-activator (:name (:place-out binds))}))
+                              :send-activator (:name (:place-bottom binds))}))
           :else
           (recur (inc in-front)
-                 (reduce (fn [acc more] (into acc more))
-                         accum
-                         (map (fn [ahead]
-                                {:name (new-name-ahead owner ahead)
-                                 :receive-inhibitors ahead
-                                 :receive-activators (remove (fn [o] (some #(when (= o %) %) ahead)) others)
-                                 :send-return (:name iplace) ; POD either this or next is wrong
-                                 :send-activator (:name iplace)})
-                              (combo/combinations others in-front)))))))))
+                 (into accum 
+                       (map (fn [ahead]
+                              {:name (new-name-ahead owner ahead)
+                               :receive-top (:place-top binds)
+                               :receive-inhibitors (remove (fn [o] (some #(when (= o %) %) ahead)) others)
+                               :send&receive-activators ahead
+                               :send-activator owner})
+                            (combo/combinations others in-front)))))))))
 
-;;;(into [{:a 1} { :b 2}] '({:c 3} {:d 4}))
 (defn make-join-trans
   "Make a set of replacement transitions for each of the arguments. There are
    as many replacements in each set as there are transitions in the argument.
@@ -323,8 +322,7 @@
   [pn imm]
   (let [arcs (:arcs pn)
         trs (:transitions pn)
-        places (:places pn)
-        new-cnt (atom 0)]
+        places (:places pn)]
     (as-> {} ?b
       (assoc ?b :imm-name (:name imm))
       (assoc ?b :imm-ins (filter #(= (:imm-name ?b) (:target %)) arcs))
@@ -334,7 +332,14 @@
       (assoc ?b :trans (filter #(some (fn [pl] (= (:name %) (:source pl))) (:places-ins ?b)) trs))
       (assoc ?b :top-ins (filter #(some (fn [tr] (= (:name tr) (:target %))) (:trans ?b)) arcs))
       (assoc ?b :place-out-in (some #(when (= (:source %) (:imm-name ?b)) %) arcs))
-      (assoc ?b :place-out (some #(when (= (:name %) (:target (:place-out-in ?b))) %) places)))))
+      (assoc ?b :place-bottom (some #(when (= (:name %) (:target (:place-out-in ?b))) %) places))
+      ;; Every :normal arc with target in a trans has this place as its source.
+      (let [narcs (filter (fn [ar] (and (= (:type ar) :normal)
+                                        (some #(= (:target ar) (:name %)) (:trans ?b))))
+                          (:top-ins ?b))]
+        (assoc ?b :place-top (:name (some (fn [pl] (when (every? #(= (:source %) (:name pl)) narcs) pl))
+                                          places)))))))
+                                    
 
 (defn max-tid [pn]
   (apply max (map :tid (:transitions pn))))
@@ -361,8 +366,8 @@
 ;;; (calc-join-trans pn2 bbb)
 
 ;;; (def pn3 
-(def pn3 (read-pnml "data/join2.xml"))
-(def bbb (join-binds pn3 (first (find-joins pn3))))
+;(def pn3 (read-pnml "data/join2.xml"))
+;(def bbb (join-binds pn3 (first (find-joins pn3))))
 
 (def pn4 (read-pnml "data/join3.xml"))
 (def bbb (join-binds pn4 (first (find-joins pn4))))
@@ -389,7 +394,9 @@
               (let [b (join-binds pn imm)]
                 (as-> pn ?pn
                   (eliminate-pn ?pn imm)
-                  (reduce (fn [pn ar] (eliminate-pn pn ar)) ?pn (:top-ins b))
+                  ;; Some :top-ins might not have source in :place-top; keep those.
+                  (reduce (fn [pn ar] (eliminate-pn pn ar)) ?pn
+                          (filter #(= (:source %) (:place-top b)) (:top-ins b)))
                   (reduce (fn [pn tr] (eliminate-pn pn tr)) ?pn (:trans b))
                   (reduce (fn [pn ar] (eliminate-pn pn ar)) ?pn (:places-ins b))
                   (reduce (fn [pn ar] (eliminate-pn pn ar)) ?pn (:imm-ins b))
