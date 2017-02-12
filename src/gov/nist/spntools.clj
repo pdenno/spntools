@@ -185,11 +185,12 @@
 ;;;==========================================================================
 ;;; GSPN --> SPN
 ;;;==========================================================================
-(declare split2spn find-splits eliminate-pn add-pn)
+(declare eliminate-pn add-pn next-tid next-aid make-arc) ; utils
+(declare join2spn split2spn find-splits)
 (defn gspn2spn [pn]
-  (->
-   (split2spn pn)
-   (join2spn pn)))
+  (-> pn
+   (split2spn)
+   (join2spn)))
 
 ;;;    === ===  trans-in [multiple]
 ;;;     | |  place-ins [multiple]
@@ -252,7 +253,7 @@
                      (= (count (filter (fn [ar] (= (:target ar) tr-name)) arcs)) 1))))
             (:transitions pn))))
 
-(declare join2spn join-unique-trans make-join-trans strip-name new-name new-name-ahead)
+(declare join2spn strip-name new-name new-name-ahead)
 ;;;    |      |     top-ins   -- These may include things from the iplaces!!!
 ;;;    V      V
 ;;;   ===    ===    trans [multiple]
@@ -267,39 +268,6 @@
 ;;;      |   place-out-in
 ;;;     _V_    
 ;;;    (___)   place-bottom      [Keep]
-(defn join-new-trans
-  "Return a collection of arcs and transitions for owner (which names an iplace)."
-  [binds owner]
-  (let [owner-t (:source (some #(when (= owner (:target %)) %) (:places-ins binds)))
-        others (remove #(= % owner) (:places* binds))]
-    (loop [in-front 0
-           accum []]
-      (if (> in-front (count others))
-        accum
-        (cond
-          (= in-front 0)
-          (recur (inc in-front)
-                 (conj accum {:name (new-name owner "-first")
-                              :receive-top (:place-top binds)
-                              :receive-inhibitors others
-                              :send-activator owner}))
-          (= in-front (count others))
-          (recur (inc in-front)
-                 (conj accum {:name (new-name owner "-last")
-                              :receive-top (:place-top binds)
-                              :receive-activators others
-                              :send-activator (:name (:place-bottom binds))}))
-          :else
-          (recur (inc in-front)
-                 (into accum 
-                       (map (fn [ahead]
-                              {:name (new-name-ahead owner ahead)
-                               :receive-top (:place-top binds)
-                               :receive-inhibitors (remove (fn [o] (some #(when (= o %) %) ahead)) others)
-                               :send&receive-activators ahead
-                               :send-activator owner})
-                            (combo/combinations others in-front)))))))))
-
 (defn join-binds
   "Return a map identifying a set of things involved in the pattern shown above."
   [pn imm]
@@ -322,48 +290,48 @@
                           (:top-ins ?b))]
         (assoc ?b :place-top (:name (some (fn [pl] (when (every? #(= (:source %) (:name pl)) narcs) pl))
                                           places)))))))
+
+(defn join-new-trans
+  "Creates 'command vectors' providing information to create new transitions and arcs."
+  [pn binds owner]
+  (let [owner-t (:source (some #(when (= owner (:target %)) %) (:places-ins binds)))
+        rate (:rate (name2transition pn owner-t))
+        others (remove #(= % owner) (:places* binds))]
+    (loop [in-front 0
+           accum []]
+      (if (> in-front (count others))
+        accum
+        (cond
+          (= in-front 0)
+          (recur (inc in-front)
+                 (conj accum {:name (new-name owner "-first")
+                              :rate rate
+                              :receive-top (:place-top binds)
+                              :receive-inhibitors others
+                              :send-activator owner}))
+          (= in-front (count others))
+          (recur (inc in-front)
+                 (conj accum {:name (new-name owner "-last")
+                              :rate rate
+                              :receive-top (:place-top binds)
+                              :receive-activators others
+                              :send-activator (:name (:place-bottom binds))}))
+          :else
+          (recur (inc in-front)
+                 (into accum 
+                       (map (fn [ahead]
+                              {:name (new-name-ahead owner ahead)
+                               :rate rate
+                               :receive-top (:place-top binds)
+                               :receive-inhibitors (remove (fn [o] (some #(when (= o %) %) ahead)) others)
+                               :send&receive-activators ahead
+                               :send-activator owner})
+                            (combo/combinations others in-front)))))))))
                                     
-
-(defn next-tid [pn]
-  (if (empty? (:transitions pn))
-    1
-    (inc (apply max (map :tid (:transitions pn))))))
-
-(defn next-aid [pn]
-  (if (empty? (:arcs pn))
-    1
-    (inc (apply max (map :aid (:arcs pn))))))
-
-
-;;; Naming convention for transitions: who is ahead of you?
-(defn strip-name
-  [key]
-  (str (str (subs (str key) 1))))
-
-(defn new-name
-  "Return the string naming the keyword."
-  [key suffix]
-  (keyword (str (str (subs (str key) 1)) suffix)))
-
-(defn new-name-ahead
-  [owner ahead]
-  (new-name
-   owner
-   (str "--"
-        (apply str (interpose "&" (map strip-name ahead)))
-        "-before")))
-  
-;;; (def bbb (join-binds pn2 (first (find-joins pn2))))
-;;; (calc-join-trans pn2 bbb)
-
-;;; (def pn3 
 ;(def pn3 (read-pnml "data/join2.xml"))
-;(def bbb (join-binds pn3 (first (find-joins pn3))))
-
-(def pn4 (read-pnml "data/join3.xml"))
-(def bbb (join-binds pn4 (first (find-joins pn4))))
-(def foo (join-new-trans bbb :P1))
-
+;(def pn4 (read-pnml "data/join3.xml"))
+;(def bbb (join-binds pn4 (first (find-joins pn4))))
+;(def foo (join-new-trans pn4 bbb :P1))
 
 (defn find-joins
   "Return IMMs that have multiple inbound arcs."
@@ -375,17 +343,13 @@
                      (> (count (filter (fn [ar] (= (:target ar) tr-name)) arcs)) 1))))
             (:transitions pn))))
 
-(defn make-arc
-  [pn source target & {:keys [type rate aid multiplicity]
-                    :or {type :normal rate 1.0 aid (next-aid pn) multiplicity 1}}]
-  {:aid aid :source source :type type :rate rate :multiplicity multiplicity})
-
 (defn join2spn
   "Eliminate IMMs that have outbound arcs to multiple places and (a single???) inbound arc."
   [pn]
   (let [arcs (:arcs pn)
         trs (:transitions pn)
         places (:places pn)
+        pn-pristine pn
         new-cnt (atom 0)]
     (reduce (fn [pn imm]
               (let [b (join-binds pn imm)]
@@ -398,11 +362,11 @@
                   (reduce (fn [pn ar] (eliminate-pn pn ar)) ?pn (:places-ins b))
                   (reduce (fn [pn ar] (eliminate-pn pn ar)) ?pn (:imm-ins b))
                   (eliminate-pn ?pn (:place-out-in b))
-                  (reduce (fn [pn cmd-vec] ; cmd-vec is commands over one of :places*
+                  (reduce (fn [pn cmd-vec] ; cmd-vec, from join-new-trans is commands over one of :places*
                             (reduce (fn [pnn cmd] ; each cmd creates a new transition and the arcs to/from it.
                                       (as-> pnn ?pnp
                                         (add-pn ?pnp {:name (:name cmd) :tid (next-tid ?pnp)
-                                                      :type :exponential :rate 1.0}) ; POD
+                                                      :type :exponential :rate (:rate cmd)}) 
                                         (add-pn ?pnp (make-arc ?pnp (:receive-top cmd) (:name cmd)))
                                         (add-pn ?pnp (make-arc ?pnp (:name cmd) (:send-activator cmd)))
                                         (reduce (fn [pn inhib]
@@ -421,8 +385,8 @@
                                                 (:send&receive-activators cmd))))
                                     pn
                                     cmd-vec))
-                          ?pn
-                          (map #(join-new-trans b %) (:places* b))))))
+                          ?pn ; Maybe 'pristine' isn't necessary. Haven't thought about it.
+                          (map #(join-new-trans pn-pristine b %) (:places* b))))))
             pn
             (find-joins pn))))
 
@@ -446,6 +410,39 @@
         (assoc pn :transitions (conj (:transitions pn) elem))
         (:aid elem) ; It is an arc
         (assoc pn :arcs (conj (:arcs pn) elem))))
+
+(defn next-tid [pn]
+  (if (empty? (:transitions pn))
+    1
+    (inc (apply max (map :tid (:transitions pn))))))
+
+(defn next-aid [pn]
+  (if (empty? (:arcs pn))
+    1
+    (inc (apply max (map :aid (:arcs pn))))))
+
+;;; Naming convention for transitions: who is ahead of you?
+(defn strip-name
+  [key]
+  (str (str (subs (str key) 1))))
+
+(defn new-name
+  "Return the string naming the keyword."
+  [key suffix]
+  (keyword (str (str (subs (str key) 1)) suffix)))
+
+(defn new-name-ahead
+  [owner ahead]
+  (new-name
+   owner
+   (str "--"
+        (apply str (interpose "&" (map strip-name ahead)))
+        "-before")))
+
+(defn make-arc
+  [pn source target & {:keys [type aid multiplicity]
+                    :or {type :normal aid (next-aid pn) multiplicity 1}}]
+  {:aid aid :source source :type type :multiplicity multiplicity})
 
         
 
