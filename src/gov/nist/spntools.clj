@@ -300,23 +300,6 @@
                                :send-activator owner})
                             (combo/combinations others in-front)))))))))
 
-(defn make-join-trans
-  "Make a set of replacement transitions for each of the arguments. There are
-   as many replacements in each set as there are transitions in the argument.
-   Provide an extra attribute to help make the connections."
-  [pn binds]
-  (let [result (atom [])
-        tid-cnt (atom (max-tid pn))]
-    (reduce (fn [res [owner other]]
-              (conj res {:name (join-trans-name trans-set owner other)
-                         :tid (swap! tid-cnt inc)
-                         :rate (:rate owner)
-                         :owner (:name owner)
-                         :order (.indexOf trans-set other)
-                         :type :exponential}))
-            []
-            (join-new-trans (:places* binds)))))
-
 (defn join-binds
   "Return a map identifying a set of things involved in the pattern shown above."
   [pn imm]
@@ -341,8 +324,16 @@
                                           places)))))))
                                     
 
-(defn max-tid [pn]
-  (apply max (map :tid (:transitions pn))))
+(defn next-tid [pn]
+  (if (empty? (:transitions pn))
+    1
+    (inc (apply max (map :tid (:transitions pn))))))
+
+(defn next-aid [pn]
+  (if (empty? (:arcs pn))
+    1
+    (inc (apply max (map :aid (:arcs pn))))))
+
 
 ;;; Naming convention for transitions: who is ahead of you?
 (defn strip-name
@@ -371,6 +362,7 @@
 
 (def pn4 (read-pnml "data/join3.xml"))
 (def bbb (join-binds pn4 (first (find-joins pn4))))
+(def foo (join-new-trans bbb :P1))
 
 
 (defn find-joins
@@ -382,6 +374,11 @@
                 (and (immediate? pn tr-name)
                      (> (count (filter (fn [ar] (= (:target ar) tr-name)) arcs)) 1))))
             (:transitions pn))))
+
+(defn make-arc
+  [pn source target & {:keys [type rate aid multiplicity]
+                    :or {type :normal rate 1.0 aid (next-aid pn) multiplicity 1}}]
+  {:aid aid :source source :type type :rate rate :multiplicity multiplicity})
 
 (defn join2spn
   "Eliminate IMMs that have outbound arcs to multiple places and (a single???) inbound arc."
@@ -401,8 +398,31 @@
                   (reduce (fn [pn ar] (eliminate-pn pn ar)) ?pn (:places-ins b))
                   (reduce (fn [pn ar] (eliminate-pn pn ar)) ?pn (:imm-ins b))
                   (eliminate-pn ?pn (:place-out-in b))
-                  (let [new-trans (make-join-trans pn (:trans b))]
-                    ?pn))))
+                  (reduce (fn [pn cmd-vec] ; cmd-vec is commands over one of :places*
+                            (reduce (fn [pnn cmd] ; each cmd creates a new transition and the arcs to/from it.
+                                      (as-> pnn ?pnp
+                                        (add-pn ?pnp {:name (:name cmd) :tid (next-tid ?pnp)
+                                                      :type :exponential :rate 1.0}) ; POD
+                                        (add-pn ?pnp (make-arc ?pnp (:receive-top cmd) (:name cmd)))
+                                        (add-pn ?pnp (make-arc ?pnp (:name cmd) (:send-activator cmd)))
+                                        (reduce (fn [pn inhib]
+                                                  (add-pn pn (make-arc pn (:name cmd) inhib :type :inhibitor)))
+                                                ?pnp
+                                                (:receive-inhibitors cmd))
+                                        (reduce (fn [pn inhib]
+                                                  (add-pn pn (make-arc pn (:name cmd) inhib)))
+                                                ?pnp
+                                                (:receive-activators cmd))
+                                        (reduce (fn [pn active]
+                                                  (as-> pn ?pn2
+                                                    (add-pn ?pn2 (make-arc ?pn2 (:name cmd) active))
+                                                    (add-pn ?pn2 (make-arc ?pn2 active (:name cmd)))))
+                                                ?pnp
+                                                (:send&receive-activators cmd))))
+                                    pn
+                                    cmd-vec))
+                          ?pn
+                          (map #(join-new-trans b %) (:places* b))))))
             pn
             (find-joins pn))))
 
