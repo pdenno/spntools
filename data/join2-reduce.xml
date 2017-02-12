@@ -224,6 +224,19 @@
 <arcpath id="001" x="198" y="109" curvePoint="false"/>
 <type value="inhibitor"/>
 </arc>
+<arc id="P1 to T1-last" source="P1" target="T1-last">
+<graphics/>
+<inscription>
+<value/>
+<graphics/>
+</inscription>
+<tagged>
+<value/>
+</tagged>
+<arcpath id="000" x="189" y="198" curvePoint="false"/>
+<arcpath id="001" x="103" y="149" curvePoint="false"/>
+<type value="inhibitor"/>
+</arc>
 <arc id="P1 to T2-first" source="P1" target="T2-first">
 <graphics/>
 <inscription>
@@ -287,6 +300,19 @@
 </tagged>
 <arcpath id="000" x="373" y="191" curvePoint="false"/>
 <arcpath id="001" x="372" y="107" curvePoint="false"/>
+<type value="inhibitor"/>
+</arc>
+<arc id="P2 to T2-last" source="P2" target="T2-last">
+<graphics/>
+<inscription>
+<value/>
+<graphics/>
+</inscription>
+<tagged>
+<value/>
+</tagged>
+<arcpath id="000" x="386" y="198" curvePoint="false"/>
+<arcpath id="001" x="486" y="139" curvePoint="false"/>
 <type value="inhibitor"/>
 </arc>
 <arc id="Pjoin to Treturn" source="Pjoin" target="Treturn">
@@ -363,7 +389,7 @@
 <tagged>
 <value>false</value>
 </tagged>
-<arcpath id="000" x="98" y="148" curvePoint="false"/>
+<arcpath id="000" x="93" y="148" curvePoint="false"/>
 <arcpath id="001" x="273" y="419" curvePoint="false"/>
 <type value="normal"/>
 </arc>
@@ -389,7 +415,7 @@
 <tagged>
 <value>false</value>
 </tagged>
-<arcpath id="000" x="491" y="139" curvePoint="false"/>
+<arcpath id="000" x="496" y="140" curvePoint="false"/>
 <arcpath id="001" x="290" y="419" curvePoint="false"/>
 <type value="normal"/>
 </arc>
