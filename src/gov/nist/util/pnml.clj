@@ -1,17 +1,7 @@
 (ns gov.nist.spntools.util.pnml
   (:require [clojure.data.xml :as xml :refer (parse-str)]
-            [clojure.pprint :refer (cl-format pprint)]))
-
-(defn ppp []
-  (binding [clojure.pprint/*print-right-margin* 120]
-    (pprint *1)))
-
-(defn ppprint [arg]
-  (binding [clojure.pprint/*print-right-margin* 120]
-    (pprint arg)))
-
-(defn get-id [obj]
-  (-> obj :attrs :id keyword))
+            [clojure.pprint :refer (cl-format pprint)]
+            [gov.nist.spntools.util.utils :refer :all]))
 
 (defn get-initial-marking [pl]
   (let [str

@@ -2,10 +2,9 @@
   (:require [clojure.data.xml :as xml :refer (parse-str)]
             [clojure.pprint :refer (cl-format pprint pp)]
             [clojure.math.combinatorics :as combo]
-            [gov.nist.spntools.util.reach :as reach :refer (calc-reachability name2place name2transition
-                                                            arcs-outof-trans arcs-into-trans immediate?
-                                                            arcs-into-place arcs-outof-place)]
-            [gov.nist.spntools.util.pnml :as pnml :refer (read-pnml ppp ppprint)]))
+            [gov.nist.spntools.util.reach :as reach :refer (calc-reachability)]
+            [gov.nist.spntools.util.pnml :as pnml :refer (read-pnml)]
+            [gov.nist.spntools.util.utils :refer :all]))
 
 ;;; ToDo: See if the name2x aid2x stuff can be simplified.
 
@@ -76,6 +75,9 @@
             (:transitions pn))))
 
 (declare join2spn strip-name new-name new-name-ahead)
+;;;   ___    ___
+;;;  (   )  (   )   places-top   May be one or more
+;;;   ---    ---
 ;;;    |      |     top-ins   -- These may include things from the iplaces!!!
 ;;;    V      V
 ;;;   ===    ===    trans [multiple]
@@ -110,8 +112,11 @@
       (let [narcs (filter (fn [ar] (and (= (:type ar) :normal)
                                         (some #(= (:target ar) (:name %)) (:trans ?b))))
                           (:top-ins ?b))]
-        (assoc ?b :place-top (:name (some (fn [pl] (when (every? #(= (:source %) (:name pl)) narcs) pl))
-                                          places)))))))
+        (as-> ?b ?bb ; POD remove when :place-top goes.
+          (assoc ?bb :places-top (map :source narcs))
+          ;; This one needs to go.
+          (assoc ?bb :place-top (:name (some (fn [pl] (when (every? #(= (:source %) (:name pl)) narcs) pl))
+                                             places))))))))
 
 (defn join-new-trans
   "Creates 'command vectors' providing information to create new transitions and arcs."
@@ -128,14 +133,16 @@
           (recur (inc in-front)
                  (conj accum {:name (new-name owner "-first")
                               :rate rate
-                              :receive-top (:place-top binds)
+                              :receive-top (:place-top binds) ; POD
+                              :receive-tops (:places-top binds)
                               :receive-inhibitors others
                               :send-activator owner}))
           (= in-front (count others))
           (recur (inc in-front)
                  (conj accum {:name (new-name owner "-last")
                               :rate rate
-                              :receive-top (:place-top binds)
+                              :receive-top (:place-top binds) ; POD
+                              :receive-tops (:places-top binds)
                               :receive-activators others
                               :send-activator (:name (:place-bottom binds))}))
           :else
@@ -145,6 +152,7 @@
                               {:name (new-name-ahead owner ahead)
                                :rate rate
                                :receive-top (:place-top binds)
+                               :receive-tops (:places-top binds)
                                :receive-inhibitors (remove (fn [o] (some #(when (= o %) %) ahead)) others)
                                :send&receive-activators ahead
                                :send-activator owner})
@@ -187,8 +195,12 @@
                             (reduce (fn [pnn cmd] ; each cmd creates a new transition and the arcs to/from it.
                                       (as-> pnn ?pnp
                                         (add-pn ?pnp {:name (:name cmd) :tid (next-tid ?pnp)
-                                                      :type :exponential :rate (:rate cmd)}) 
-                                        (add-pn ?pnp (make-arc ?pnp (:receive-top cmd) (:name cmd)))
+                                                      :type :exponential :rate (:rate cmd)})
+                                        (reduce (fn [pn receiver]
+                                                  (add-pn pn (make-arc ?pnp receiver (:name cmd))))
+                                                ?pnp
+                                                (:places-top cmd))
+                                        (add-pn ?pnp (make-arc ?pnp (:receive-top cmd) (:name cmd))) ; POD remove
                                         (add-pn ?pnp (make-arc ?pnp (:name cmd) (:send-activator cmd)))
                                         (reduce (fn [pn inhib]
                                                   (add-pn pn (make-arc pn (:name cmd) inhib :type :inhibitor)))
@@ -213,12 +225,6 @@
 
 
 (declare find-vanish vanish-binds)
-
-
-(def pn1
-  (-> (read-pnml "data/marsan69.xml")
-      (split2spn)
-      #_(join2spn)))
 
 
 (defn vanish2spn
@@ -281,11 +287,11 @@
   "Transform the PN graph by adding the argument element."
   [pn elem]
   (cond (:pid elem) ; It is a place.
-        (assoc pn :places (conj (:places pn) elem))
+        (assoc pn :places (conj (:places pn) elem)))
         (:tid elem) ; It is a transition
         (assoc pn :transitions (conj (:transitions pn) elem))
         (:aid elem) ; It is an arc
-        (assoc pn :arcs (conj (:arcs pn) elem))))
+        (assoc pn :arcs (conj (:arcs pn) elem)))
 
 (defn next-tid [pn]
   (if (empty? (:transitions pn))
@@ -324,8 +330,26 @@
   {:aid aid :source source :type type :multiplicity multiplicity})
 
         
+;;;------- Diagnostic 
+
+(def pn1
+  (-> (read-pnml "data/marsan69.xml")
+      (split2spn)
+      #_(join2spn)))
+
+(defn one-step
+  [filename]
+    (-> (read-pnml filename)
+        (split2spn)))
+
+(defn two-steps
+  [filename]
+    (-> (read-pnml filename)
+        (split2spn)
+        (join2spn)))
 
 
+(def bbb (join-binds pn1 (first (find-joins pn1))))
 
                       
                  
