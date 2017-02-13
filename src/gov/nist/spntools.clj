@@ -3,8 +3,11 @@
             [clojure.pprint :refer (cl-format pprint pp)]
             [clojure.math.combinatorics :as combo]
             [gov.nist.spntools.util.reach :as reach :refer (calc-reachability name2place name2transition
-                                                                              immediate? arcs-outof-place)]
+                                                            arcs-outof-trans arcs-into-trans immediate?
+                                                            arcs-into-place arcs-outof-place)]
             [gov.nist.spntools.util.pnml :as pnml :refer (read-pnml ppp ppprint)]))
+
+;;; ToDo: See if the name2x aid2x stuff can be simplified.
 
 (declare eliminate-pn add-pn next-tid next-aid make-arc) ; utils
 (declare join2spn split2spn find-splits vanish2spn)
@@ -209,21 +212,59 @@
             (find-joins pn))))
 
 
-(declare find-vanish)
+(declare find-vanish vanish-binds)
+
+
+(def pn1
+  (-> (read-pnml "data/marsan69.xml")
+      (split2spn)
+      #_(join2spn)))
+
+
 (defn vanish2spn
   "Remove a vanishing place and IMMs that are attached."
   [pn]
-  (find-vanish pn))
+  (reduce (fn [pn place]
+            (let [b (vanish-binds pn place)]            
+              pn))
+          pn
+          (find-vanish pn)))
+
+;;;      XXXX XXXX   trans-ins (multiple)
+;;;        |   |     place-ins (multiple)
+;;;        V   V
+;;;        ------
+;;;       (      )   place
+;;;        ------
+;;;        |   |     place-outs (multiple)
+;;;        V   V
+;;;     XXXX  XXXX   trans (multiple)
+;;;        |   |    
+;;;        V   V     trans-outs (multiple)
+(defn vanish-binds
+  "Return a map identifying a set of things involved in the pattern shown above."
+  [pn place]
+  (as-> {} ?b
+    (assoc ?b :place place)
+    (assoc ?b :place-outs (arcs-outof-place pn (:place ?b)))
+    (assoc ?b :trans (map :target (:place-outs ?b)))
+    (assoc ?b :trans-outs (map #(arcs-outof-trans pn %)
+                               (map #(:tid (name2transition pn %)) (:trans ?b))))
+    (assoc ?b :place-ins (arcs-into-place pn (:place ?b)))
+    (assoc ?b :trans-ins (map :source (:place-ins ?b)))))
 
 (defn find-vanish
   [pn]
-  (let [arcs (:arcs pn)
-        trans (:transitions pn)
-        places (:places pn)]
-    (filter (fn [pl]
-            (and (every? 
-                  
-
+  (filter (fn [pl]
+            (let [arcs-out (arcs-outof-place pn (:name pl))
+                  trans (map :target arcs-out)
+                  tids (map #(:tid (name2transition pn %)) trans)]
+              (and ; POD these may be too restrictive. We'll see.
+               (every? #(immediate? pn %) trans)
+               ;; Each trans has just one  in and one out.
+               (every? #(= 1 (count (arcs-outof-trans pn %))) tids)
+               (every? #(= 1 (count (arcs-into-trans pn %))) tids))))
+          (:places pn)))
 
 ;;; ---- Utils ---------------
 (defn eliminate-pn

@@ -31,10 +31,16 @@
   (let [tr-name (:name (tid2obj pn tid))]
     (filter #(= (:source %) tr-name) (:arcs pn))))
 
+;;; This one uses :name!
 (defn arcs-outof-place
   "Return the output arcs of a place."
   [pn pl-name]
   (filter #(= (:source %) pl-name) (:arcs pn)))
+
+(defn arcs-into-place
+  "Return the output arcs of a place."
+  [pn pl-name]
+  (filter #(= (:target %) pl-name) (:arcs pn)))
 
 (defn name2place
   [pn name]
