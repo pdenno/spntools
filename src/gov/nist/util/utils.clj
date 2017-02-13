@@ -14,8 +14,7 @@
 (defn get-id [obj]
   (-> obj :attrs :id keyword))
 
-
-;;; POD maybe memoize to something that doesn't get the pn. 
+;;; POD Give arcs names and fix this. 
 (defn tid2obj
   [pn tid]
   (some #(when (= (:tid %) tid) %) (:transitions pn)))
@@ -27,6 +26,7 @@
 (defn aid2obj
   [pn aid]
   (some #(when (= (:aid %) aid) %) (:arcs pn)))
+
 
 (defn arcs-into-trans
   "Return the input arcs to a transition."
@@ -51,6 +51,32 @@
   [pn pl-name]
   (filter #(= (:target %) pl-name) (:arcs pn)))
 
+(defn follow-path
+  [pn obj]
+  (cond (:tid obj) (arcs-outof-trans pn (:tid obj)),
+        (:pid obj) (arcs-outof-place pn (:name obj)),
+        (:aid obj) (list (or (name2transition pn (:target obj))
+                             (name2place pn (:target obj))))))
+        
+(def ^:dynamic *path-from* false)
+(defn path-from-aux
+  [pn here to nsteps & {:keys [so-far] :or {so-far []}}]
+  (cond (= nsteps 0)
+        (if (= (:name (last so-far)) to)
+          (reset! *path-from* so-far)
+          (when (not @*path-from*) (reset! *path-from* false)))
+        (> nsteps 0)
+        (for [p (follow-path pn here)]
+          (path-from-aux pn p to (dec nsteps) :so-far (conj so-far p)))))
+
+;;; POD what comes back is a mess.
+(defn path-from
+  "Return a path from FROM to TO (both are places) in exactly STEPS steps (counting arcs and places)."
+  [pn from to nsteps]
+  (binding [*path-from* (atom false)]
+    (path-from-aux pn (name2place pn from) to nsteps)
+    @*path-from*))
+                 
 (defn name2place
   [pn name]
   (some #(when (= name (:name %)) %) (:places pn)))

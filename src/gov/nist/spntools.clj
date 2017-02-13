@@ -111,15 +111,9 @@
       (let [narcs (filter (fn [ar] (and (= (:type ar) :normal)
                                         (some #(= (:target ar) (:name %)) (:trans ?b))))
                           (:top-ins ?b))]
-        (as-> ?b ?bb ; POD remove when :place-top goes.
-          (assoc ?bb :places-top (distinct (map :source narcs)))
-          ;; This one needs to go.
-          (assoc ?bb :place-top (:name (some (fn [pl] (when (every? #(= (:source %) (:name pl)) narcs) pl))
-                                             places)))
-          (assoc ?bb :preserve-top-ins (remove (fn [tin] (some #(= (:source tin) %) (:places-top ?bb)))
-                                               (:top-ins ?bb)))
-          (assoc ?bb :top-ins (remove (fn [tin] (some #(= % tin) (:preserve-top-ins ?bb))) (:top-ins ?bb))))))))
-
+        (assoc ?b :places-top (distinct (map :source narcs))))
+      (assoc ?b :preserve-top-ins (remove (fn [tin] (some #(= (:source tin) %) (:places-top ?b))) (:top-ins ?b)))
+      (assoc ?b :top-ins (remove (fn [tin] (some #(= % tin) (:preserve-top-ins ?b))) (:top-ins ?b))))))
 
 (defn join-new-trans
   "Creates 'command vectors' providing information to create new transitions and arcs."
@@ -142,7 +136,7 @@
                                 :rate rate
                                 :preserves (into (map #(assoc % :target n) receive-preserves)
                                                  (map #(assoc % :source % n) send-preserves))
-                                :receive-tops (:places-top binds)
+                                :receive-tops (filter #(path-from % owner 2) (:places-top binds)) 
                                 :receive-inhibitors others
                                 :send-activator owner})))
           (= in-front (count others))
@@ -150,7 +144,7 @@
                  (let [n (new-name owner "-last")]
                    (conj accum {:name n
                                 :rate rate
-                                :receive-tops (:places-top binds)
+                                :receive-tops (:places-top binds) ; POD
                                 :preserves (into (map #(assoc % :target  n) receive-preserves)
                                                  (map #(assoc % :source n) send-preserves))
                                 :receive-activators others
@@ -162,7 +156,7 @@
                               (let [n (new-name-ahead owner ahead)] 
                                 {:name n
                                  :rate rate
-                                 :receive-tops (:places-top binds)
+                                 :receive-tops (:places-top binds) ; POD
                                  :preserves (into (map #(assoc % :target n) receive-preserves)
                                                   (map #(assoc % :source n) send-preserves))
                                  :receive-inhibitors (remove (fn [o] (some #(when (= o %) %) ahead)) others)
@@ -170,9 +164,6 @@
                                  :send-activator owner}))
                               (combo/combinations others in-front)))))))))
                                     
-;(def j2 (read-pnml "data/join2.xml"))
-;(def bbb (join-binds j2 (first (find-joins j2))))
-;(def foo (join-new-trans j2 bbb :P1))
 (defn find-joins
   "Return IMMs that have multiple inbound arcs."
   [pn]
@@ -284,12 +275,10 @@
           (:places pn)))
 
 
-;;;------- Diagnostic 
-
-(def pn1
-  (-> (read-pnml "data/marsan69.xml")
-      (split2spn)
-      #_(join2spn)))
+;;;------- Diagnostic
+;;;(def j2 (one-step "data/marsan69.xml"))
+;;;(def bbb (join-binds j2 (first (find-joins j2))))
+;;;(ppprint (join-new-trans j2 bbb (first (:places* bbb))))
 
 (defn one-step
   [filename]
@@ -302,9 +291,6 @@
         (split2spn)
         (join2spn)))
 
-
-(def bbb (join-binds pn1 (first (find-joins pn1))))
-
 (defn find-arc
   [pn source target]
   (filter #(and (= (:source %) source)
@@ -312,32 +298,6 @@
           (:arcs pn)))
                       
 
-;;; Ones with commas are inhibitors
-(defn j2-has-arcs []    
-  (let [j2 (gspn2spn (read-pnml "data/join2.xml"))
-        data  [[:Pstart :P1-last 1] [:Pstart :P1-first 2] [:Pstart :P2-first 3] [:Pstart :P2-last 4]
-               [:P1-first :P1 5]  [:P1 :P1-first, 6] [:P2 :P1-first 7]  [:P1 :P2-first, 8]  [:P2-first :P2 9]
-               [:P2 :P2-first, 10] [:P2 :P1-last 11] [:P1 :P2-last 12] [:P1 :P1-last, 13] [:P2 :P2-last, 14]
-               [:P1-last :Pjoin 15]  [:P2-last :Pjoin 16] [:Pjoin :Treturn 17]  [:Treturn :Pstart 18]]]
-    (println "Testing" (count data) "arcs")
-    (every? (fn [r] r)
-            (reduce (fn [result [source target num]]
-                      (if (= (count (find-arc j2 source target)) 1) ; just worked out that way.
-                        (conj result true)
-                        (do (println "--- Failing:" num  "[" source target "]")
-                            (conj result false))))
-                    []
-
-                    data))))
-
-(defn j2-weird-arcs []
-  (let [j2 (gspn2spn (read-pnml "data/join2.xml"))
-        data  [[:Pstart :P1-last 1] [:Pstart :P1-first 2] [:Pstart :P2-first 3] [:Pstart :P2-last 4]
-               [:P1-first :P1 5]  [:P1 :P1-first, 6] [:P2 :P1-first 7]  [:P1 :P2-first, 8]  [:P2-first :P2 9]
-               [:P2 :P2-first, 10] [:P2 :P1-last 11] [:P1 :P2-last 12] [:P1 :P1-last, 13] [:P2 :P2-last, 14]
-               [:P1-last :Pjoin 15]  [:P2-last :Pjoin 16] [:Pjoin :Treturn 17]  [:Treturn :Pstart 18]]
-        cdata (map (fn [[s t _]] [s t]) data)]
-    (remove (fn [a] (some #(= [(:source a) (:target a)] %) cdata)) (:arcs j2))))
 
 
                         

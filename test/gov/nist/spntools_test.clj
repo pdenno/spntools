@@ -87,6 +87,40 @@
                     []
                     data))))
 
+(defn marsan-one-step-arcs-test []    
+  (let [j2 (one-step "data/marsan69.xml")
+        data [[:P1 :Tndata 1] [:P3 :Tpar1 6] [:P4 :Tpar2 7] [:P5 :t_syn 10] [:P6 :t_syn 11]
+              [:P7 :t_ko 13] [:P7 :t_ok 16] [:P8 :Tcheck 15] [:P9 :Tio 18] [:t_ko :P8 14]
+              [:t_ok :P9 17] [:t_syn :P7 12] [:Tio :P1 19] [:Tpar1 :P5 8] [:Tpar2 :P6 9]
+              [:Tcheck :P3 4] [:Tcheck :P4 5] [:Tndata :P3 2] [:Tndata :P4 3]]]
+    (println "Testing" (count data) "arcs")
+    (every? (fn [r] r)
+            (reduce (fn [result [source target num]]
+                      (if (= (count (find-arc-test j2 source target)) 1) ; just worked out that way.
+                        (conj result true)
+                        (do (println "--- Failing:" num  "[" source target "]")
+                            (conj result false))))
+                    []
+                    data))))
+
+(defn marsan-two-step-arcs-test []    
+  (let [j2 (two-step "data/marsan69.xml")
+        data [[:Tio :P1 1] [:P9 :Tio 2]
+              [:t_ok :P9 3] [:P7 :t_ok 4] [:P7 :t_ko 5] [:t_ko :P8 6] [:P8 :Tcheck 7] [:Tcheck :P3 8]
+              [:Tcheck :P4 9] [:P6-last :P7 10] [:P6-first :P6 11] [:P5 :P6-last 12] [:P5 :P6-first 13]
+              [:P6 :P5-first 14] [:P6 :P5-last 15] [:P3 :P5-last 16] [:P3 :P5-first 17]
+              [:P4 :P6-first 18] [:P4 :P6-last 19] [:Tndata :P4 20] [:Tndata :P3 21]
+              [:P1 :Tndata 22] [:P5-first :P5 23] [:P5-last :P7 24]]]
+    (println "Testing" (count data) "arcs")
+    (every? (fn [r] r)
+            (reduce (fn [result [source target num]]
+                      (if (= (count (find-arc-test j2 source target)) 1) ; just worked out that way.
+                        (conj result true)
+                        (do (println "--- Failing:" num  "[" source target "]")
+                            (conj result false))))
+                    []
+                    data))))
+
 (defn j2-weird-arcs-test []
   (let [j2 (gspn2spn (read-pnml "data/join2.xml"))
         data  [[:Pstart :P1-last 1] [:Pstart :P1-first 2] [:Pstart :P2-first 3] [:Pstart :P2-last 4]
@@ -96,14 +130,36 @@
         cdata (map (fn [[s t _]] [s t]) data)]
     (remove (fn [a] (some #(= [(:source a) (:target a)] %) cdata)) (:arcs j2))))
 
+(defn marsan-one-step-weird-arcs-test []
+  (let [j2 (one-step "data/marsan69.xml")
+        data  [[:P1 :Tndata 1] [:P3 :Tpar1 6] [:P4 :Tpar2 7] [:P5 :t_syn 10] [:P6 :t_syn 11]
+               [:P7 :t_ko 13] [:P7 :t_ok 16] [:P8 :Tcheck 15] [:P9 :Tio 18] [:t_ko :P8 14]
+               [:t_ok :P9 17] [:t_syn :P7 12] [:Tio :P1 19] [:Tpar1 :P5 8] [:Tpar2 :P6 9]
+               [:Tcheck :P3 4] [:Tcheck :P4 5] [:Tndata :P3 2] [:Tndata :P4 3]]
+        cdata (map (fn [[s t _]] [s t]) data)]
+    (remove (fn [a] (some #(= [(:source a) (:target a)] %) cdata)) (:arcs j2))))
 
-(deftest join2-find-missing
-  (testing "join2 has all correct arcs"
-    (is (j2-has-arcs-test))))
+(defn marsan-two-step-weird-arcs-test []
+  (let [j2 (two-step "data/marsan69.xml")
+        data  [[:Tio :P1 1] [:P9 :Tio 2] [:t_ok :P9 3] [:P7 :t_ok 4] [:P7 :t_ko 5]
+               [:t_ko :P8 6] [:P8 :Tcheck 7] [:Tcheck :P3 8] [:Tcheck :P4 9] [:P6-last :P7 10]
+               [:P6-first :P6 11] [:P5 :P6-last 12] [:P5 :P6-first 13]
+               [:P6 :P5-first 14] [:P6 :P5-last 15] [:P3 :P5-last 16] [:P3 :P5-first 17]
+               [:P4 :P6-first 18] [:P4 :P6-last 19] [:Tndata :P4 20] [:Tndata :P3 21]
+               [:P1 :Tndata 22] [:P5-first :P5 23] [:P5-last :P7 24]]
+        cdata (map (fn [[s t _]] [s t]) data)]
+    (remove (fn [a] (some #(= [(:source a) (:target a)] %) cdata)) (:arcs j2))))
 
-(deftest join2-find-unwanted
-  (testing "join2 has all correct arcs"
-    (is (empty? (j2-weird-arcs-test)))))
+(deftest find-missing-arcs
+  (testing "PNs has all correct arcs"
+    (is (j2-has-arcs-test))
+    (is (marsan-one-step-arcs-test))))
+
+(deftest find-unwanted-arcs
+  (testing "PNs do not have unexpected arcs"
+    (is (empty? (j2-weird-arcs-test)))
+    (is (empty? (marsan-one-step-weird-arcs-test)))
+    (is (empty? (marsan-two-step-weird-arcs-test)))))
 
 
 
