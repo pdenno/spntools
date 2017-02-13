@@ -8,7 +8,6 @@
 
 ;;; ToDo: See if the name2x aid2x stuff can be simplified.
 
-(declare eliminate-pn add-pn next-tid next-aid make-arc) ; utils
 (declare join2spn split2spn find-splits vanish2spn)
 (defn gspn2spn [pn]
   (-> pn
@@ -74,7 +73,7 @@
                      (= (count (filter (fn [ar] (= (:target ar) tr-name)) arcs)) 1))))
             (:transitions pn))))
 
-(declare join2spn strip-name new-name new-name-ahead)
+(declare join2spn)
 ;;;   ___    ___
 ;;;  (   )  (   )   places-top   May be one or more
 ;;;   ---    ---
@@ -113,16 +112,23 @@
                                         (some #(= (:target ar) (:name %)) (:trans ?b))))
                           (:top-ins ?b))]
         (as-> ?b ?bb ; POD remove when :place-top goes.
-          (assoc ?bb :places-top (map :source narcs))
+          (assoc ?bb :places-top (distinct (map :source narcs)))
           ;; This one needs to go.
           (assoc ?bb :place-top (:name (some (fn [pl] (when (every? #(= (:source %) (:name pl)) narcs) pl))
-                                             places))))))))
+                                             places)))
+          (assoc ?bb :preserve-top-ins (remove (fn [tin] (some #(= (:source tin) %) (:places-top ?bb)))
+                                               (:top-ins ?bb)))
+          (assoc ?bb :top-ins (remove (fn [tin] (some #(= % tin) (:preserve-top-ins ?bb))) (:top-ins ?bb))))))))
+
 
 (defn join-new-trans
   "Creates 'command vectors' providing information to create new transitions and arcs."
   [pn binds owner]
   (let [owner-t (:source (some #(when (= owner (:target %)) %) (:places-ins binds)))
         rate (:rate (name2transition pn owner-t))
+        kill-trans (map :name (:trans binds))
+        receive-preserves (filter #(= owner (:source %)) (:preserve-top-ins binds))
+        send-preserves (filter #(= owner (:target %)) (:preserve-top-ins binds))
         others (remove #(= % owner) (:places* binds))]
     (loop [in-front 0
            accum []]
@@ -131,32 +137,38 @@
         (cond
           (= in-front 0)
           (recur (inc in-front)
-                 (conj accum {:name (new-name owner "-first")
-                              :rate rate
-                              :receive-top (:place-top binds) ; POD
-                              :receive-tops (:places-top binds)
-                              :receive-inhibitors others
-                              :send-activator owner}))
+                 (let [n (new-name owner "-first")]
+                   (conj accum {:name n
+                                :rate rate
+                                :preserves (into (map #(assoc % :target n) receive-preserves)
+                                                 (map #(assoc % :source % n) send-preserves))
+                                :receive-tops (:places-top binds)
+                                :receive-inhibitors others
+                                :send-activator owner})))
           (= in-front (count others))
           (recur (inc in-front)
-                 (conj accum {:name (new-name owner "-last")
-                              :rate rate
-                              :receive-top (:place-top binds) ; POD
-                              :receive-tops (:places-top binds)
-                              :receive-activators others
-                              :send-activator (:name (:place-bottom binds))}))
+                 (let [n (new-name owner "-last")]
+                   (conj accum {:name n
+                                :rate rate
+                                :receive-tops (:places-top binds)
+                                :preserves (into (map #(assoc % :target  n) receive-preserves)
+                                                 (map #(assoc % :source n) send-preserves))
+                                :receive-activators others
+                                :send-activator (:name (:place-bottom binds))})))
           :else
           (recur (inc in-front)
                  (into accum 
                        (map (fn [ahead]
-                              {:name (new-name-ahead owner ahead)
-                               :rate rate
-                               :receive-top (:place-top binds)
-                               :receive-tops (:places-top binds)
-                               :receive-inhibitors (remove (fn [o] (some #(when (= o %) %) ahead)) others)
-                               :send&receive-activators ahead
-                               :send-activator owner})
-                            (combo/combinations others in-front)))))))))
+                              (let [n (new-name-ahead owner ahead)] 
+                                {:name n
+                                 :rate rate
+                                 :receive-tops (:places-top binds)
+                                 :preserves (into (map #(assoc % :target n) receive-preserves)
+                                                  (map #(assoc % :source n) send-preserves))
+                                 :receive-inhibitors (remove (fn [o] (some #(when (= o %) %) ahead)) others)
+                                 :send&receive-activators ahead
+                                 :send-activator owner}))
+                              (combo/combinations others in-front)))))))))
                                     
 ;(def pn3 (read-pnml "data/join2.xml"))
 ;(def pn4 (read-pnml "data/join3.xml"))
@@ -184,9 +196,8 @@
               (let [b (join-binds pn imm)]
                 (as-> pn ?pn
                   (eliminate-pn ?pn imm)
-                  ;; Some :top-ins might not have source in :place-top; keep those.
-                  (reduce (fn [pn ar] (eliminate-pn pn ar)) ?pn
-                          (filter #(= (:source %) (:place-top b)) (:top-ins b)))
+                  (reduce (fn [pn ar] (eliminate-pn pn ar)) ?pn (:top-ins b))
+                  (reduce (fn [pn ar] (eliminate-pn pn ar)) ?pn (:preserve-top-ins b)) 
                   (reduce (fn [pn tr] (eliminate-pn pn tr)) ?pn (:trans b))
                   (reduce (fn [pn ar] (eliminate-pn pn ar)) ?pn (:places-ins b))
                   (reduce (fn [pn ar] (eliminate-pn pn ar)) ?pn (:imm-ins b))
@@ -196,11 +207,15 @@
                                       (as-> pnn ?pnp
                                         (add-pn ?pnp {:name (:name cmd) :tid (next-tid ?pnp)
                                                       :type :exponential :rate (:rate cmd)})
-                                        (reduce (fn [pn receiver]
-                                                  (add-pn pn (make-arc ?pnp receiver (:name cmd))))
+                                        (reduce (fn [pn receiver] ; POD 2017-02-13
+                                                  (add-pn pn (make-arc pn receiver (:name cmd))))
                                                 ?pnp
-                                                (:places-top cmd))
-                                        (add-pn ?pnp (make-arc ?pnp (:receive-top cmd) (:name cmd))) ; POD remove
+                                                (:receive-tops cmd))
+                                        (reduce (fn [pn psv]
+                                                  (add-pn pn (make-arc pn (:source psv) (:target psv)
+                                                                       :type (:type psv) :multiplicity (:multiplicity psv))))
+                                                ?pnp
+                                                (:preserves cmd))
                                         (add-pn ?pnp (make-arc ?pnp (:name cmd) (:send-activator cmd)))
                                         (reduce (fn [pn inhib]
                                                   (add-pn pn (make-arc pn (:name cmd) inhib :type :inhibitor)))
@@ -223,10 +238,7 @@
             pn
             (find-joins pn))))
 
-
 (declare find-vanish vanish-binds)
-
-
 (defn vanish2spn
   "Remove a vanishing place and IMMs that are attached."
   [pn]
@@ -272,64 +284,7 @@
                (every? #(= 1 (count (arcs-into-trans pn %))) tids))))
           (:places pn)))
 
-;;; ---- Utils ---------------
-(defn eliminate-pn
-  "Transform the PN graph by eliminating the argument element."
-  [pn elem]
-  (cond (:pid elem) ; It is a place.
-        (assoc pn :places (remove #(= % elem) (:places pn)))
-        (:tid elem) ; It is a transition
-        (assoc pn :transitions (remove #(= % elem) (:transitions pn)))
-        (:aid elem) ; It is an arc
-        (assoc pn :arcs (remove #(= % elem) (:arcs pn)))))
 
-(defn add-pn
-  "Transform the PN graph by adding the argument element."
-  [pn elem]
-  (cond (:pid elem) ; It is a place.
-        (assoc pn :places (conj (:places pn) elem)))
-        (:tid elem) ; It is a transition
-        (assoc pn :transitions (conj (:transitions pn) elem))
-        (:aid elem) ; It is an arc
-        (assoc pn :arcs (conj (:arcs pn) elem)))
-
-(defn next-tid [pn]
-  (if (empty? (:transitions pn))
-    1
-    (inc (apply max (map :tid (:transitions pn))))))
-
-(def +zippy+ (atom nil))
-
-(defn next-aid [pn]
-  (reset! +zippy+ pn)
-  (if (empty? (:arcs pn))
-    1
-    (inc (apply max (map :aid (:arcs pn))))))
-
-;;; Naming convention for transitions: who is ahead of you?
-(defn strip-name
-  [key]
-  (str (str (subs (str key) 1))))
-
-(defn new-name
-  "Return the string naming the keyword."
-  [key suffix]
-  (keyword (str (str (subs (str key) 1)) suffix)))
-
-(defn new-name-ahead
-  [owner ahead]
-  (new-name
-   owner
-   (str "--"
-        (apply str (interpose "&" (map strip-name ahead)))
-        "-before")))
-
-(defn make-arc
-  [pn source target & {:keys [type aid multiplicity]
-                    :or {type :normal aid (next-aid pn) multiplicity 1}}]
-  {:aid aid :source source :type type :multiplicity multiplicity})
-
-        
 ;;;------- Diagnostic 
 
 (def pn1
@@ -342,12 +297,11 @@
     (-> (read-pnml filename)
         (split2spn)))
 
-(defn two-steps
+(defn two-step
   [filename]
     (-> (read-pnml filename)
         (split2spn)
         (join2spn)))
-
 
 (def bbb (join-binds pn1 (first (find-joins pn1))))
 

@@ -63,4 +63,61 @@
   [pn name]
   (= :immediate (:type (name2transition pn name))))
 
+(defn eliminate-pn
+  "Transform the PN graph by eliminating the argument element."
+  [pn elem]
+  (cond (:pid elem) ; It is a place.
+        (assoc pn :places (vec (remove #(= % elem) (:places pn))))
+        (:tid elem) ; It is a transition
+        (assoc pn :transitions (vec (remove #(= % elem) (:transitions pn))))
+        (:aid elem) ; It is an arc
+        (assoc pn :arcs (vec (remove #(= % elem) (:arcs pn))))))
+
+(defn add-pn
+  "Transform the PN graph by adding the argument element."
+  [pn elem]
+  (cond (:pid elem) ; It is a place.
+        (assoc pn :places (conj (:places pn) elem))
+        (:tid elem) ; It is a transition
+        (assoc pn :transitions (conj (:transitions pn) elem))
+        (:aid elem) ; It is an arc
+        (assoc pn :arcs (conj (:arcs pn) elem))))
+
+(defn next-tid [pn]
+  (if (empty? (:transitions pn))
+    1
+    (inc (apply max (map :tid (:transitions pn))))))
+
+(def +zippy+ (atom nil))
+
+(defn next-aid [pn]
+  (if (empty? (:arcs pn))
+    1
+    (inc (apply max (map :aid (:arcs pn))))))
+
+;;; Naming convention for transitions: who is ahead of you?
+(defn strip-name
+  [key]
+  (str (str (subs (str key) 1))))
+
+(defn new-name
+  "Return the string naming the keyword."
+  [key suffix]
+  (keyword (str (str (subs (str key) 1)) suffix)))
+
+(defn new-name-ahead
+  [owner ahead]
+  (new-name
+   owner
+   (str "--"
+        (apply str (interpose "&" (map strip-name ahead)))
+        "-before")))
+
+(defn make-arc
+  [pn source target & {:keys [type aid multiplicity]
+                    :or {type :normal aid (next-aid pn) multiplicity 1}}]
+  {:aid aid :source source :target target :type type :multiplicity multiplicity})
+
+
+
 
