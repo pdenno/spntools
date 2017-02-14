@@ -136,7 +136,7 @@
                                 :rate rate
                                 :preserves (into (map #(assoc % :target n) receive-preserves)
                                                  (map #(assoc % :source % n) send-preserves))
-                                :receive-tops (filter #(path-from % owner 2) (:places-top binds)) 
+                                :receive-tops (filter #(path-from pn % owner 4) (:places-top binds)) 
                                 :receive-inhibitors others
                                 :send-activator owner})))
           (= in-front (count others))
@@ -144,7 +144,7 @@
                  (let [n (new-name owner "-last")]
                    (conj accum {:name n
                                 :rate rate
-                                :receive-tops (:places-top binds) ; POD
+                                :receive-tops (filter #(path-from pn % owner 4) (:places-top binds)) 
                                 :preserves (into (map #(assoc % :target  n) receive-preserves)
                                                  (map #(assoc % :source n) send-preserves))
                                 :receive-activators others
@@ -156,7 +156,7 @@
                               (let [n (new-name-ahead owner ahead)] 
                                 {:name n
                                  :rate rate
-                                 :receive-tops (:places-top binds) ; POD
+                                 :receive-tops (filter #(path-from pn % owner 4) (:places-top binds)) 
                                  :preserves (into (map #(assoc % :target n) receive-preserves)
                                                   (map #(assoc % :source n) send-preserves))
                                  :receive-inhibitors (remove (fn [o] (some #(when (= o %) %) ahead)) others)

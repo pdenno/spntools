@@ -40,24 +40,14 @@
   (let [tr-name (:name (tid2obj pn tid))]
     (filter #(= (:source %) tr-name) (:arcs pn))))
 
-;;; This one uses :name!
-(defn arcs-outof-place
-  "Return the output arcs of a place."
-  [pn pl-name]
-  (filter #(= (:source %) pl-name) (:arcs pn)))
-
-(defn arcs-into-place
-  "Return the output arcs of a place."
-  [pn pl-name]
-  (filter #(= (:target %) pl-name) (:arcs pn)))
-
+(declare name2transition name2place)
 (defn follow-path
   [pn obj]
   (cond (:tid obj) (arcs-outof-trans pn (:tid obj)),
         (:pid obj) (arcs-outof-place pn (:name obj)),
         (:aid obj) (list (or (name2transition pn (:target obj))
                              (name2place pn (:target obj))))))
-        
+
 (def ^:dynamic *path-from* false)
 (defn path-from-aux
   [pn here to nsteps & {:keys [so-far] :or {so-far []}}]
@@ -66,10 +56,9 @@
           (reset! *path-from* so-far)
           (when (not @*path-from*) (reset! *path-from* false)))
         (> nsteps 0)
-        (for [p (follow-path pn here)]
+        (doseq [p (follow-path pn here)]
           (path-from-aux pn p to (dec nsteps) :so-far (conj so-far p)))))
 
-;;; POD what comes back is a mess.
 (defn path-from
   "Return a path from FROM to TO (both are places) in exactly STEPS steps (counting arcs and places)."
   [pn from to nsteps]
@@ -84,6 +73,17 @@
 (defn name2transition
   [pn name]
   (some #(when (= name (:name %)) %) (:transitions pn)))
+
+;;; This one uses :name!
+(defn arcs-outof-place
+  "Return the output arcs of a place."
+  [pn pl-name]
+  (filter #(= (:source %) pl-name) (:arcs pn)))
+
+(defn arcs-into-place
+  "Return the output arcs of a place."
+  [pn pl-name]
+  (filter #(= (:target %) pl-name) (:arcs pn)))
 
 (defn immediate?
   [pn name]

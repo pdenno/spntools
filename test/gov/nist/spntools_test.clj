@@ -7,7 +7,7 @@
 (deftest read-pnml-1
     (testing "pnml reading"
     (let [pnml (gspn2spn (read-pnml "data/marsan69.xml"))]
-      (is (= (count (:arcs pnml)) 28))
+      (is (= (count (:arcs pnml)) 24))
       (is (= (count (:transitions pnml)) 9))
       (is (= (count (:places pnml)) 8)))))
 
