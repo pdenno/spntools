@@ -23,9 +23,10 @@
             first 
             :content
             first)]
-    (when (string? str)
+    (if (string? str)
       (when-let [match (re-matches #"Default,(.\d*)" str)]
-        (read-string (nth match 1))))))
+        (read-string (nth match 1)))
+      1))) ; PIPE doesn't set multiplicity of inhibitory arcs.
 
 (def +pid-cnt+ (atom 0))
 (def +tid-cnt+ (atom 0))
@@ -80,13 +81,15 @@
     (assoc ?m :arcs (vec (map essential-arc (:arcs ?m))))
     (dissoc ?m :raw)))
 
-(defn reorder-marking
-  "Renumber the pids so that the marking is shown in the argument order."
+(defn reorder-places
+  "Reorder and renumber the places for easier comparison with textbook models."
   [pn order]
   (update pn :places
           (fn [places]
-            (vec (map #(assoc % :pid (inc (.indexOf order (:id %)))) places)))))
+            (vec
+             (sort #(< (:pid %1) (:pid %2))
+                   (map #(assoc % :pid (inc (.indexOf order (:name %)))) places))))))
 
                 
 
-                   
+                  

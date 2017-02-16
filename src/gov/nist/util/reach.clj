@@ -1,20 +1,28 @@
 (ns gov.nist.spntools.util.reach
   (:require [clojure.data.xml :as xml :refer (parse-str)]
             [clojure.pprint :refer (cl-format pprint pp)]
-            [gov.nist.spntools.util.utils :refer :all]))
+            [gov.nist.spntools.util.utils :refer :all]
+            [gov.nist.spntools.util.reach :refer :all] ; pod temporary?
+            [uncomplicate.neanderthal.core :as ne]
+            [uncomplicate.neanderthal.native :as nen]))
 
-(defn initial-marking
-  [pn]
-  (vec (map :initial-marking (sort #(< (:pid %1) (:pid %2)) (:places pn)))))
 
-(defn fireable?
+;;; POD Consider making these marking vectors maps. I'd still use vectors
+;;;     for +visited-links+ however. 
+;;; POD still screwed up; it needs the :marking-key. 
+(defn fireable? 
   "Return true if transition is fireable under the argument marking."
   [pn mark tid]
   (when-let [arcs (not-empty (arcs-into-trans pn tid))]
-    (every? (fn [ar] (>= (nth mark (dec (:pid (name2place pn (:source ar)))))
-                         (:multiplicity ar)))
-            arcs)))
-
+    (let [arc-groups (group-by :type arcs)]
+      (and 
+       (every? (fn [ar] (>= (nth mark (dec (:pid (name2place pn (:source ar)))))
+                            (:multiplicity ar)))
+               (:normal arc-groups))
+       (every? (fn [ar] (< (nth mark (dec (:pid (name2place pn (:source ar)))))
+                           (:multiplicity ar)))
+               (:inhibitor arc-groups))))))
+     
 (defn fireables
   "Return a vector of tids that are fireable under the argument marking."
   [pn mark]
@@ -43,59 +51,59 @@
 ;;; and the transition taken. Links look like (marking tid). 
 ;;; The target marking is completely specified by the source and the transition. 
 (defn next-markings
-  "Return a seq of maps ({:source <mark> :trans <transition that fired> :target <new mark>}...)"
+  ;; "Return a seq of maps ({:M <mark> :trans <transition that fired> :Mp <new mark>}...)"
   [pn marking]
   (map (fn [l]
          (let [tr (tid2obj pn (second l))]
-           {:source marking
-            :trans (:name tr)
-            :target (mark-at-link-head pn l)}))
+           {:M marking
+            :fire (:name tr)
+            :Mp (mark-at-link-head pn l)
+            :rate (:rate tr)}))
        (filter (fn [link] (not-any? (fn [vis] (= link vis)) @*visited-links*))
                (map (fn [tid] (list marking tid)) (fireables pn marking)))))
 
 (defn calc-reachability-aux
   [pn marking]
   (let [nexts (next-markings pn marking)] 
-    (swap! *visited-links* into (map #(list (:source %) (:tid (name2transition pn (:trans %)))) nexts))
+    (swap! *visited-links* into (map #(list (:M %) (:tid (name2transition pn (:fire %)))) nexts))
+    (reset! +zippy+ @*visited-links*)
     (swap! *graph* into nexts)
     (doseq [nx nexts]
-      (calc-reachability-aux pn (:target nx)))))
+      (calc-reachability-aux pn (:Mp nx)))))
 
 (defn calc-reachability
   [pn]
-  (binding [*visited-links* (atom [])
-            *graph* (atom [])]
-    (calc-reachability-aux pn (initial-marking pn))
-    @*graph*))
+  (let [graph (initial-marking pn)]
+    (binding [*visited-links* (atom [])
+              *graph* (atom [])]
+      (calc-reachability-aux pn (:initial-marking graph))
+      (assoc graph :graph @*graph*))))
 
+
+
+;;; Reachability-specific utilities ---------------------------------------------
 (defn markings2source
   "Return source state names and transitions that are sources of the argument marking."
   [mark graph name-map]
   (as-> graph ?g
-    (filter #(= (:target %) mark) ?g)
-    (map #(vector (get name-map (:source %)) (:trans %)) ?g)))
+    (filter #(= (:Mp %) mark) ?g)
+    (map #(vector (get name-map (:source %)) (:fire %)) ?g)))
 
 (defn markings2target
   "Return target state names and transitions that are targets of the argument marking."
   [mark graph name-map]
   (as-> graph ?g
-    (filter #(= (:source %) mark) ?g)
-    (map #(vector (get name-map (:target %)) (:trans %)) ?g)))
+    (filter #(= (:M %) mark) ?g)
+    (map #(vector (get name-map (:target %)) (:fire %)) ?g)))
 
-(defn make-name-map
-  "Make a map of [marking keyword] naming the markings."
-  [graph]
-  (let [cnt (atom 0)]
-    (reduce (fn [m link] (assoc m (:source link) (keyword (str "S" (swap! cnt inc)))))
-            {}
-            graph)))
 
 ;;; Reorganize from individual firings to indexed by state with transitions to and from.
-;;; Also, use name-map to rename states (currently markings) to names used in Pipe (S1, S2, etc.). 
+;;; Also, use name-map to rename states (currently markings) to names used in Pipe (S1, S2, etc.).
+;;; POD probably can clean this up now that initial-marking returns a map with :marking-key.
 (defn pipe-format
   "Reorganize the graph data from a list of transitions to markings with transitions."
   [graph pn name-map]
-  (let [init-marking (initial-marking pn)]
+  (let [init-marking (:initial-marking (initial-marking pn))]
     (as-> graph ?g
       (group-by :source ?g)
       (reduce-kv (fn [m k v]
@@ -117,4 +125,3 @@
                  ?g
                  ?g)
       (into (sorted-map) (zipmap (keys ?g) (vals ?g))))))
-

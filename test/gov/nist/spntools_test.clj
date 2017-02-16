@@ -4,13 +4,6 @@
             [gov.nist.spntools.util.pnml :refer :all]
             [gov.nist.spntools.util.utils :refer :all]))
 
-(deftest read-pnml-1
-    (testing "pnml reading"
-    (let [pnml (gspn2spn (read-pnml "data/marsan69.xml"))]
-      (is (= (count (:arcs pnml)) 24))
-      (is (= (count (:transitions pnml)) 9))
-      (is (= (count (:places pnml)) 8)))))
-
 (deftest join-2-test
   (testing "small join reduction"
     (let [j2 (gspn2spn (read-pnml "data/join2.xml"))]
@@ -25,7 +18,6 @@
       (is (= (count (:transitions j3)) 13))
       (is (= (count (:places j3)) 5)))))
 
-;;; Needs investigation.
 (deftest join2-graph-test
   (testing "join graph equality"
     (let [result (as-> (gspn2spn (read-pnml "data/join2.xml")) ?pn
@@ -48,19 +40,19 @@
               #{{:aid 6, :source :Pjoin, :target :Treturn, :type :normal, :multiplicity 1}
                 {:aid 11, :source :Treturn, :target :Pstart, :type :normal, :multiplicity 2}
                 {:aid 12, :source :Pstart, :target :P1-first, :type :normal, :multiplicity 1}
-                {:aid 13, :source :P1, :target :P1-first, :type :inhibitor, :multiplicity nil}
+                {:aid 13, :source :P1, :target :P1-first, :type :inhibitor, :multiplicity 1}
                 {:aid 14, :source :P1-first, :target :P1, :type :normal, :multiplicity 1}
                 {:aid 15, :source :P2, :target :P1-first, :type :inhibitor, :multiplicity 1}
                 {:aid 16, :source :Pstart, :target :P1-last, :type :normal, :multiplicity 1}
-                {:aid 17, :source :P1, :target :P1-last, :type :inhibitor, :multiplicity nil}
+                {:aid 17, :source :P1, :target :P1-last, :type :inhibitor, :multiplicity 1}
                 {:aid 18, :source :P1-last, :target :Pjoin, :type :normal, :multiplicity 1}
                 {:aid 19, :source :P2, :target :P1-last, :type :normal, :multiplicity 1}
                 {:aid 20, :source :Pstart, :target :P2-first, :type :normal, :multiplicity 1}
-                {:aid 21, :source :P2, :target :P2-first, :type :inhibitor, :multiplicity nil}
+                {:aid 21, :source :P2, :target :P2-first, :type :inhibitor, :multiplicity 1}
                 {:aid 22, :source :P2-first, :target :P2, :type :normal, :multiplicity 1}
                 {:aid 23, :source :P1, :target :P2-first, :type :inhibitor, :multiplicity 1}
                 {:aid 24, :source :Pstart, :target :P2-last, :type :normal, :multiplicity 1}
-                {:aid 25, :source :P2, :target :P2-last, :type :inhibitor, :multiplicity nil}
+                {:aid 25, :source :P2, :target :P2-last, :type :inhibitor, :multiplicity 1}
                 {:aid 26, :source :P2-last, :target :Pjoin, :type :normal, :multiplicity 1}
                 {:aid 27, :source :P1, :target :P2-last, :type :normal, :multiplicity 1}}})))))
 
@@ -70,6 +62,17 @@
                 (= (:target %) target))
           (:arcs pn)))
 
+(defn check-every [pn data]
+  (every? (fn [r] r)
+          (reduce (fn [result [source target num]]
+                    (if (= (count (find-arc-test pn source target)) 1) ; just worked out that way.
+                      (conj result true)
+                      (do (println "--- Failing:" num  "[" source target "]")
+                          (conj result false))))
+                  []
+                  data)))
+
+
 ;;; Ones with commas are inhibitors
 (defn j2-has-arcs-test []    
   (let [j2 (gspn2spn (read-pnml "data/join2.xml"))
@@ -78,14 +81,7 @@
                [:P2 :P2-first, 10] [:P2 :P1-last 11] [:P1 :P2-last 12] [:P1 :P1-last, 13] [:P2 :P2-last, 14]
                [:P1-last :Pjoin 15]  [:P2-last :Pjoin 16] [:Pjoin :Treturn 17]  [:Treturn :Pstart 18]]]
     (println "Testing" (count data) "arcs")
-    (every? (fn [r] r)
-            (reduce (fn [result [source target num]]
-                      (if (= (count (find-arc-test j2 source target)) 1) ; just worked out that way.
-                        (conj result true)
-                        (do (println "--- Failing:" num  "[" source target "]")
-                            (conj result false))))
-                    []
-                    data))))
+    (check-every j2 data)))
 
 (defn marsan-one-step-arcs-test []    
   (let [j2 (one-step "data/marsan69.xml")
@@ -94,15 +90,8 @@
               [:t_ok :P9 17] [:t_syn :P7 12] [:Tio :P1 19] [:Tpar1 :P5 8] [:Tpar2 :P6 9]
               [:Tcheck :P3 4] [:Tcheck :P4 5] [:Tndata :P3 2] [:Tndata :P4 3]]]
     (println "Testing" (count data) "arcs")
-    (every? (fn [r] r)
-            (reduce (fn [result [source target num]]
-                      (if (= (count (find-arc-test j2 source target)) 1) ; just worked out that way.
-                        (conj result true)
-                        (do (println "--- Failing:" num  "[" source target "]")
-                            (conj result false))))
-                    []
-                    data))))
-
+    (check-every j2 data)))
+    
 (defn marsan-two-step-arcs-test []    
   (let [j2 (two-step "data/marsan69.xml")
         data [[:Tio :P1 1] [:P9 :Tio 2]
@@ -151,7 +140,7 @@
     (remove (fn [a] (some #(= [(:source a) (:target a)] %) cdata)) (:arcs j2))))
 
 (deftest find-missing-arcs
-  (testing "PNs has all correct arcs"
+  (testing "PNs have all correct arcs"
     (is (j2-has-arcs-test))
     (is (marsan-one-step-arcs-test))))
 
@@ -163,5 +152,20 @@
 
 
 
-      
-          
+(deftest infinitesimal-generator-matrix
+  (testing "Marsan section 6.1 example"
+    (is (= (pn-Q-matrix m6 
+                        :force-places [:Pact1 :Preq1 :Pacc1 :Pidle :Pact2 :Preq2 :Pacc2]
+                        :force-markings [[1 0 0 1 1 0 0]
+                                         [0 1 0 1 1 0 0]
+                                         [0 0 1 0 1 0 0]
+                                         [0 0 1 0 0 1 0]
+                                         [0 1 0 1 0 1 0]
+                                         [1 0 0 1 0 1 0]
+                                         [1 0 0 0 0 0 1]
+                                         [0 1 0 0 0 0 1]])
+           [-3.0 0.0 10.0 0.0 0.0 0.0 5.0 0.0 1.0 -102.0 0.0 0.0 0.0 0.0 0.0
+            5.0 0.0 100.0 -12.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 2.0 -10.0 100.0
+            0.0 0.0 0.0 0.0 2.0 0.0 0.0 -200.0 1.0 0.0 0.0 2.0 0.0 0.0 10.0
+            0.0 -101.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 100.0 -6.0 0.0 0.0 0.0 0.0
+            0.0 100.0 0.0 1.0 -5.0]))))
