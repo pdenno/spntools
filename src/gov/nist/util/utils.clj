@@ -40,31 +40,32 @@
   (let [tr-name (:name (tid2obj pn tid))]
     (filter #(= (:source %) tr-name) (:arcs pn))))
 
-(declare name2transition name2place)
+(declare arcs-out-of-trans arcs-outof-place name2transition name2place)
 (defn follow-path
+  "Return a sequence of places, transitions, arcs forward of OBJ."
   [pn obj]
   (cond (:tid obj) (arcs-outof-trans pn (:tid obj)),
         (:pid obj) (arcs-outof-place pn (:name obj)),
         (:aid obj) (list (or (name2transition pn (:target obj))
                              (name2place pn (:target obj))))))
 
-(def ^:dynamic *path-from* false)
-(defn path-from-aux
+(def ^:dynamic *path-to* nil)
+(defn paths-to-aux
   [pn here to nsteps & {:keys [so-far] :or {so-far []}}]
   (cond (= nsteps 0)
-        (if (= (:name (last so-far)) to)
-          (reset! *path-from* so-far)
-          (when (not @*path-from*) (reset! *path-from* false)))
+        (when (= (:name (last so-far)) to)
+          (swap! *path-to* conj so-far))
         (> nsteps 0)
         (doseq [p (follow-path pn here)]
-          (path-from-aux pn p to (dec nsteps) :so-far (conj so-far p)))))
+          (paths-to-aux pn p to (dec nsteps) :so-far (conj so-far p)))))
 
-(defn path-from
-  "Return a path from FROM to TO (both are places) in exactly STEPS steps (counting arcs and places)."
+(defn paths-to
+  "Return a path from FROM to TO (both are places) in exactly 
+   STEPS steps (counting places, transitions and arcs)."
   [pn from to nsteps]
-  (binding [*path-from* (atom false)]
-    (path-from-aux pn (name2place pn from) to nsteps)
-    @*path-from*))
+  (binding [*path-to* (atom [])]
+    (paths-to-aux pn (name2place pn from) to nsteps)
+    @*path-to*))
                  
 (defn name2place
   [pn name]
@@ -145,5 +146,21 @@
   {:aid aid :source source :target target :type type :multiplicity multiplicity})
 
 
+(defn initial-marking
+  "Return a map {:marking-key <vector of place names> :initial-marking <vector of integers>}"
+  [pn]
+  (let [sorted (sort #(< (:pid %1) (:pid %2)) (:places pn))]
+    {:marking-key (vec (map :name sorted))
+     :initial-marking
+     (vec (map :initial-marking (sort #(< (:pid %1) (:pid %2)) sorted)))}))
 
-
+(defn reorder-markings
+  "Reorder the markings calculated from the reachability graph so to match a textbook example."
+  [graph new-order]
+  (let [sgraph (set graph)
+        sorder (set new-order)
+        isect (clojure.set/intersection sgraph sorder)]
+    (when (not (= (count graph) (count isect))) 
+      (throw (ex-info "new-order invalid (count)"
+                      {:diff (clojure.set/difference sgraph sorder)})))
+    new-order))
