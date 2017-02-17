@@ -150,8 +150,6 @@
     (is (empty? (marsan-one-step-weird-arcs-test)))
     (is (empty? (marsan-two-step-weird-arcs-test)))))
 
-
-
 (deftest infinitesimal-generator-matrix
   (testing "Marsan section 6.1 example"
     (is (= (pn-Q-matrix m6 
@@ -169,3 +167,17 @@
             0.0 0.0 0.0 0.0 2.0 0.0 0.0 -200.0 1.0 0.0 0.0 2.0 0.0 0.0 10.0
             0.0 -101.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 100.0 -6.0 0.0 0.0 0.0 0.0
             0.0 100.0 0.0 1.0 -5.0]))))
+
+
+(deftest gauss-jordan-elimination
+  (testing "Gauss-Jordan elimination solution, inverse and determinant"
+    (let [result (gj-explicit [[1.0 2.0 3.0] [3.0 2.0 1.0] [2.0 1.0 3.0]] [12.0 24.0 36.0])
+          x (:x result)
+          ainv (:inv result)
+          det (:det result)]
+      ;(is (< -11.999 det -12.001)) ; POD needs investigation.
+      (is (vec=* x [13.0 -11.0 7.0] 0.0000001))
+      (is (vec=* (nth ainv 0) [-5/12  1/4  1/3] 0.0000001))
+      (is (vec=* (nth ainv 1) [ 7/12  1/4 -2/3] 0.0000001))
+      (is (vec=* (nth ainv 2) [ 1/12 -1/4  1/3] 0.0000001)))))
+      

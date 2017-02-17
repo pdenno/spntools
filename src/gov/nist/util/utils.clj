@@ -164,3 +164,9 @@
       (throw (ex-info "new-order invalid (count)"
                       {:diff (clojure.set/difference sgraph sorder)})))
     new-order))
+
+(defn vec=*
+  "Check that v1 is = v2 +/i tolerance at every element."
+  [v1 v2 tol]
+  (every? (fn [ans] ans)
+          (map #(< (- %2 tol) %1 (+ %2 tol)) v1 v2)))
