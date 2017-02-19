@@ -3,11 +3,10 @@
             [clojure.pprint :refer (cl-format pprint pp)]
             [clojure.math.combinatorics :as combo]
             [gov.nist.spntools.util.reach :as reach :refer (calc-reachability)]
-            [gov.nist.spntools.util.pnml :as pnml :refer (read-pnml reorder-places reorder-marking)]
+            [gov.nist.spntools.util.pnml :as pnml :refer (read-pnml)]
             [gov.nist.spntools.util.utils :as utils :refer :all]
-            [uncomplicate.neanderthal.core :as ne]
-            [uncomplicate.neanderthal.native :as nen]))
-
+            [clojure.core.matrix :as m :refer :all]
+            [clojure.core.matrix.linear :as ml :refer (svd)]))
 
 ;;; Four steps to most reductions:
 ;;;  1) Find instances of the pattern.
@@ -146,7 +145,7 @@
                                 :rate rate
                                 :preserves (into (map #(assoc % :target n) receive-preserves)
                                                  (map #(assoc % :source % n) send-preserves))
-                                :receive-tops (filter #(paths-to pn % owner 4) (:places-top binds)) 
+                                :receive-tops (filter #(first (paths-to pn % owner 4)) (:places-top binds))
                                 :receive-inhibitors others
                                 :send-activator owner})))
           (= in-front (count others))
@@ -154,7 +153,7 @@
                  (let [n (new-name owner "-last")]
                    (conj accum {:name n
                                 :rate rate
-                                :receive-tops (filter #(paths-to pn % owner 4) (:places-top binds)) 
+                                :receive-tops (filter #(first (paths-to pn % owner 4)) (:places-top binds))
                                 :preserves (into (map #(assoc % :target  n) receive-preserves)
                                                  (map #(assoc % :source n) send-preserves))
                                 :receive-activators others
@@ -166,7 +165,7 @@
                               (let [n (new-name-ahead owner ahead)] 
                                 {:name n
                                  :rate rate
-                                 :receive-tops (filter #(path-to pn % owner 4) (:places-top binds)) 
+                                 :receive-tops (filter #(first (paths-to pn % owner 4)) (:places-top binds))
                                  :preserves (into (map #(assoc % :target n) receive-preserves)
                                                   (map #(assoc % :source n) send-preserves))
                                  :receive-inhibitors (remove (fn [o] (some #(when (= o %) %) ahead)) others)
@@ -328,8 +327,10 @@
       (- (reduce #(+ %1 (:rate %2)) 0.0 trans)) ; POD Someday I'll need to know why!
       (reduce #(+ %1 (:rate %2)) 0.0 trans-mp))))
 
-(defn pn-Q-matrix
-  "Produce a column-ordered vector of rates (AKA the state transition rate matrix,
+
+
+(defn pn2CTMC-Q-matrix
+  "Calculate the reachability graph infinitesimal gnererator matrix 
    AKA the infinitesimal gnerator matrix) from the reachability graph."
   [pn & {:keys [force-markings force-places]}]
   (let [pn (if force-places (reorder-places pn force-places) pn)
@@ -344,76 +345,19 @@
                  (range 1 (inc size))))
           (range 1 (inc size))))))
 
-(defn concat-identity
-  "Return A with I appended on the right (e.g. for Gauss Jordan elimination)."
-  [A & {:keys [size] :or {size (count (first A))}}]
-  (vec (map #(vec (concat (nth A %)
-                          (assoc (vec (repeat size 0.0)) % 1.0)))
-            (range size))))
 
-(defn concat-vector
-  "Return A with b appended on the right (e.g. for Gauss Jordan elimination)."
-  [A b]
-  (vec (reduce (fn [AA i] (update AA i #(conj % (nth b i))))
-               A
-               (range (count b)))))
-
-;;; POD: Most Gauss-Jordan programs include a search of the matrix to place the largest element on
-;;; the diagonal prior to division by that element so as to minimize the effects of round off error.
-;;; POD: Also, get it it banded form. 
-(defn gj-explicit
-  "Return the inverse of A, determinant and solution for argument b using Gauss-Jordan elimination."
-  [A b]
-  (let [size (count b)
-        Ab (concat-vector A b)
-        AbI (concat-identity Ab :size size)
-        det (atom 1)
-        mat (as-> AbI ?AAA
-              (reduce (fn [AAA ii] ; solve forward for 1 on diagonal
-                        (as-> AAA ?A
-                          (reduce (fn [A i] ; Normalize every row by lead element.
-                                    (let [ai1 (nth (nth A i) ii)] ; some extra * by 0 here on map.
-                                      (if (not (zero? ai1))
-                                        (do (swap! det * ai1)
-                                            (assoc A i (vec (map #(/ % ai1) (nth A i)))))
-                                        A)))
-                                  ?A
-                                  (range ii size))
-                          (reduce (fn [AA i]
-                                    (reduce (fn [A j] ; Subtract first row from all the remaining rows.
-                                              (if (= i j)
-                                                A
-                                                (if (not (zero? (nth (nth A j) ii))) ; POD force 0 here?
-                                                  (assoc A j (vec (map #(- %1 %2) (nth A i) (nth A j)))) 
-                                                  A)))
-                                            AA
-                                            (range i size)))
-                                  ?A
-                                  (range ii size))))
-                      ?AAA
-                      (range size))
-              (reduce (fn [AA icol] ; backward solve
-                        (reduce (fn [A irow] ; subtract 'upwards' one column at a time to form identity matrix on left. 
-                                  (if-let [val (if (zero? (nth (nth A irow) (inc icol))) false (nth (nth A irow) (inc icol)))]
-                                    (assoc A irow (vec (map #(- %1 (* val %2)) (nth A irow) (nth A (inc icol))))) ;icol is a row!a
-                                    A))
-                                AA
-                                (reverse (range (inc icol)))))
-                      ?AAA
-                      (reverse (range (dec size)))))]
-    {:x (vec (map #(nth % size) mat)) 
-     :det :not-yet-correct ; @det
-     :inv (vec (map #(vec (subvec % (inc size))) mat))}))
-
-            
-          
-    
-    
+(def Q (m/array [[-3.0 1.0 0.0 0.0 0.0 2.0 0.0 0.0]
+                 [0.0 -102.0 100.0 0.0 2.0 0.0 0.0 0.0]
+                 [10.0 0.0 -12.0 2.0 0.0 0.0 0.0 0.0]
+                 [0.0 0.0 0.0 -10.0 0.0 10.0 0.0 0.0]
+                 [0.0 0.0 0.0 100.0 -200.0 0.0 0.0 100.0]
+                 [0.0 0.0 0.0 0.0 1.0 -101.0 100.0 0.0]
+                 [5.0 0.0 0.0 0.0 0.0 0.0 -6.0 1.0]
+                 [0.0 5.0 0.0 0.0 0.0 0.0 0.0 -5.0]]))
 
 
-      
+
+
 
                             
-                                
-      
-
+                             

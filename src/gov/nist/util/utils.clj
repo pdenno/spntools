@@ -66,7 +66,7 @@
   (binding [*path-to* (atom [])]
     (paths-to-aux pn (name2place pn from) to nsteps)
     @*path-to*))
-                 
+
 (defn name2place
   [pn name]
   (some #(when (= name (:name %)) %) (:places pn)))
@@ -170,3 +170,66 @@
   [v1 v2 tol]
   (every? (fn [ans] ans)
           (map #(< (- %2 tol) %1 (+ %2 tol)) v1 v2)))
+
+#_(defn concat-identity
+  "Return A with I appended on the right (e.g. for Gauss Jordan elimination)."
+  [A & {:keys [size] :or {size (count (first A))}}]
+  (vec (map #(vec (concat (nth A %)
+                          (assoc (vec (repeat size 0.0)) % 1.0)))
+            (range size))))
+
+#_(defn concat-vector
+  "Return A with b appended on the right (e.g. for Gauss Jordan elimination)."
+  [A b]
+  (vec (reduce (fn [AA i] (update AA i #(conj % (nth b i))))
+               A
+               (range (count b)))))
+
+;;; POD: Most Gauss-Jordan programs include a search of the matrix to place the largest element on
+;;; the diagonal prior to division by that element so as to minimize the effects of round off error.
+;;; POD: Also, get it it banded form. 
+#_(defn gj-explicit
+  "Return the inverse of A, determinant and solution for argument b using Gauss-Jordan elimination."
+  [A b]
+  (let [size (count b)
+        Ab (concat-vector A b)
+        AbI (concat-identity Ab :size size)
+        det (atom 1)
+        mat (as-> AbI ?AAA
+              (reduce (fn [AAA ii] ; solve forward for 1 on diagonal
+                        (as-> AAA ?A
+                          (reduce (fn [A i] ; Normalize every row by lead element.
+                                    (let [ai1 (nth (nth A i) ii)] ; some extra * by 0 here on map.
+                                      (if (not (zero? ai1))
+                                        (do (swap! det * ai1)
+                                            ;(println "ai1 =" ai1)
+                                            (assoc A i (vec (map #(/ % ai1) (nth A i)))))
+                                        A)))
+                                  ?A
+                                  (range ii size))
+                          (reduce (fn [AA i]
+                                    (reduce (fn [A j] ; Subtract first row from all the remaining rows.
+                                              (if (= i j)
+                                                A
+                                                (if (not (zero? (nth (nth A j) ii))) ; POD force 0 here?
+                                                  (assoc A j (vec (map #(- %1 %2) (nth A i) (nth A j)))) 
+                                                  A)))
+                                            AA
+                                            (range i size)))
+                                  ?A
+                                  (range ii size))))
+                      ?AAA
+                      (range size))
+              (reduce (fn [AA icol] ; backward solve. Note icol designates row in the assoc.
+                        (reduce (fn [A irow] ; subtract 'upwards' one column at a time to form identity matrix on left. 
+                                  (if-let [val (if (zero? (nth (nth A irow) (inc icol))) false (nth (nth A irow) (inc icol)))]
+                                    (assoc A irow (vec (map #(- %1 (* val %2)) (nth A irow) (nth A (inc icol)))))
+                                    A))
+                                AA
+                                (reverse (range (inc icol)))))
+                      ?AAA
+                      (reverse (range (dec size)))))]
+    {:x (vec (map #(nth % size) mat)) 
+     :det @det ;:not-yet-correct ; @det
+     :inv (vec (map #(vec (subvec % (inc size))) mat))}))
+

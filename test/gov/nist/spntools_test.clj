@@ -110,6 +110,7 @@
                     []
                     data))))
 
+;;; Numbering (third element in the data vector) is on a printout of the diagram somewhere.
 (defn j2-weird-arcs-test []
   (let [j2 (gspn2spn (read-pnml "data/join2.xml"))
         data  [[:Pstart :P1-last 1] [:Pstart :P1-first 2] [:Pstart :P2-first 3] [:Pstart :P2-last 4]
@@ -151,8 +152,8 @@
     (is (empty? (marsan-two-step-weird-arcs-test)))))
 
 (deftest infinitesimal-generator-matrix
-  (testing "Marsan section 6.1 example"
-    (is (= (pn-Q-matrix m6 
+  (testing "Marsan section 6.1 example, infinitesimal generator"
+    (is (= (pn-Q-matrix (read-pnml "data/m6.xml")
                         :force-places [:Pact1 :Preq1 :Pacc1 :Pidle :Pact2 :Preq2 :Pacc2]
                         :force-markings [[1 0 0 1 1 0 0]
                                          [0 1 0 1 1 0 0]
@@ -162,14 +163,17 @@
                                          [1 0 0 1 0 1 0]
                                          [1 0 0 0 0 0 1]
                                          [0 1 0 0 0 0 1]])
-           [-3.0 0.0 10.0 0.0 0.0 0.0 5.0 0.0 1.0 -102.0 0.0 0.0 0.0 0.0 0.0
-            5.0 0.0 100.0 -12.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 2.0 -10.0 100.0
-            0.0 0.0 0.0 0.0 2.0 0.0 0.0 -200.0 1.0 0.0 0.0 2.0 0.0 0.0 10.0
-            0.0 -101.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 100.0 -6.0 0.0 0.0 0.0 0.0
-            0.0 100.0 0.0 1.0 -5.0]))))
+           [-3.0    0.0   10.0   0.0    0.0    0.0   5.0   0.0
+             1.0 -102.0    0.0   0.0    0.0    0.0   0.0   5.0
+             0.0  100.0  -12.0   0.0    0.0    0.0   0.0   0.0
+             0.0    0.0    2.0 -10.0  100.0    0.0   0.0   0.0
+             0.0    2.0    0.0   0.0 -200.0    1.0   0.0   0.0
+             2.0    0.0    0.0  10.0    0.0 -101.0   0.0   0.0
+             0.0    0.0    0.0   0.0    0.0  100.0  -6.0   0.0
+             0.0    0.0    0.0   0.0  100.0    0.0   1.0  -5.0]))))
 
 
-(deftest gauss-jordan-elimination
+#_(deftest gauss-jordan-elimination
   (testing "Gauss-Jordan elimination solution, inverse and determinant"
     (let [result (gj-explicit [[1.0 2.0 3.0] [3.0 2.0 1.0] [2.0 1.0 3.0]] [12.0 24.0 36.0])
           x (:x result)

@@ -2,7 +2,6 @@
   (:require [clojure.data.xml :as xml :refer (parse-str)]
             [clojure.pprint :refer (cl-format pprint pp)]
             [gov.nist.spntools.util.utils :refer :all]
-            [gov.nist.spntools.util.reach :refer :all] ; pod temporary?
             [uncomplicate.neanderthal.core :as ne]
             [uncomplicate.neanderthal.native :as nen]))
 
