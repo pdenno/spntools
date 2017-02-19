@@ -2,9 +2,10 @@
   (:require [clojure.data.xml :as xml :refer (parse-str)]
             [clojure.pprint :refer (cl-format pprint pp)]
             [clojure.math.combinatorics :as combo]
-            [gov.nist.spntools.util.reach :as reach :refer (calc-reachability)]
-            [gov.nist.spntools.util.pnml :as pnml :refer (read-pnml)]
+            [gov.nist.spntools.util.reach :as reach :refer (reachability)]
+            [gov.nist.spntools.util.pnml :as pnml :refer (read-pnml reorder-places)]
             [gov.nist.spntools.util.utils :as utils :refer :all]
+            ;[gov.nist.spntools-test :as tt :refer :all]    ; POD temporary. 
             [clojure.core.matrix :as m :refer :all]
             [clojure.core.matrix.linear :as ml :refer (svd)]))
 
@@ -294,6 +295,10 @@
 ;;;(def j2 (one-step "data/marsan69.xml"))
 ;;;(def bbb (join-binds j2 (first (find-joins j2))))
 ;;;(ppprint (join-new-trans j2 bbb (first (:places* bbb))))
+(defn zero-step
+  [filename]
+  (read-pnml filename))
+
 
 (defn one-step
   [filename]
@@ -306,44 +311,55 @@
       (split2spn)
       (join2spn)))
 
+(defn full-step
+  [filename]
+  (-> (read-pnml filename)
+      (gspn2spn)))
+      
 (defn find-arc
   [pn source target]
   (filter #(and (= (:source %) source)
                 (= (:target %) target))
           (:arcs pn)))
                       
-;;; Reach2MC ==========================================================
+;;; =========== Steady State Calculation ===============================================
+(declare Q-matrix steady-state-props)
+(defn pn-steady-state
+  [pn]
+  "Calculate and add steady-state properties to the argument PN."
+  (-> pn
+      (gspn2spn)
+      (reachability)
+      (Q-matrix)
+      (steady-state-props)))
 
-;;;(calc-rate sss (calc-reachability sss) :A :B)
 ;;; The transition rate Mi --> Mj  (i not= j) is the sum of the firing rates of
-;;; the transitions enabled by the markings Mi that generate Mj. Where i=j,
-;;; it is the the sum of the firing rates enabled.
+;;; the transitions enabled by the markings Mi that generate Mj. 
+;;; Where i=j, it is negative of the the sum of the firing rates enabled.
 (defn calc-rate 
   "Return the transition rate between marking M and Mp."
   [pn graph m mp]
   (let [trans (filter #(= (:M %) m) graph)
         trans-mp (filter #(= (:Mp %) mp) trans)]
     (if (= m mp)
-      (- (reduce #(+ %1 (:rate %2)) 0.0 trans)) ; POD Someday I'll need to know why!
+      (- (reduce #(+ %1 (:rate %2)) 0.0 trans))
       (reduce #(+ %1 (:rate %2)) 0.0 trans-mp))))
 
-
-
-(defn pn2CTMC-Q-matrix
-  "Calculate the reachability graph infinitesimal gnererator matrix 
-   AKA the infinitesimal gnerator matrix) from the reachability graph."
+(defn Q-matrix ; POD fix this so it does what the comment says!
+  "Calculate the infinitesimal generator matrix from the reachability graph"
   [pn & {:keys [force-markings force-places]}]
   (let [pn (if force-places (reorder-places pn force-places) pn)
-        reach (calc-reachability pn)
+        reach (reachability pn)
         graph (:graph reach)
         states (distinct (map :M graph))
         states (if force-markings (reorder-markings states force-markings) states)
         size (count states)]
-    (vec (mapcat
-          (fn [icol]
-            (map (fn [irow] (calc-rate pn graph (nth states (dec irow)) (nth states (dec icol))))
-                 (range 1 (inc size))))
-          (range 1 (inc size))))))
+    (assoc pn :Q ; POD someday, this will be parametric. 
+           (vec (mapcat
+                 (fn [icol]
+                   (map (fn [irow] (calc-rate pn graph (nth states (dec irow)) (nth states (dec icol))))
+                        (range 1 (inc size))))
+                 (range 1 (inc size)))))))
 
 
 (def Q (m/array [[-3.0 1.0 0.0 0.0 0.0 2.0 0.0 0.0]

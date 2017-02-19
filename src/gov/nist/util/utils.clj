@@ -155,7 +155,7 @@
      (vec (map :initial-marking (sort #(< (:pid %1) (:pid %2)) sorted)))}))
 
 (defn reorder-markings
-  "Reorder the markings calculated from the reachability graph so to match a textbook example."
+  "Reorder the markings calculated from the reachability graph so as to match a textbook example."
   [graph new-order]
   (let [sgraph (set graph)
         sorder (set new-order)

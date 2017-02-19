@@ -2,7 +2,8 @@
   (:require [clojure.test :refer :all]
             [gov.nist.spntools :refer :all]
             [gov.nist.spntools.util.pnml :refer :all]
-            [gov.nist.spntools.util.utils :refer :all]))
+            [gov.nist.spntools.util.utils :refer :all]
+            [gov.nist.spntools.util.reach :refer :all]))
 
 (deftest join-2-test
   (testing "small join reduction"
@@ -72,6 +73,29 @@
                   []
                   data)))
 
+;;;==========================================================================
+;;; Reachability
+;;;==========================================================================
+(defn get-misc-arc-count
+  [file]
+  [(count (:graph (reachability (zero-step file))))
+   (count (:graph (reachability (one-step file))))
+   (count (:graph (reachability (two-step file))))
+   (count (:graph (reachability (full-step file))))])
+
+(deftest reachability-test
+  (testing "Reachability graph size"
+    (is (= [4 4 4 4]     (get-misc-arc-count "data/simple.xml")))
+    (is (= [4 4 6 6]     (get-misc-arc-count "data/join2.xml")))
+    (is (= [6 6 6 6]     (get-misc-arc-count "data/join2-reduce.xml")))
+    (is (= [9 9 30 30]   (get-misc-arc-count "data/join3.xml")))
+    (is (= [30 30 30 30] (get-misc-arc-count "data/join3-reduce-v2.xml")))
+    (is (= [95 76 84 84] (get-misc-arc-count "data/marsan69.xml")))
+    (is (= [14 14 14 14] (get-misc-arc-count "data/m6.xml")))))
+
+;;;==========================================================================
+;;; Reduction GSPN to SPN, one-step, two-step and full
+;;;==========================================================================
 
 ;;; Ones with commas are inhibitors
 (defn j2-has-arcs-test []    
@@ -151,18 +175,21 @@
     (is (empty? (marsan-one-step-weird-arcs-test)))
     (is (empty? (marsan-two-step-weird-arcs-test)))))
 
+;;;========================================================
+;;; Infinitesimal Generator
+;;;========================================================
 (deftest infinitesimal-generator-matrix
   (testing "Marsan section 6.1 example, infinitesimal generator"
-    (is (= (pn-Q-matrix (read-pnml "data/m6.xml")
-                        :force-places [:Pact1 :Preq1 :Pacc1 :Pidle :Pact2 :Preq2 :Pacc2]
-                        :force-markings [[1 0 0 1 1 0 0]
-                                         [0 1 0 1 1 0 0]
-                                         [0 0 1 0 1 0 0]
-                                         [0 0 1 0 0 1 0]
-                                         [0 1 0 1 0 1 0]
-                                         [1 0 0 1 0 1 0]
-                                         [1 0 0 0 0 0 1]
-                                         [0 1 0 0 0 0 1]])
+    (is (= (Q-matrix (read-pnml "data/m6.xml")
+                     :force-places [:Pact1 :Preq1 :Pacc1 :Pidle :Pact2 :Preq2 :Pacc2]
+                     :force-markings [[1 0 0 1 1 0 0]
+                                      [0 1 0 1 1 0 0]
+                                      [0 0 1 0 1 0 0]
+                                      [0 0 1 0 0 1 0]
+                                      [0 1 0 1 0 1 0]
+                                      [1 0 0 1 0 1 0]
+                                      [1 0 0 0 0 0 1]
+                                      [0 1 0 0 0 0 1]])
            [-3.0    0.0   10.0   0.0    0.0    0.0   5.0   0.0
              1.0 -102.0    0.0   0.0    0.0    0.0   0.0   5.0
              0.0  100.0  -12.0   0.0    0.0    0.0   0.0   0.0

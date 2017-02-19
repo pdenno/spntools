@@ -1,25 +1,20 @@
 (ns gov.nist.spntools.util.reach
   (:require [clojure.data.xml :as xml :refer (parse-str)]
             [clojure.pprint :refer (cl-format pprint pp)]
-            [gov.nist.spntools.util.utils :refer :all]
-            [uncomplicate.neanderthal.core :as ne]
-            [uncomplicate.neanderthal.native :as nen]))
+            [gov.nist.spntools.util.utils :refer :all]))
 
-
-;;; POD Consider making these marking vectors maps. I'd still use vectors
-;;;     for +visited-links+ however. 
-;;; POD still screwed up; it needs the :marking-key. 
 (defn fireable? 
   "Return true if transition is fireable under the argument marking."
   [pn mark tid]
   (when-let [arcs (not-empty (arcs-into-trans pn tid))]
-    (let [arc-groups (group-by :type arcs)]
+    (let [arc-groups (group-by :type arcs)
+          marking-key (:marking-key pn)]
       (and 
-       (every? (fn [ar] (>= (nth mark (dec (:pid (name2place pn (:source ar)))))
+       (every? (fn [ar] (>= (nth mark (.indexOf marking-key (:source ar)))
                             (:multiplicity ar)))
                (:normal arc-groups))
-       (every? (fn [ar] (< (nth mark (dec (:pid (name2place pn (:source ar)))))
-                           (:multiplicity ar)))
+       (every? (fn [ar] (< (nth mark (.indexOf marking-key (:source ar))))
+                           (:multiplicity ar))
                (:inhibitor arc-groups))))))
      
 (defn fireables
@@ -35,11 +30,11 @@
               (let [indx (dec (:pid (name2place pn (:source arc))))] 
                 (update mar indx #(- % (:multiplicity arc)))))
             ?m
-            (arcs-into-trans pn tid))
-    (reduce (fn [mar arc]
+            (filter #(= (:type %) :normal) (arcs-into-trans pn tid)))
+    (reduce (fn [mar arc] 
               (let [indx (dec (:pid (name2place pn (:target arc))))] 
                 (update mar indx #(+ % (:multiplicity arc)))))
-            ?m
+            ?m ; inhibitors don't exit transitions
             (arcs-outof-trans pn tid))))
 
 (def ^:dynamic *visited-links* nil)
@@ -61,24 +56,22 @@
        (filter (fn [link] (not-any? (fn [vis] (= link vis)) @*visited-links*))
                (map (fn [tid] (list marking tid)) (fireables pn marking)))))
 
-(defn calc-reachability-aux
+(defn reachability-aux
   [pn marking]
   (let [nexts (next-markings pn marking)] 
     (swap! *visited-links* into (map #(list (:M %) (:tid (name2transition pn (:fire %)))) nexts))
     (reset! +zippy+ @*visited-links*)
     (swap! *graph* into nexts)
     (doseq [nx nexts]
-      (calc-reachability-aux pn (:Mp nx)))))
+      (reachability-aux pn (:Mp nx)))))
 
-(defn calc-reachability
+(defn reachability
+  "Calculate the reachability of the argument gspn or spn." 
   [pn]
-  (let [graph (initial-marking pn)]
-    (binding [*visited-links* (atom [])
-              *graph* (atom [])]
-      (calc-reachability-aux pn (:initial-marking graph))
-      (assoc graph :graph @*graph*))))
-
-
+  (binding [*visited-links* (atom [])
+            *graph* (atom [])]
+    (reachability-aux pn (:initial-marking pn))
+    (assoc pn :reach @*graph*)))
 
 ;;; Reachability-specific utilities ---------------------------------------------
 (defn markings2source
