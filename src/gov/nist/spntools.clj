@@ -350,8 +350,8 @@
 
 (defn Q-matrix 
   "Calculate the infinitesimal generator matrix from the reachability graph"
-  [pn]
-  (let [states (distinct (map :M (:reach pn)))
+  [pn & {:keys [force-ordering]}] ; force-ordering for debugging. 
+  (let [states (or force-ordering (distinct (map :M (:reach pn))))
         size (count states)]
     (assoc pn :Q ; POD someday, this will be parametric. 
            (vec (map
