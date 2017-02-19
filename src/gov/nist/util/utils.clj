@@ -2,7 +2,6 @@
   (:require [clojure.data.xml :as xml :refer (parse-str)]
             [clojure.pprint :refer (cl-format pprint pp)]))
 
-
 (defn ppp []
   (binding [clojure.pprint/*print-right-margin* 120]
     (pprint *1)))
@@ -156,14 +155,14 @@
 
 (defn reorder-markings
   "Reorder the markings calculated from the reachability graph so as to match a textbook example."
-  [graph new-order]
-  (let [sgraph (set graph)
+  [pn new-order]
+  (let [sgraph (set (:marking-key pn))
         sorder (set new-order)
         isect (clojure.set/intersection sgraph sorder)]
-    (when (not (= (count graph) (count isect))) 
+    (when (not (= (count sgraph) (count isect))) 
       (throw (ex-info "new-order invalid (count)"
                       {:diff (clojure.set/difference sgraph sorder)})))
-    new-order))
+    (assoc pn :marking-key new-order)))
 
 (defn vec=*
   "Check that v1 is = v2 +/i tolerance at every element."

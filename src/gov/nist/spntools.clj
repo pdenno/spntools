@@ -5,17 +5,19 @@
             [gov.nist.spntools.util.reach :as reach :refer (reachability)]
             [gov.nist.spntools.util.pnml :as pnml :refer (read-pnml reorder-places)]
             [gov.nist.spntools.util.utils :as utils :refer :all]
-            ;[gov.nist.spntools-test :as tt :refer :all]    ; POD temporary. 
             [clojure.core.matrix :as m :refer :all]
             [clojure.core.matrix.linear :as ml :refer (svd)]))
+
+;;; ToDo: * It is probably a bad idea to have a :initial-marking on pn since things
+;;;         could change (though I don't know what) and it is easy to compute.
+;;;         (map :initial-marking (:places pn))
+;;;       * See if the name2x aid2x stuff can be simplified.
 
 ;;; Four steps to most reductions:
 ;;;  1) Find instances of the pattern.
 ;;;  2) Create bindings of elements of the instance.
 ;;;  3) Create 'command vectors' of graph editing instructions.
 ;;;  4) Reduce the graph by executing the instructions.
-
-;;; ToDo: See if the name2x aid2x stuff can be simplified.
 
 (declare join2spn split2spn find-splits vanish2spn)
 (defn gspn2spn [pn]
@@ -338,27 +340,24 @@
 ;;; Where i=j, it is negative of the the sum of the firing rates enabled.
 (defn calc-rate 
   "Return the transition rate between marking M and Mp."
-  [pn graph m mp]
-  (let [trans (filter #(= (:M %) m) graph)
+  [pn m mp]
+  (let [graph (:reach pn)
+        trans (filter #(= (:M %) m) graph)
         trans-mp (filter #(= (:Mp %) mp) trans)]
     (if (= m mp)
       (- (reduce #(+ %1 (:rate %2)) 0.0 trans))
       (reduce #(+ %1 (:rate %2)) 0.0 trans-mp))))
 
-(defn Q-matrix ; POD fix this so it does what the comment says!
+(defn Q-matrix 
   "Calculate the infinitesimal generator matrix from the reachability graph"
-  [pn & {:keys [force-markings force-places]}]
-  (let [pn (if force-places (reorder-places pn force-places) pn)
-        reach (reachability pn)
-        graph (:graph reach)
-        states (distinct (map :M graph))
-        states (if force-markings (reorder-markings states force-markings) states)
+  [pn]
+  (let [states (distinct (map :M (:reach pn)))
         size (count states)]
     (assoc pn :Q ; POD someday, this will be parametric. 
-           (vec (mapcat
+           (vec (map
                  (fn [icol]
-                   (map (fn [irow] (calc-rate pn graph (nth states (dec irow)) (nth states (dec icol))))
-                        (range 1 (inc size))))
+                   (vec (map (fn [irow] (calc-rate pn (nth states (dec irow)) (nth states (dec icol))))
+                             (range 1 (inc size)))))
                  (range 1 (inc size)))))))
 
 

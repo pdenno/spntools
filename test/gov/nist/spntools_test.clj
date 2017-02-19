@@ -21,41 +21,37 @@
 
 (deftest join2-graph-test
   (testing "join graph equality"
-    (let [result (as-> (gspn2spn (read-pnml "data/join2.xml")) ?pn
-                   (assoc ?pn :places (set (:places ?pn)))
-                   (assoc ?pn :transitions (set (:transitions ?pn)))
-                   (assoc ?pn :arcs (set (:arcs ?pn))))]
-      (is (= result
-             {:places
-              #{{:name :P1, :pid 1, :initial-marking 0}
-                {:name :P2, :pid 2, :initial-marking 0}
-                {:name :Pjoin, :pid 3, :initial-marking 0}
-                {:name :Pstart, :pid 4, :initial-marking 2}},
-              :transitions
-              #{{:name :Treturn, :tid 4, :type :exponential, :rate 1.0}
-                {:name :P1-first, :tid 5, :type :exponential, :rate 1.0}
-                {:name :P1-last, :tid 6, :type :exponential, :rate 1.0}
-                {:name :P2-first, :tid 7, :type :exponential, :rate 1.0}
-                {:name :P2-last, :tid 8, :type :exponential, :rate 1.0}},
-              :arcs
-              #{{:aid 6, :source :Pjoin, :target :Treturn, :type :normal, :multiplicity 1}
-                {:aid 11, :source :Treturn, :target :Pstart, :type :normal, :multiplicity 2}
-                {:aid 12, :source :Pstart, :target :P1-first, :type :normal, :multiplicity 1}
-                {:aid 13, :source :P1, :target :P1-first, :type :inhibitor, :multiplicity 1}
-                {:aid 14, :source :P1-first, :target :P1, :type :normal, :multiplicity 1}
-                {:aid 15, :source :P2, :target :P1-first, :type :inhibitor, :multiplicity 1}
-                {:aid 16, :source :Pstart, :target :P1-last, :type :normal, :multiplicity 1}
-                {:aid 17, :source :P1, :target :P1-last, :type :inhibitor, :multiplicity 1}
-                {:aid 18, :source :P1-last, :target :Pjoin, :type :normal, :multiplicity 1}
-                {:aid 19, :source :P2, :target :P1-last, :type :normal, :multiplicity 1}
-                {:aid 20, :source :Pstart, :target :P2-first, :type :normal, :multiplicity 1}
-                {:aid 21, :source :P2, :target :P2-first, :type :inhibitor, :multiplicity 1}
-                {:aid 22, :source :P2-first, :target :P2, :type :normal, :multiplicity 1}
-                {:aid 23, :source :P1, :target :P2-first, :type :inhibitor, :multiplicity 1}
-                {:aid 24, :source :Pstart, :target :P2-last, :type :normal, :multiplicity 1}
-                {:aid 25, :source :P2, :target :P2-last, :type :inhibitor, :multiplicity 1}
-                {:aid 26, :source :P2-last, :target :Pjoin, :type :normal, :multiplicity 1}
-                {:aid 27, :source :P1, :target :P2-last, :type :normal, :multiplicity 1}}})))))
+    (let [result (gspn2spn (read-pnml "data/join2.xml"))]
+      (is (= (set (:places result))
+             #{{:name :P1, :pid 1, :initial-marking 0}
+               {:name :P2, :pid 2, :initial-marking 0}
+               {:name :Pjoin, :pid 3, :initial-marking 0}
+               {:name :Pstart, :pid 4, :initial-marking 2}}))
+      (is (= (set (:transitions result))
+             #{{:name :Treturn, :tid 4, :type :exponential, :rate 1.0}
+               {:name :P1-first, :tid 5, :type :exponential, :rate 1.0}
+               {:name :P1-last, :tid 6, :type :exponential, :rate 1.0}
+               {:name :P2-first, :tid 7, :type :exponential, :rate 1.0}
+               {:name :P2-last, :tid 8, :type :exponential, :rate 1.0}}))
+      (is (= (set (:arcs result))
+             #{{:aid 6, :source :Pjoin, :target :Treturn, :type :normal, :multiplicity 1}
+               {:aid 11, :source :Treturn, :target :Pstart, :type :normal, :multiplicity 2}
+               {:aid 12, :source :Pstart, :target :P1-first, :type :normal, :multiplicity 1}
+               {:aid 13, :source :P1, :target :P1-first, :type :inhibitor, :multiplicity 1}
+               {:aid 14, :source :P1-first, :target :P1, :type :normal, :multiplicity 1}
+               {:aid 15, :source :P2, :target :P1-first, :type :inhibitor, :multiplicity 1}
+               {:aid 16, :source :Pstart, :target :P1-last, :type :normal, :multiplicity 1}
+               {:aid 17, :source :P1, :target :P1-last, :type :inhibitor, :multiplicity 1}
+               {:aid 18, :source :P1-last, :target :Pjoin, :type :normal, :multiplicity 1}
+               {:aid 19, :source :P2, :target :P1-last, :type :normal, :multiplicity 1}
+               {:aid 20, :source :Pstart, :target :P2-first, :type :normal, :multiplicity 1}
+               {:aid 21, :source :P2, :target :P2-first, :type :inhibitor, :multiplicity 1}
+               {:aid 22, :source :P2-first, :target :P2, :type :normal, :multiplicity 1}
+               {:aid 23, :source :P1, :target :P2-first, :type :inhibitor, :multiplicity 1}
+               {:aid 24, :source :Pstart, :target :P2-last, :type :normal, :multiplicity 1}
+               {:aid 25, :source :P2, :target :P2-last, :type :inhibitor, :multiplicity 1}
+               {:aid 26, :source :P2-last, :target :Pjoin, :type :normal, :multiplicity 1}
+               {:aid 27, :source :P1, :target :P2-last, :type :normal, :multiplicity 1}})))))
 
 (defn find-arc-test
   [pn source target]
@@ -78,18 +74,18 @@
 ;;;==========================================================================
 (defn get-misc-arc-count
   [file]
-  [(count (:graph (reachability (zero-step file))))
-   (count (:graph (reachability (one-step file))))
-   (count (:graph (reachability (two-step file))))
-   (count (:graph (reachability (full-step file))))])
+  [(count (:reach (reachability (zero-step file))))
+   (count (:reach (reachability (one-step file))))
+   (count (:reach (reachability (two-step file))))
+   (count (:reach (reachability (full-step file))))])
 
 (deftest reachability-test
   (testing "Reachability graph size"
     (is (= [4 4 4 4]     (get-misc-arc-count "data/simple.xml")))
-    (is (= [4 4 6 6]     (get-misc-arc-count "data/join2.xml")))
-    (is (= [6 6 6 6]     (get-misc-arc-count "data/join2-reduce.xml")))
-    (is (= [9 9 30 30]   (get-misc-arc-count "data/join3.xml")))
-    (is (= [30 30 30 30] (get-misc-arc-count "data/join3-reduce-v2.xml")))
+    (is (= [8 8 9 9]     (get-misc-arc-count "data/join2.xml")))
+    (is (= [9 9 9 9]     (get-misc-arc-count "data/join2-reduce.xml")))
+    (is (= [32 32 58 58] (get-misc-arc-count "data/join3.xml")))
+    (is (= [58 58 58 58] (get-misc-arc-count "data/join3-reduce-v2.xml")))
     (is (= [95 76 84 84] (get-misc-arc-count "data/marsan69.xml")))
     (is (= [14 14 14 14] (get-misc-arc-count "data/m6.xml")))))
 
@@ -175,30 +171,47 @@
     (is (empty? (marsan-one-step-weird-arcs-test)))
     (is (empty? (marsan-two-step-weird-arcs-test)))))
 
+(deftest distinct-markings
+  (testing "markings created by reachability"
+    (= (set [[1 0 0 1 1 0 0]
+             [0 1 0 1 1 0 0]
+             [0 0 1 0 1 0 0]
+             [0 0 1 0 0 1 0]
+             [0 1 0 1 0 1 0]
+             [1 0 0 1 0 1 0]
+             [1 0 0 0 0 0 1]
+             [0 1 0 0 0 0 1]])
+       (set
+        (as-> (two-step "data/m6.xml") ?pn
+          (reorder-places ?pn [:Pact1 :Preq1 :Pacc1 :Pidle :Pact2 :Preq2 :Pacc2])
+          (reachability ?pn)
+          (distinct (map :M (:reach ?pn))))))))
+        
 ;;;========================================================
 ;;; Infinitesimal Generator
 ;;;========================================================
 (deftest infinitesimal-generator-matrix
   (testing "Marsan section 6.1 example, infinitesimal generator"
-    (is (= (Q-matrix (read-pnml "data/m6.xml")
-                     :force-places [:Pact1 :Preq1 :Pacc1 :Pidle :Pact2 :Preq2 :Pacc2]
-                     :force-markings [[1 0 0 1 1 0 0]
-                                      [0 1 0 1 1 0 0]
-                                      [0 0 1 0 1 0 0]
-                                      [0 0 1 0 0 1 0]
-                                      [0 1 0 1 0 1 0]
-                                      [1 0 0 1 0 1 0]
-                                      [1 0 0 0 0 0 1]
-                                      [0 1 0 0 0 0 1]])
-           [-3.0    0.0   10.0   0.0    0.0    0.0   5.0   0.0
-             1.0 -102.0    0.0   0.0    0.0    0.0   0.0   5.0
-             0.0  100.0  -12.0   0.0    0.0    0.0   0.0   0.0
-             0.0    0.0    2.0 -10.0  100.0    0.0   0.0   0.0
-             0.0    2.0    0.0   0.0 -200.0    1.0   0.0   0.0
-             2.0    0.0    0.0  10.0    0.0 -101.0   0.0   0.0
-             0.0    0.0    0.0   0.0    0.0  100.0  -6.0   0.0
-             0.0    0.0    0.0   0.0  100.0    0.0   1.0  -5.0]))))
-
+    (is (= (:Q (-> (two-step "data/m6.xml")
+                   (reorder-places [:Pact1 :Preq1 :Pacc1 :Pidle :Pact2 :Preq2 :Pacc2])
+                   (reachability)
+                   (Q-matrix :force-ordering
+                             [[1 0 0 1 1 0 0]
+                              [0 1 0 1 1 0 0]
+                              [0 0 1 0 1 0 0]
+                              [0 0 1 0 0 1 0]
+                              [0 1 0 1 0 1 0]
+                              [1 0 0 1 0 1 0]
+                              [1 0 0 0 0 0 1]
+                              [0 1 0 0 0 0 1]])))
+           [[-3.0    0.0   10.0   0.0    0.0    0.0   5.0   0.0]
+            [ 1.0 -102.0    0.0   0.0    0.0    0.0   0.0   5.0]
+            [ 0.0  100.0  -12.0   0.0    0.0    0.0   0.0   0.0]
+            [ 0.0    0.0    2.0 -10.0  100.0    0.0   0.0   0.0]
+            [ 0.0    2.0    0.0   0.0 -200.0    1.0   0.0   0.0]
+            [ 2.0    0.0    0.0  10.0    0.0 -101.0   0.0   0.0]
+            [ 0.0    0.0    0.0   0.0    0.0  100.0  -6.0   0.0]
+            [ 0.0    0.0    0.0   0.0  100.0    0.0   1.0  -5.0]]))))
 
 #_(deftest gauss-jordan-elimination
   (testing "Gauss-Jordan elimination solution, inverse and determinant"
