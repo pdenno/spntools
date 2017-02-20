@@ -164,6 +164,11 @@
                       {:diff (clojure.set/difference sgraph sorder)})))
     (assoc pn :marking-key new-order)))
 
+(defn =*
+   "Check that v1 is = v2 +/i tolerance."
+  [v1 v2 tol]
+  (< (- v1 tol) v2 (+ v1 tol)))
+
 (defn vec=*
   "Check that v1 is = v2 +/i tolerance at every element."
   [v1 v2 tol]

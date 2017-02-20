@@ -371,18 +371,46 @@
   (let [sol (ml/svd (m/array (:Q pn)))
         svec (m/to-vector (m/get-row (:V* sol) (dec (m/slice-count (:S sol))))) 
         scale (apply + svec)]
-    ;; (1) In the past I was pulling columns from U. (xA=0 --> left null). That made sense!
-    ;; (2) I have seen all values negative at times. 
-    (vec (map #(/ % scale) svec))))
-        
+    ;; (1) In the past, I was pulling the last column from U. (xA=0 --> left null space). That made sense!
+    ;; (2) I have seen all values negative at times.
+    (as-> pn ?pn
+        (assoc ?pn :steady-state-vec (vec (map #(/ % scale) svec)))
+        (assoc ?pn :avg-tokens-on-place (avg-tokens-on-place ?pn)))))
     
+#_{:marking-key [:Pacc1 :Pacc2 :Pact1 :Pact2 :Pidle :Preq1 :Preq2],
+ :steady-state-vec
+ [0.6147123680197807
+  0.008416964271842083
+  1.5273304760275329E-4
+  0.015555604262431213
+  0.013712680976870026
+  0.2285446829478337
+  0.04876359754162226
+  0.07014136893201722],
+ :states
+ ([0 0 1 1 1 0 0]
+  [0 0 0 1 1 1 0]
+  [0 0 0 0 1 1 1]
+  [1 0 0 0 0 0 1]
+  [0 0 1 0 1 0 1]
+  [0 1 1 0 0 0 0]
+  [0 1 0 0 0 1 0]
+  [1 0 0 1 0 0 0])}
 
-
-
-
-
-    
-
+(defn avg-tokens-on-place
+  "Calculate the average number of tokens on a place."
+  [pn]
+  (let [svec (:steady-state-vec pn)
+        states (:states pn)
+        mk (:marking-key pn)
+        zipargs (zipmap states svec)]
+    (zipmap mk
+            (map (fn [place]
+                   (let [place-pos (.indexOf mk place)]
+                     (reduce (fn [sum [state prob]] (+ sum (* (nth state place-pos) prob)))
+                             0.0
+                             zipargs)))
+                 mk))))
 
 
 

@@ -224,4 +224,22 @@
       (is (vec=* (nth ainv 0) [-5/12  1/4  1/3] 0.0000001))
       (is (vec=* (nth ainv 1) [ 7/12  1/4 -2/3] 0.0000001))
       (is (vec=* (nth ainv 2) [ 1/12 -1/4  1/3] 0.0000001)))))
+
+;;;========================================================
+;;; Steady-state properties
+;;;========================================================
+(deftest steady-state-properties
+  (testing "Steady-state properties are consistent with findings from other tools"
+    (let [res (:avg-tokens-on-place (pn-steady-state (read-pnml "data/m6.xml")))]
+      (is (=* (:Pacc1 res) 0.0856969731944484 0.0001)) ; The long numbers? 
+      (is (=* (:Pacc2 res) 0.2773082804894559 0.0001)) ; Just so that I can go
+      (is (=* (:Pact1 res) 0.8569697319444844 0.0001)) ; back and check. 
+      (is (=* (:Pact2 res) 0.6932707012236401 0.0001))
+      (is (=* (:Pidle res) 0.6369947463160957 0.0001))
+      (is (=* (:Preq1 res) 0.0573332948610671 0.0001))
+      (is (=* (:Preq2 res) 0.0294210182869039 0.0001)))))
+
+
+
+
       
