@@ -19,6 +19,8 @@
 ;;;  3) Create 'command vectors' of graph editing instructions.
 ;;;  4) Reduce the graph by executing the instructions.
 
+(m/set-current-implementation :vectorz)
+
 (declare join2spn split2spn find-splits vanish2spn)
 (defn gspn2spn [pn]
   (-> pn
@@ -353,22 +355,34 @@
   [pn & {:keys [force-ordering]}] ; force-ordering for debugging. 
   (let [states (or force-ordering (distinct (map :M (:reach pn))))
         size (count states)]
-    (assoc pn :Q ; POD someday, this will be parametric. 
-           (vec (map
-                 (fn [icol]
-                   (vec (map (fn [irow] (calc-rate pn (nth states (dec irow)) (nth states (dec icol))))
-                             (range 1 (inc size)))))
-                 (range 1 (inc size)))))))
+    (as-> pn ?pn
+      (assoc ?pn :Q ; POD someday, this will be parametric. 
+             (vec (map
+                   (fn [icol]
+                     (vec (map (fn [irow] (calc-rate ?pn (nth states (dec irow)) (nth states (dec icol))))
+                               (range 1 (inc size)))))
+                   (range 1 (inc size)))))
+      (assoc ?pn :states states))))
+
+;;; POD: Should check for smallest eigenvalue around 0 in SVD calculation.
+(defn steady-state-props
+  "Calculate steady-state props for the PN, for which the Q matrix has been generated."
+  [pn]
+  (let [sol (ml/svd (m/array (:Q pn)))
+        svec (m/to-vector (m/get-row (:V* sol) (dec (m/slice-count (:S sol))))) 
+        scale (apply + svec)]
+    ;; (1) In the past I was pulling columns from U. (xA=0 --> left null). That made sense!
+    ;; (2) I have seen all values negative at times. 
+    (vec (map #(/ % scale) svec))))
+        
+    
 
 
-(def Q (m/array [[-3.0 1.0 0.0 0.0 0.0 2.0 0.0 0.0]
-                 [0.0 -102.0 100.0 0.0 2.0 0.0 0.0 0.0]
-                 [10.0 0.0 -12.0 2.0 0.0 0.0 0.0 0.0]
-                 [0.0 0.0 0.0 -10.0 0.0 10.0 0.0 0.0]
-                 [0.0 0.0 0.0 100.0 -200.0 0.0 0.0 100.0]
-                 [0.0 0.0 0.0 0.0 1.0 -101.0 100.0 0.0]
-                 [5.0 0.0 0.0 0.0 0.0 0.0 -6.0 1.0]
-                 [0.0 5.0 0.0 0.0 0.0 0.0 0.0 -5.0]]))
+
+
+
+    
+
 
 
 

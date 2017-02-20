@@ -60,7 +60,6 @@
   [pn marking]
   (let [nexts (next-markings pn marking)] 
     (swap! *visited-links* into (map #(list (:M %) (:tid (name2transition pn (:fire %)))) nexts))
-    (reset! +zippy+ @*visited-links*)
     (swap! *graph* into nexts)
     (doseq [nx nexts]
       (reachability-aux pn (:Mp nx)))))
