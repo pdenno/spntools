@@ -13,8 +13,8 @@
        (every? (fn [ar] (>= (nth mark (.indexOf marking-key (:source ar)))
                             (:multiplicity ar)))
                (:normal arc-groups))
-       (every? (fn [ar] (< (nth mark (.indexOf marking-key (:source ar))))
-                           (:multiplicity ar))
+       (every? (fn [ar] (< (nth mark (.indexOf marking-key (:source ar)))
+                           (:multiplicity ar)))
                (:inhibitor arc-groups))))))
      
 (defn fireables
@@ -70,7 +70,16 @@
   (binding [*visited-links* (atom [])
             *graph* (atom [])]
     (reachability-aux pn (:initial-marking pn))
-    (assoc pn :reach @*graph*)))
+    (as-> pn ?pn
+        (assoc ?pn :reach @*graph*)
+        (let [m  (set (distinct (map #(:M %) (:reach ?pn))))
+              mp (set (distinct (map #(:Mp %) (:reach ?pn))))
+              m-mp (clojure.set/difference m mp)
+              mp-m (clojure.set/difference mp m)]
+          (if (and (empty? m-mp) (empty? mp-m))
+            ?pn
+            (assoc ?pn :failure {:reason :absorbing-states
+                                 :data {:m-not-mp m-mp :mp-not-m mp-m}}))))))
 
 ;;; Reachability-specific utilities ---------------------------------------------
 (defn markings2source

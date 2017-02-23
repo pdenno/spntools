@@ -327,7 +327,7 @@
           (:arcs pn)))
                       
 ;;; =========== Steady State Calculation ===============================================
-(declare Q-matrix steady-state-props)
+(declare Q-matrix steady-state-props avg-tokens-on-place)
 (defn pn-steady-state
   [pn]
   "Calculate and add steady-state properties to the argument PN."
@@ -337,46 +337,62 @@
       (Q-matrix)
       (steady-state-props)))
 
-;;; The transition rate Mi --> Mj  (i not= j) is the sum of the firing rates of
+;;; The transition rate M --> Mp  (i not= j) is the sum of the firing rates of
 ;;; the transitions enabled by the markings Mi that generate Mj. 
-;;; Where i=j, it is negative of the the sum of the firing rates enabled.
+;;; Where M=Mp, it is negative of the the sum of the firing rates enabled.
 (defn calc-rate 
   "Return the transition rate between marking M and Mp."
   [pn m mp]
-  (let [graph (:reach pn)
-        trans (filter #(= (:M %) m) graph)
-        trans-mp (filter #(= (:Mp %) mp) trans)]
+  (let [graph (:reach pn)]
     (if (= m mp)
-      (- (reduce #(+ %1 (:rate %2)) 0.0 trans))
-      (reduce #(+ %1 (:rate %2)) 0.0 trans-mp))))
+      (- (reduce #(+ %1 (:rate %2)) 0.0 (filter #(and (= (:M %) m) (not (= (:Mp %) m))) graph)))
+      (reduce #(+ %1 (:rate %2)) 0.0 (filter #(and (= (:M %) m) (= (:Mp %) mp)) graph)))))
+    
 
 (defn Q-matrix 
   "Calculate the infinitesimal generator matrix from the reachability graph"
-  [pn & {:keys [force-ordering]}] ; force-ordering for debugging. 
-  (let [states (or force-ordering (distinct (map :M (:reach pn))))
-        size (count states)]
-    (as-> pn ?pn
-      (assoc ?pn :Q ; POD someday, this will be parametric. 
-             (vec (map
-                   (fn [icol]
-                     (vec (map (fn [irow] (calc-rate ?pn (nth states (dec irow)) (nth states (dec icol))))
-                               (range 1 (inc size)))))
-                   (range 1 (inc size)))))
-      (assoc ?pn :states states))))
+  [pn & {:keys [force-ordering]}] ; force-ordering for debugging.
+  (if (:failure pn)
+    pn
+    (let [states (or force-ordering (distinct (map :M (:reach pn))))
+          size (count states)]
+      (as-> pn ?pn
+        (assoc ?pn :Q ; POD someday, this will be parametric. 
+               (vec (map
+                     (fn [irow]
+                       (vec (map (fn [icol] (calc-rate ?pn (nth states (dec irow)) (nth states (dec icol))))
+                                 (range 1 (inc size)))))
+                     (range 1 (inc size)))))
+        (assoc ?pn :states states)))))
 
-;;; POD: Should check for smallest eigenvalue around 0 in SVD calculation.
+(defn zero-pos
+  "Return the position of the value closest to zero."
+  [v]
+  (let [size (count v)]
+    (loop [i 1
+           mini (abs (first v))
+           min-pos 1]
+      (cond (= i size) min-pos,
+            (< (abs (nth v i)) mini)
+            (recur (inc i) (abs (nth v i)) i),
+            :else
+            (recur (inc i) mini min-pos)))))
+
 (defn steady-state-props
   "Calculate steady-state props for the PN, for which the Q matrix has been generated."
   [pn]
-  (let [sol (ml/svd (m/array (:Q pn)))
-        svec (m/to-vector (m/get-row (:V* sol) (dec (m/slice-count (:S sol))))) 
-        scale (apply + svec)]
-    ;; (1) In the past, I was pulling the last column from U. (xA=0 --> left null space). That made sense!
-    ;; (2) I have seen all values negative at times.
-    (as-> pn ?pn
-        (assoc ?pn :steady-state-vec (vec (map #(/ % scale) svec)))
-        (assoc ?pn :avg-tokens-on-place (avg-tokens-on-place ?pn)))))
-    
+  (if (:failure pn)
+    pn
+    (let [sol (ml/svd (m/array (:Q pn))) ; U makes sense xA=0 --> left null space.
+          svec (vec (m/get-column (:U sol) (zero-pos (vec (:S sol)))))
+          scale (apply + svec)]
+      ;; I have seen all values negative at times.
+      (as-> pn ?pn
+        (dissoc ?pn :states)
+        (assoc ?pn :steady-state (zipmap (:states pn) (map #(/ % scale) svec)))
+        (assoc ?pn :avg-tokens-on-place (avg-tokens-on-place ?pn))))))
+
+;;; This for m6, I think. 
 #_{:marking-key [:Pacc1 :Pacc2 :Pact1 :Pact2 :Pidle :Preq1 :Preq2],
  :steady-state-vec
  [0.6147123680197807
@@ -400,16 +416,14 @@
 (defn avg-tokens-on-place
   "Calculate the average number of tokens on a place."
   [pn]
-  (let [svec (:steady-state-vec pn)
-        states (:states pn)
-        mk (:marking-key pn)
-        zipargs (zipmap states svec)]
+  (let [steady (:steady-state pn)
+        mk (:marking-key pn)]
     (zipmap mk
             (map (fn [place]
                    (let [place-pos (.indexOf mk place)]
                      (reduce (fn [sum [state prob]] (+ sum (* (nth state place-pos) prob)))
                              0.0
-                             zipargs)))
+                             steady)))
                  mk))))
 
 

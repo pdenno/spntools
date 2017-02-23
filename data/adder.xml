@@ -1,0 +1,535 @@
+<?xml version="1.0" encoding="ISO-8859-1"?><pnml>
+<net id="Net-One" type="P/T net">
+<token id="Default" enabled="true" red="0" green="0" blue="0"/>
+<place id="eight-register">
+<graphics>
+<position x="90.0" y="525.0"/>
+</graphics>
+<name>
+<value>eight-register</value>
+<graphics>
+<offset x="111.0" y="22.0"/>
+</graphics>
+</name>
+<initialMarking>
+<value>Default,0</value>
+<graphics>
+<offset x="0.0" y="0.0"/>
+</graphics>
+</initialMarking>
+<capacity>
+<value>0</value>
+</capacity>
+</place>
+<place id="four-input">
+<graphics>
+<position x="150.0" y="90.0"/>
+</graphics>
+<name>
+<value>four-input</value>
+<graphics>
+<offset x="45.0" y="-2.0"/>
+</graphics>
+</name>
+<initialMarking>
+<value>Default,0</value>
+<graphics>
+<offset x="0.0" y="0.0"/>
+</graphics>
+</initialMarking>
+<capacity>
+<value>0</value>
+</capacity>
+</place>
+<place id="four-register">
+<graphics>
+<position x="195.0" y="390.0"/>
+</graphics>
+<name>
+<value>four-register</value>
+<graphics>
+<offset x="108.0" y="24.0"/>
+</graphics>
+</name>
+<initialMarking>
+<value>Default,0</value>
+<graphics>
+<offset x="0.0" y="0.0"/>
+</graphics>
+</initialMarking>
+<capacity>
+<value>0</value>
+</capacity>
+</place>
+<place id="one-input">
+<graphics>
+<position x="390.0" y="90.0"/>
+</graphics>
+<name>
+<value>one-input</value>
+<graphics>
+<offset x="39.0" y="-3.0"/>
+</graphics>
+</name>
+<initialMarking>
+<value>Default,1</value>
+<graphics>
+<offset x="0.0" y="0.0"/>
+</graphics>
+</initialMarking>
+<capacity>
+<value>0</value>
+</capacity>
+</place>
+<place id="one-register">
+<graphics>
+<position x="450.0" y="165.0"/>
+</graphics>
+<name>
+<value>one-register</value>
+<graphics>
+<offset x="98.0" y="17.0"/>
+</graphics>
+</name>
+<initialMarking>
+<value>Default,1</value>
+<graphics>
+<offset x="0.0" y="0.0"/>
+</graphics>
+</initialMarking>
+<capacity>
+<value>0</value>
+</capacity>
+</place>
+<place id="two-input">
+<graphics>
+<position x="267.0" y="91.0"/>
+</graphics>
+<name>
+<value>two-input</value>
+<graphics>
+<offset x="41.0" y="-3.0"/>
+</graphics>
+</name>
+<initialMarking>
+<value>Default,1</value>
+<graphics>
+<offset x="0.0" y="0.0"/>
+</graphics>
+</initialMarking>
+<capacity>
+<value>0</value>
+</capacity>
+</place>
+<place id="two-register">
+<graphics>
+<position x="330.0" y="270.0"/>
+</graphics>
+<name>
+<value>two-register</value>
+<graphics>
+<offset x="103.0" y="17.0"/>
+</graphics>
+</name>
+<initialMarking>
+<value>Default,1</value>
+<graphics>
+<offset x="0.0" y="0.0"/>
+</graphics>
+</initialMarking>
+<capacity>
+<value>0</value>
+</capacity>
+</place>
+<transition id="flip-one">
+<graphics>
+<position x="435.0" y="120.0"/>
+</graphics>
+<name>
+<value>flip-one</value>
+<graphics>
+<offset x="69.0" y="9.0"/>
+</graphics>
+</name>
+<orientation>
+<value>90</value>
+</orientation>
+<rate>
+<value>1.0</value>
+</rate>
+<timed>
+<value>true</value>
+</timed>
+<infiniteServer>
+<value>false</value>
+</infiniteServer>
+<priority>
+<value>1</value>
+</priority>
+</transition>
+<transition id="flip-two">
+<graphics>
+<position x="300.0" y="195.0"/>
+</graphics>
+<name>
+<value>flip-two</value>
+<graphics>
+<offset x="33.0" y="-2.0"/>
+</graphics>
+</name>
+<orientation>
+<value>90</value>
+</orientation>
+<rate>
+<value>1.0</value>
+</rate>
+<timed>
+<value>true</value>
+</timed>
+<infiniteServer>
+<value>false</value>
+</infiniteServer>
+<priority>
+<value>1</value>
+</priority>
+</transition>
+<transition id="four-carry">
+<graphics>
+<position x="150.0" y="450.0"/>
+</graphics>
+<name>
+<value>four-carry</value>
+<graphics>
+<offset x="94.0" y="22.0"/>
+</graphics>
+</name>
+<orientation>
+<value>90</value>
+</orientation>
+<rate>
+<value>1.0</value>
+</rate>
+<timed>
+<value>true</value>
+</timed>
+<infiniteServer>
+<value>false</value>
+</infiniteServer>
+<priority>
+<value>1</value>
+</priority>
+</transition>
+<transition id="four-flip">
+<graphics>
+<position x="180.0" y="240.0"/>
+</graphics>
+<name>
+<value>four-flip</value>
+<graphics>
+<offset x="33.0" y="-4.0"/>
+</graphics>
+</name>
+<orientation>
+<value>90</value>
+</orientation>
+<rate>
+<value>1.0</value>
+</rate>
+<timed>
+<value>true</value>
+</timed>
+<infiniteServer>
+<value>false</value>
+</infiniteServer>
+<priority>
+<value>1</value>
+</priority>
+</transition>
+<transition id="one-carry">
+<graphics>
+<position x="391.0" y="221.0"/>
+</graphics>
+<name>
+<value>one-carry</value>
+<graphics>
+<offset x="86.0" y="26.0"/>
+</graphics>
+</name>
+<orientation>
+<value>90</value>
+</orientation>
+<rate>
+<value>1.0</value>
+</rate>
+<timed>
+<value>true</value>
+</timed>
+<infiniteServer>
+<value>false</value>
+</infiniteServer>
+<priority>
+<value>1</value>
+</priority>
+</transition>
+<transition id="two-carry">
+<graphics>
+<position x="267.0" y="331.0"/>
+</graphics>
+<name>
+<value>two-carry</value>
+<graphics>
+<offset x="90.0" y="21.0"/>
+</graphics>
+</name>
+<orientation>
+<value>90</value>
+</orientation>
+<rate>
+<value>1.0</value>
+</rate>
+<timed>
+<value>true</value>
+</timed>
+<infiniteServer>
+<value>false</value>
+</infiniteServer>
+<priority>
+<value>1</value>
+</priority>
+</transition>
+<arc id="flip-one to one-register" source="flip-one" target="one-register">
+<graphics/>
+<inscription>
+<value>Default,1</value>
+<graphics/>
+</inscription>
+<tagged>
+<value>false</value>
+</tagged>
+<arcpath id="000" x="451" y="137" curvePoint="false"/>
+<arcpath id="001" x="458" y="162" curvePoint="false"/>
+<type value="normal"/>
+</arc>
+<arc id="flip-two to two-register" source="flip-two" target="two-register">
+<graphics/>
+<inscription>
+<value>Default,1</value>
+<graphics/>
+</inscription>
+<tagged>
+<value>false</value>
+</tagged>
+<arcpath id="000" x="316" y="212" curvePoint="false"/>
+<arcpath id="001" x="336" y="267" curvePoint="false"/>
+<type value="normal"/>
+</arc>
+<arc id="four-carry to eight-register" source="four-carry" target="eight-register">
+<graphics/>
+<inscription>
+<value>Default,1</value>
+<graphics/>
+</inscription>
+<tagged>
+<value>false</value>
+</tagged>
+<arcpath id="000" x="161" y="466" curvePoint="false"/>
+<arcpath id="001" x="111" y="525" curvePoint="false"/>
+<type value="normal"/>
+</arc>
+<arc id="four-flip to four-register" source="four-flip" target="four-register">
+<graphics/>
+<inscription>
+<value>Default,1</value>
+<graphics/>
+</inscription>
+<tagged>
+<value>false</value>
+</tagged>
+<arcpath id="000" x="186" y="256" curvePoint="false"/>
+<arcpath id="001" x="204" y="387" curvePoint="false"/>
+<type value="normal"/>
+</arc>
+<arc id="four-input to four-carry" source="four-input" target="four-carry">
+<graphics/>
+<inscription>
+<value>Default,1</value>
+<graphics/>
+</inscription>
+<tagged>
+<value>false</value>
+</tagged>
+<arcpath id="000" x="161" y="116" curvePoint="false"/>
+<arcpath id="001" x="156" y="456" curvePoint="false"/>
+<type value="normal"/>
+</arc>
+<arc id="four-input to four-flip" source="four-input" target="four-flip">
+<graphics/>
+<inscription>
+<value>Default,1</value>
+<graphics/>
+</inscription>
+<tagged>
+<value>false</value>
+</tagged>
+<arcpath id="000" x="164" y="116" curvePoint="false"/>
+<arcpath id="001" x="191" y="246" curvePoint="false"/>
+<type value="normal"/>
+</arc>
+<arc id="four-register to four-carry" source="four-register" target="four-carry">
+<graphics/>
+<inscription>
+<value>Default,1</value>
+<graphics/>
+</inscription>
+<tagged>
+<value>false</value>
+</tagged>
+<arcpath id="000" x="198" y="414" curvePoint="false"/>
+<arcpath id="001" x="166" y="457" curvePoint="false"/>
+<type value="normal"/>
+</arc>
+<arc id="four-register to four-flip" source="four-register" target="four-flip">
+<graphics/>
+<inscription>
+<value/>
+<graphics/>
+</inscription>
+<tagged>
+<value/>
+</tagged>
+<arcpath id="000" x="205" y="387" curvePoint="false"/>
+<arcpath id="001" x="196" y="257" curvePoint="false"/>
+<type value="inhibitor"/>
+</arc>
+<arc id="one-carry to two-input" source="one-carry" target="two-input">
+<graphics/>
+<inscription>
+<value>Default,1</value>
+<graphics/>
+</inscription>
+<tagged>
+<value>false</value>
+</tagged>
+<arcpath id="000" x="394" y="227" curvePoint="false"/>
+<arcpath id="001" x="289" y="114" curvePoint="false"/>
+<type value="normal"/>
+</arc>
+<arc id="one-input to flip-one" source="one-input" target="flip-one">
+<graphics/>
+<inscription>
+<value>Default,1</value>
+<graphics/>
+</inscription>
+<tagged>
+<value>false</value>
+</tagged>
+<arcpath id="000" x="415" y="109" curvePoint="false"/>
+<arcpath id="001" x="446" y="126" curvePoint="false"/>
+<type value="normal"/>
+</arc>
+<arc id="one-input to one-carry" source="one-input" target="one-carry">
+<graphics/>
+<inscription>
+<value>Default,1</value>
+<graphics/>
+</inscription>
+<tagged>
+<value>false</value>
+</tagged>
+<arcpath id="000" x="401" y="116" curvePoint="false"/>
+<arcpath id="001" x="401" y="227" curvePoint="false"/>
+<type value="normal"/>
+</arc>
+<arc id="one-register to flip-one" source="one-register" target="flip-one">
+<graphics/>
+<inscription>
+<value/>
+<graphics/>
+</inscription>
+<tagged>
+<value/>
+</tagged>
+<arcpath id="000" x="455" y="163" curvePoint="false"/>
+<arcpath id="001" x="441" y="136" curvePoint="false"/>
+<type value="inhibitor"/>
+</arc>
+<arc id="one-register to one-carry" source="one-register" target="one-carry">
+<graphics/>
+<inscription>
+<value>Default,1</value>
+<graphics/>
+</inscription>
+<tagged>
+<value>false</value>
+</tagged>
+<arcpath id="000" x="451" y="187" curvePoint="false"/>
+<arcpath id="001" x="408" y="228" curvePoint="false"/>
+<type value="normal"/>
+</arc>
+<arc id="two-carry to four-input" source="two-carry" target="four-input">
+<graphics/>
+<inscription>
+<value>Default,1</value>
+<graphics/>
+</inscription>
+<tagged>
+<value>false</value>
+</tagged>
+<arcpath id="000" x="270" y="337" curvePoint="false"/>
+<arcpath id="001" x="168" y="115" curvePoint="false"/>
+<type value="normal"/>
+</arc>
+<arc id="two-input to flip-two" source="two-input" target="flip-two">
+<graphics/>
+<inscription>
+<value>Default,1</value>
+<graphics/>
+</inscription>
+<tagged>
+<value>false</value>
+</tagged>
+<arcpath id="000" x="283" y="117" curvePoint="false"/>
+<arcpath id="001" x="311" y="201" curvePoint="false"/>
+<type value="normal"/>
+</arc>
+<arc id="two-input to two-carry" source="two-input" target="two-carry">
+<graphics/>
+<inscription>
+<value>Default,1</value>
+<graphics/>
+</inscription>
+<tagged>
+<value>false</value>
+</tagged>
+<arcpath id="000" x="278" y="117" curvePoint="false"/>
+<arcpath id="001" x="277" y="337" curvePoint="false"/>
+<type value="normal"/>
+</arc>
+<arc id="two-register to flip-two" source="two-register" target="flip-two">
+<graphics/>
+<inscription>
+<value/>
+<graphics/>
+</inscription>
+<tagged>
+<value/>
+</tagged>
+<arcpath id="000" x="335" y="268" curvePoint="false"/>
+<arcpath id="001" x="306" y="211" curvePoint="false"/>
+<type value="inhibitor"/>
+</arc>
+<arc id="two-register to two-carry" source="two-register" target="two-carry">
+<graphics/>
+<inscription>
+<value>Default,1</value>
+<graphics/>
+</inscription>
+<tagged>
+<value>false</value>
+</tagged>
+<arcpath id="000" x="331" y="292" curvePoint="false"/>
+<arcpath id="001" x="284" y="338" curvePoint="false"/>
+<type value="normal"/>
+</arc>
+</net>
+</pnml>

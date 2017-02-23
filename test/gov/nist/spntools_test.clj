@@ -82,11 +82,11 @@
 (deftest reachability-test
   (testing "Reachability graph size"
     (is (= [4 4 4 4]     (get-misc-arc-count "data/simple.xml")))
-    (is (= [8 8 9 9]     (get-misc-arc-count "data/join2.xml")))
-    (is (= [9 9 9 9]     (get-misc-arc-count "data/join2-reduce.xml")))
-    (is (= [32 32 58 58] (get-misc-arc-count "data/join3.xml")))
-    (is (= [58 58 58 58] (get-misc-arc-count "data/join3-reduce-v2.xml")))
-    (is (= [95 76 84 84] (get-misc-arc-count "data/marsan69.xml")))
+    (is (= [6 6 5 5]     (get-misc-arc-count "data/join2.xml")))
+    (is (= [5 5 5 5]     (get-misc-arc-count "data/join2-reduce.xml")))
+    (is (= [14 14 13 13] (get-misc-arc-count "data/join3.xml")))
+    (is (= [13 13 13 13] (get-misc-arc-count "data/join3-reduce-v2.xml")))
+    (is (= [95 76 59 59] (get-misc-arc-count "data/marsan69.xml")))
     (is (= [14 14 14 14] (get-misc-arc-count "data/m6.xml")))))
 
 ;;;==========================================================================
@@ -204,14 +204,14 @@
                               [1 0 0 1 0 1 0]
                               [1 0 0 0 0 0 1]
                               [0 1 0 0 0 0 1]])))
-           [[-3.0    0.0   10.0   0.0    0.0    0.0   5.0   0.0]
-            [ 1.0 -102.0    0.0   0.0    0.0    0.0   0.0   5.0]
-            [ 0.0  100.0  -12.0   0.0    0.0    0.0   0.0   0.0]
-            [ 0.0    0.0    2.0 -10.0  100.0    0.0   0.0   0.0]
-            [ 0.0    2.0    0.0   0.0 -200.0    1.0   0.0   0.0]
-            [ 2.0    0.0    0.0  10.0    0.0 -101.0   0.0   0.0]
-            [ 0.0    0.0    0.0   0.0    0.0  100.0  -6.0   0.0]
-            [ 0.0    0.0    0.0   0.0  100.0    0.0   1.0  -5.0]]))))
+           [[-3.0 1.0 0.0 0.0 0.0 2.0 0.0 0.0]
+            [0.0 -102.0 100.0 0.0 2.0 0.0 0.0 0.0]
+            [10.0 0.0 -12.0 2.0 0.0 0.0 0.0 0.0]
+            [0.0 0.0 0.0 -10.0 0.0 10.0 0.0 0.0]
+            [0.0 0.0 0.0 100.0 -200.0 0.0 0.0 100.0]
+            [0.0 0.0 0.0 0.0 1.0 -101.0 100.0 0.0]
+            [5.0 0.0 0.0 0.0 0.0 0.0 -6.0 1.0]
+            [0.0 5.0 0.0 0.0 0.0 0.0 0.0 -5.0]]))))
 
 #_(deftest gauss-jordan-elimination
   (testing "Gauss-Jordan elimination solution, inverse and determinant"
@@ -228,16 +228,57 @@
 ;;;========================================================
 ;;; Steady-state properties
 ;;;========================================================
-(deftest steady-state-properties
+(deftest steady-state-properties-simple
   (testing "Steady-state properties are consistent with findings from other tools"
-    (let [res (:avg-tokens-on-place (pn-steady-state (read-pnml "data/m6.xml")))]
-      (is (=* (:Pacc1 res) 0.0856969731944484 0.0001)) ; The long numbers? 
-      (is (=* (:Pacc2 res) 0.2773082804894559 0.0001)) ; Just so that I can go
-      (is (=* (:Pact1 res) 0.8569697319444844 0.0001)) ; back and check. 
-      (is (=* (:Pact2 res) 0.6932707012236401 0.0001))
-      (is (=* (:Pidle res) 0.6369947463160957 0.0001))
-      (is (=* (:Preq1 res) 0.0573332948610671 0.0001))
-      (is (=* (:Preq2 res) 0.0294210182869039 0.0001)))))
+    (let [result (:avg-tokens-on-place (pn-steady-state (read-pnml "data/simple.xml")))
+          correct {:A 0.33333333333333326, :B 0.6666666666666669}]
+      (is (every? (fn [[key val]]
+                    (=* val (get correct key) 0.0001)) result)))))
+
+(deftest steady-state-properties-m6
+  (testing "Steady-state properties are consistent/m6"
+    (let [result (:avg-tokens-on-place (pn-steady-state (read-pnml "data/m6.xml")))
+          correct {:Pacc1 0.08569697319444844, :Pacc2 0.27730828048945594, :Pact1 0.8569697319444844,
+                   :Pact2 0.6932707012236401,  :Pidle 0.6369947463160957,  :Preq1 0.0573332948610671,
+                   :Preq2 0.029421018286903994}]
+      (is (every? (fn [[key val]]
+                    (=* val (get correct key) 0.0001)) result)))))
+
+(deftest steady-state-properties-join2
+  (testing "Steady-state properties are consistent/join2"
+    (let [result (:avg-tokens-on-place (pn-steady-state (read-pnml "data/join2.xml")))
+          correct {:P1 0.2, :P2 0.2, :Pjoin 0.4, :Pstart 0.8}]
+      (is (every? (fn [[key val]]
+                    (=* val (get correct key) 0.0001)) result)))))
+
+(deftest steady-state-properties-join2-reduced
+  (testing "Steady-state properties are consistent/join2-reduce"
+    (let [result (:avg-tokens-on-place (pn-steady-state (read-pnml "data/join2-reduce.xml")))
+          correct {:P1 0.2, :P2 0.2, :Pjoin 0.4, :Pstart 0.8}]
+      (is (every? (fn [[key val]]
+                    (=* val (get correct key) 0.0001)) result)))))
+
+(deftest steady-state-properties-join3
+  (testing "Steady-state properties are consistent/join3"
+    (let [result (:avg-tokens-on-place (pn-steady-state (read-pnml "data/join3.xml")))
+          correct {:P1 0.24779 :P2 0.27764 :P3 0.3029 :Pjoin 0.39401 :Pstart 0.98963}]
+      (is (every? (fn [[key val]]
+                    (=* val (get correct key) 0.0001)) result)))))
+
+;;; There must be a bug my drawing of join3-reduce because the values 
+;;; here should match those of join3. 
+(deftest steady-state-properties-join3-reduced
+  (testing "Steady-state properties are consistent/join3-reduce"
+    (let [result (:avg-tokens-on-place (pn-steady-state (read-pnml "data/join3-reduce-v2.xml")))
+          correct {:P1 0.29412 :P2 0.29412 :P3 0.29412 :Pjoin 0.35294 :Pstart 1.05882}]
+      (is (every? (fn [[key val]]
+                    (=* val (get correct key) 0.0001)) result)))))
+
+
+
+
+
+
 
 
 
