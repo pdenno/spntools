@@ -79,10 +79,6 @@
     (assoc ?m :transitions (vec (map essential-transition (:transitions ?m))))
     (assoc ?m :arcs (filter #(= :arc (:tag %)) (:raw ?m)))
     (assoc ?m :arcs (vec (map essential-arc (:arcs ?m))))
-    (let [marking (initial-marking ?m)]
-      (as-> ?m ?mm
-        (assoc ?mm :initial-marking (:initial-marking marking))
-        (assoc ?mm :marking-key (:marking-key marking))))
     (dissoc ?m :raw)))
 
 (defn reorder-places

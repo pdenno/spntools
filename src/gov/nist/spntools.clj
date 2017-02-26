@@ -8,10 +8,7 @@
             [clojure.core.matrix :as m :refer :all]
             [clojure.core.matrix.linear :as ml :refer (svd)]))
 
-;;; ToDo: * It is probably a bad idea to have a :initial-marking on pn since things
-;;;         could change (though I don't know what) and it is easy to compute.
-;;;         (map :initial-marking (:places pn))
-;;;       * See if the name2x aid2x stuff can be simplified.
+;;; ToDo: * See if the name2x aid2x stuff can be simplified.
 
 ;;; Four steps to most reductions:
 ;;;  1) Find instances of the pattern.
@@ -265,7 +262,7 @@
   (reduce (fn [pn place]
             (let [b (vanish-binds pn place)]
               (as-> pn ?pn
-;                (reduce (fn [pn ar] (eliminate-pn pn ar)) ?pn (map :trans (:strans-ins b)))
+                (reduce (fn [pn ar] (eliminate-pn pn ar)) ?pn (map :trans (:strans-ins b)))
                 (reduce (fn [pn ar] (eliminate-pn pn ar)) ?pn (mapcat :ins (:strans-ins b)))
                 (reduce (fn [pn tr] (eliminate-pn pn tr)) ?pn (:strans b))
                 (reduce (fn [pn ar] (eliminate-pn pn ar)) ?pn (:place-ins b))
@@ -274,8 +271,8 @@
                 (reduce (fn [pn tr] (eliminate-pn pn tr)) ?pn (:trans b))
                 (reduce (fn [pn ar] (eliminate-pn pn ar)) ?pn (:trans-outs b))
                 (reduce (fn [pn cmd]
-                          (as-> pn ?pnn
-                            (let [new-trans (:new-trans cmd)]
+                          (let [new-trans (:new-trans cmd)]
+                            (as-> pn ?pnn
                               (add-pn ?pnn {:name (:name new-trans) :tid (next-tid ?pnn)
                                             :type :exponential :rate (:rate new-trans)})
                               (add-pn ?pnn (make-arc ?pnn (:name new-trans) (:send-to cmd)))
@@ -286,7 +283,7 @@
                                       ?pnn
                                       (:receive-from-make-copy cmd)))))
                         ?pn
-                        (vanish-cmd b))))) ; POD pristine might be pointless
+                        (vanish-cmd b)))))
           pn
           (find-vanish pn)))
 
@@ -330,7 +327,8 @@
               (into cmd
                     (map (fn [strans-in]
                            {:new-trans {:name (name-prime (:name (:trans strans-in)) tplace)
-                                        :rate "foo"}
+                                        ;; POD rate is s-rate*t-weight, POD NYI, since t-weight=1
+                                        :rate (:rate (:trans strans-in))} 
                             :send-to tplace
                             :receive-from-make-copy (:ins strans-in)})
                          (:strans-ins binds))))

@@ -25,14 +25,15 @@
 (defn mark-at-link-head
   "Return the mark that is at the head of the argument link."
   [pn [mark tid]]
+  ;(reset! +zippy+ (list mark tid))
   (as-> mark ?m
     (reduce (fn [mar arc]
-              (let [indx (dec (:pid (name2place pn (:source arc))))] 
+              (let [indx (:pid (name2place pn (:source arc)))] 
                 (update mar indx #(- % (:multiplicity arc)))))
             ?m
             (filter #(= (:type %) :normal) (arcs-into-trans pn tid)))
     (reduce (fn [mar arc] 
-              (let [indx (dec (:pid (name2place pn (:target arc))))] 
+              (let [indx (:pid (name2place pn (:target arc)))] 
                 (update mar indx #(+ % (:multiplicity arc)))))
             ?m ; inhibitors don't exit transitions
             (arcs-outof-trans pn tid))))
@@ -56,21 +57,29 @@
        (filter (fn [link] (not-any? (fn [vis] (= link vis)) @*visited-links*))
                (map (fn [tid] (list marking tid)) (fireables pn marking)))))
 
+
 (defn reachability-aux
   [pn marking]
-  (let [nexts (next-markings pn marking)] 
-    (swap! *visited-links* into (map #(list (:M %) (:tid (name2transition pn (:fire %)))) nexts))
+  (let [nexts (next-markings pn marking)]
+    ;(println "Next " (map #(list (:M %) (:tid (name2transition pn (:fire %)))) nexts))
+    (swap! *visited-links* into (map #(list (:M %) (:tid (name2transition pn (:fire %)))) nexts)) ; POD looks wasteful
     (swap! *graph* into nexts)
     (doseq [nx nexts]
       (reachability-aux pn (:Mp nx)))))
 
+(declare renumber-pids)
 (defn reachability
   "Calculate the reachability of the argument gspn or spn." 
   [pn]
   (binding [*visited-links* (atom [])
             *graph* (atom [])]
-    (reachability-aux pn (:initial-marking pn))
-    (as-> pn ?pn
+    (let [marking (initial-marking pn)
+          pnn (as-> pn ?pn
+                (renumber-pids ?pn) ; initial-marking sorts the by pid too. 
+                (assoc ?pn :marking-key (:marking-key marking))
+                (assoc ?pn :initial-marking (:initial-marking marking)))]
+      (reachability-aux pnn (:initial-marking pnn))
+      (as-> pnn ?pn
         (assoc ?pn :reach @*graph*)
         (let [m  (set (distinct (map #(:M %) (:reach ?pn))))
               mp (set (distinct (map #(:Mp %) (:reach ?pn))))
@@ -79,7 +88,7 @@
           (if (and (empty? m-mp) (empty? mp-m))
             ?pn
             (assoc ?pn :failure {:reason :absorbing-states
-                                 :data {:m-not-mp m-mp :mp-not-m mp-m}}))))))
+                                 :data {:m-not-mp m-mp :mp-not-m mp-m}})))))))
 
 ;;; Reachability-specific utilities ---------------------------------------------
 (defn markings2source
@@ -95,7 +104,6 @@
   (as-> graph ?g
     (filter #(= (:M %) mark) ?g)
     (map #(vector (get name-map (:target %)) (:fire %)) ?g)))
-
 
 ;;; Reorganize from individual firings to indexed by state with transitions to and from.
 ;;; Also, use name-map to rename states (currently markings) to names used in Pipe (S1, S2, etc.).
@@ -125,3 +133,16 @@
                  ?g
                  ?g)
       (into (sorted-map) (zipmap (keys ?g) (vals ?g))))))
+
+(defn renumber-pids
+  "Number the pids from 0 so that they can be used as an index into the marker.
+   Reduction makes this necessary."
+  [pn]
+  (update pn :places
+          (fn [places]
+            (let [order (vec (sort #(< (:pid %1) (:pid %2)) places))]
+              (reduce (fn [order id]
+                        (assoc-in order [id :pid] id))
+                      order
+                      (range (count order)))))))
+  
