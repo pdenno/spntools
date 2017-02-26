@@ -129,7 +129,7 @@
       (assoc ?b :preserve-top-ins (remove (fn [tin] (some #(= (:source tin) %) (:places-top ?b))) (:top-ins ?b)))
       (assoc ?b :top-ins (remove (fn [tin] (some #(= % tin) (:preserve-top-ins ?b))) (:top-ins ?b))))))
 
-(defn join-new-trans
+(defn join-cmd
   "Creates 'command vectors' providing instructions to create new transitions and arcs."
   [pn binds owner]
   (let [owner-t (:source (some #(when (= owner (:target %)) %) (:places-ins binds)))
@@ -194,7 +194,6 @@
   (let [arcs (:arcs pn)
         trs (:transitions pn)
         places (:places pn)
-        pn-pristine pn
         new-cnt (atom 0)]
     (reduce (fn [pn imm]
               (let [b (join-binds pn imm)]
@@ -206,7 +205,7 @@
                   (reduce (fn [pn ar] (eliminate-pn pn ar)) ?pn (:places-ins b))
                   (reduce (fn [pn ar] (eliminate-pn pn ar)) ?pn (:imm-ins b))
                   (eliminate-pn ?pn (:place-bottom-in b))
-                  (reduce (fn [pn cmd-vec] ; cmd-vec, from join-new-trans is commands over one of :places*
+                  (reduce (fn [pn cmd-vec] ; cmd-vec, from join-cmd is commands over one of :places*
                             (reduce (fn [pnn cmd] ; each cmd creates a new transition and the arcs to/from it.
                                       (as-> pnn ?pnp
                                         (add-pn ?pnp {:name (:name cmd) :tid (next-tid ?pnp)
@@ -237,43 +236,74 @@
                                                 (:send&receive-activators cmd))))
                                     pn
                                     cmd-vec))
-                          ?pn ; Maybe 'pristine' isn't necessary. Haven't thought about it.
-                          (map #(join-new-trans pn-pristine b %) (:places* b))))))
+                          ?pn 
+                          (map #(join-cmd pn b %) (:places* b))))))
             pn
             (find-joins pn))))
 
-(declare find-vanish vanish-binds vanish-new-trans)
+;;;     (   ) ( )    splaces             -- Not recorded. Use strans-ins. Keep these.
+;;;      | |   |     strans-ins          -- Don't keep anything from here through trans-outs.
+;;;      v v   v
+;;;      XXXX XXXX   strans (multiple)   
+;;;        |   |     
+;;;        V   V     place-ins (multiple)
+;;;        ------
+;;;       (      )   place (owner)
+;;;        ------
+;;;        |    |     place-outs (multiple)
+;;;        V    V
+;;;     XXXX   XXXX   trans (multiple)
+;;;      |      |    
+;;;      V      V     trans-outs (multiple)
+;;;     ---    ---
+;;;    (   )  (   )    tplaces (multiple)
+;;;     ---    ---
+(declare find-vanish vanish-binds vanish-cmd)
 (defn vanish2spn
-  "Remove a vanishing place and IMMs that are attached."
+  "Remove vanishing places and IMMs that are attached. Add in replacements."
   [pn]
   (reduce (fn [pn place]
-            (let [b (vanish-binds pn place)]            
-              pn))
+            (let [b (vanish-binds pn place)]
+              (as-> pn ?pn
+;                (reduce (fn [pn ar] (eliminate-pn pn ar)) ?pn (map :trans (:strans-ins b)))
+                (reduce (fn [pn ar] (eliminate-pn pn ar)) ?pn (mapcat :ins (:strans-ins b)))
+                (reduce (fn [pn tr] (eliminate-pn pn tr)) ?pn (:strans b))
+                (reduce (fn [pn ar] (eliminate-pn pn ar)) ?pn (:place-ins b))
+                (eliminate-pn ?pn (:place b))
+                (reduce (fn [pn ar] (eliminate-pn pn ar)) ?pn (:place-outs b))
+                (reduce (fn [pn tr] (eliminate-pn pn tr)) ?pn (:trans b))
+                (reduce (fn [pn ar] (eliminate-pn pn ar)) ?pn (:trans-outs b))
+                (reduce (fn [pn cmd]
+                          (as-> pn ?pnn
+                            (let [new-trans (:new-trans cmd)]
+                              (add-pn ?pnn {:name (:name new-trans) :tid (next-tid ?pnn)
+                                            :type :exponential :rate (:rate new-trans)})
+                              (add-pn ?pnn (make-arc ?pnn (:name new-trans) (:send-to cmd)))
+                              (reduce (fn [pn ar]
+                                        (add-pn pn (make-arc pn (:source ar) (:name new-trans)
+                                                             :type (:type ar)
+                                                             :multiplicity (:multiplicity ar))))
+                                      ?pnn
+                                      (:receive-from-make-copy cmd)))))
+                        ?pn
+                        (vanish-cmd b))))) ; POD pristine might be pointless
           pn
           (find-vanish pn)))
 
-;;;      XXXX XXXX   trans-ins (multiple)
-;;;        |   |     place-ins (multiple)
-;;;        V   V
-;;;        ------
-;;;       (      )   place
-;;;        ------
-;;;        |   |     place-outs (multiple)
-;;;        V   V
-;;;     XXXX  XXXX   trans (multiple)
-;;;        |   |    
-;;;        V   V     trans-outs (multiple)
 (defn vanish-binds
   "Return a map identifying a set of things involved in the pattern shown above."
   [pn place]
   (as-> {} ?b
     (assoc ?b :place place)
-    (assoc ?b :place-outs (arcs-outof-place pn (:place ?b)))
-    (assoc ?b :trans (map :target (:place-outs ?b)))
-    (assoc ?b :trans-outs (map #(arcs-outof-trans pn %)
-                               (map #(:tid (name2transition pn %)) (:trans ?b))))
-    (assoc ?b :place-ins (arcs-into-place pn (:place ?b)))
-    (assoc ?b :trans-ins (map :source (:place-ins ?b)))))
+    (assoc ?b :place-outs (arcs-outof-place pn (:name (:place ?b))))
+    (assoc ?b :trans (map #(name2transition pn (:target %)) (:place-outs ?b)))
+    (assoc ?b :trans-outs (mapcat #(arcs-outof-trans pn %) (map :tid (:trans ?b))))
+    (assoc ?b :tplaces (map :target (:trans-outs ?b)))
+    (assoc ?b :place-ins (arcs-into-place pn (:name (:place ?b))))
+    (assoc ?b :strans (map #(name2transition pn (:source %)) (:place-ins ?b)))
+    (assoc ?b :strans-ins (map (fn [tr] {:trans tr
+                                         :ins (arcs-into-trans pn (:tid tr))})
+                              (:strans ?b)))))
 
 (defn find-vanish
   [pn]
@@ -288,21 +318,34 @@
                (every? #(= 1 (count (arcs-into-trans pn %))) tids))))
           (:places pn)))
 
-(defn vanish-new-trans
+(defn name-prime
+  [n1 n2]
+  (keyword (str (subs (str n1) 1) "-" (subs (str n2) 1))))
+
+(defn vanish-cmd
   "Creates 'command vectors' providing instructions to create new transitions and arcs."
-  [pn binds owner])
-
-
-  
+  [binds]
+  (let [owner (:place binds)]
+    (reduce (fn [cmd tplace]
+              (into cmd
+                    (map (fn [strans-in]
+                           {:new-trans {:name (name-prime (:name (:trans strans-in)) tplace)
+                                        :rate "foo"}
+                            :send-to tplace
+                            :receive-from-make-copy (:ins strans-in)})
+                         (:strans-ins binds))))
+            nil
+            (:tplaces binds))))
 
 ;;;------- Diagnostic
-;;;(def j2 (one-step "data/marsan69.xml"))
-;;;(def bbb (join-binds j2 (first (find-joins j2))))
-;;;(ppprint (join-new-trans j2 bbb (first (:places* bbb))))
+;;; The idea is that vanish-binds gets called in turn for each :place returned from find-vanish.
+;;; In vanish-cmd, we call that :place 'owner.'
+;;;(def m (two-step "data/marsan69.xml"))
+;;;(def bbb (vanish-binds m (first (find-vanish m))))
+;;;(ppprint (vanish-cmd m bbb))
 (defn zero-step
   [filename]
   (read-pnml filename))
-
 
 (defn one-step
   [filename]
@@ -351,7 +394,7 @@
 
 (defn Q-matrix 
   "Calculate the infinitesimal generator matrix from the reachability graph"
-  [pn & {:keys [force-ordering]}] ; force-ordering for debugging.
+  [pn & {:keys [force-ordering]}] ; force-ordering is for debugging.
   (if (:failure pn)
     pn
     (let [states (or force-ordering (distinct (map :M (:reach pn))))
@@ -371,7 +414,7 @@
   (let [size (count v)]
     (loop [i 1
            mini (abs (first v))
-           min-pos 1]
+           min-pos 0]
       (cond (= i size) min-pos,
             (< (abs (nth v i)) mini)
             (recur (inc i) (abs (nth v i)) i),
@@ -379,39 +422,17 @@
             (recur (inc i) mini min-pos)))))
 
 (defn steady-state-props
-  "Calculate steady-state props for the PN, for which the Q matrix has been generated."
+  "Calculate steady-state props for a PN for which the Q matrix has been generated."
   [pn]
   (if (:failure pn)
     pn
     (let [sol (ml/svd (m/array (:Q pn))) ; U makes sense xA=0 --> left null space.
           svec (vec (m/get-column (:U sol) (zero-pos (vec (:S sol)))))
           scale (apply + svec)]
-      ;; I have seen all values negative at times.
       (as-> pn ?pn
-        (dissoc ?pn :states)
-        (assoc ?pn :steady-state (zipmap (:states pn) (map #(/ % scale) svec)))
-        (assoc ?pn :avg-tokens-on-place (avg-tokens-on-place ?pn))))))
-
-;;; This for m6, I think. 
-#_{:marking-key [:Pacc1 :Pacc2 :Pact1 :Pact2 :Pidle :Preq1 :Preq2],
- :steady-state-vec
- [0.6147123680197807
-  0.008416964271842083
-  1.5273304760275329E-4
-  0.015555604262431213
-  0.013712680976870026
-  0.2285446829478337
-  0.04876359754162226
-  0.07014136893201722],
- :states
- ([0 0 1 1 1 0 0]
-  [0 0 0 1 1 1 0]
-  [0 0 0 0 1 1 1]
-  [1 0 0 0 0 0 1]
-  [0 0 1 0 1 0 1]
-  [0 1 1 0 0 0 0]
-  [0 1 0 0 0 1 0]
-  [1 0 0 1 0 0 0])}
+        (assoc ?pn :steady-state (zipmap (:states ?pn) (map #(/ % scale) svec)))
+        (assoc ?pn :avg-tokens-on-place (avg-tokens-on-place ?pn))
+        (dissoc ?pn :states)))))
 
 (defn avg-tokens-on-place
   "Calculate the average number of tokens on a place."
