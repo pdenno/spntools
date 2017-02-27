@@ -328,7 +328,7 @@
                     (map (fn [strans-in]
                            {:new-trans {:name (name-prime (:name (:trans strans-in)) tplace)
                                         ;; POD rate is s-rate*t-weight, POD NYI, since t-weight=1
-                                        :rate (:rate (:trans strans-in))} 
+                                        :rate (/ (:rate (:trans strans-in)) (count (:trans binds)))} 
                             :send-to tplace
                             :receive-from-make-copy (:ins strans-in)})
                          (:strans-ins binds))))
@@ -340,7 +340,7 @@
 ;;; In vanish-cmd, we call that :place 'owner.'
 ;;;(def m (two-step "data/marsan69.xml"))
 ;;;(def bbb (vanish-binds m (first (find-vanish m))))
-;;;(ppprint (vanish-cmd m bbb))
+;;;(ppprint (vanish-cmd bbb))
 (defn zero-step
   [filename]
   (read-pnml filename))

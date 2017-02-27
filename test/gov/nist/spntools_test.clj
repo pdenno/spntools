@@ -86,7 +86,7 @@
     (is (= [5 5 5 5]     (get-misc-arc-count "data/join2-reduce.xml")))
     (is (= [14 14 13 13] (get-misc-arc-count "data/join3.xml")))
     (is (= [13 13 13 13] (get-misc-arc-count "data/join3-reduce-v2.xml")))
-    (is (= [95 76 59 59] (get-misc-arc-count "data/marsan69.xml")))
+    (is (= [95 76 59 48] (get-misc-arc-count "data/marsan69.xml")))
     (is (= [14 14 14 14] (get-misc-arc-count "data/m6.xml")))))
 
 ;;;==========================================================================
@@ -273,6 +273,27 @@
           correct {:P1 0.29412 :P2 0.29412 :P3 0.29412 :Pjoin 0.35294 :Pstart 1.05882}]
       (is (every? (fn [[key val]]
                     (=* val (get correct key) 0.0001)) result)))))
+
+(deftest steady-state-properties-marsan
+  (testing "Steady-state properties are consistent/marsan69 (which does 3 kinds of reduction)"
+    (let [result (:avg-tokens-on-place (pn-steady-state (read-pnml "data/marsan69.xml")))
+          correct {:P1 0.31305 :P3 0.72487 :P4 0.72487 :P5 0.33774 :P6 0.33774 :P8 0.31217 :P9 0.31217}]
+      (is (every? (fn [[key val]]
+                    (=* val (get correct key) 0.0001)) result)))))
+
+(deftest steady-state-properties-3rd-step-vanishing-place
+  (testing "Steady-state properties a case with '3rd-step vanishing place'"
+    (let [result (:avg-tokens-on-place (pn-steady-state (read-pnml "data/m612.xml")))
+          correct {:P1 0.16667 :P2 0.16667 :P3 0.16667 :Pa 0.5}]
+      (is (every? (fn [[key val]]
+                    (=* val (get correct key) 0.001)) result)))))
+
+
+
+
+
+
+      
 
 
 
