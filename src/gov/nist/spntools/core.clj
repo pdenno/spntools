@@ -1,4 +1,4 @@
-(ns gov.nist.spntools
+(ns gov.nist.spntools.core
   (:require [clojure.data.xml :as xml :refer (parse-str)]
             [clojure.pprint :refer (cl-format pprint pp)]
             [clojure.math.combinatorics :as combo]
