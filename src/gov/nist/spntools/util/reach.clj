@@ -90,7 +90,10 @@
           (if (and (empty? m-mp) (empty? mp-m))
             ?pn
             (assoc ?pn :failure {:reason :absorbing-states
-                                 :data {:m-not-mp m-mp :mp-not-m mp-m}})))))))
+                                 :data {:m-not-mp m-mp :mp-not-m mp-m}})))
+        (if (empty? (:reach ?pn))
+          (assoc ?pn :failure {:reason :null-reachability-graph})
+          ?pn)))))
 
 ;;; Reachability-specific utilities ---------------------------------------------
 (defn markings2source

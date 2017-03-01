@@ -6,5 +6,5 @@
   :dependencies [[org.clojure/clojure "1.8.0"]
                  [org.clojure/data.xml "0.0.8"]
                  [org.clojure/math.combinatorics "0.1.4"]
-                 [net.mikera/vectorz-clj "0.45.0"]
+                 [net.mikera/vectorz-clj "0.46.0"]
                  [net.mikera/core.matrix "0.57.0"]])

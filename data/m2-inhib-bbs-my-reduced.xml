@@ -1,0 +1,560 @@
+<?xml version="1.0" encoding="ISO-8859-1"?><pnml>
+<net id="Net-One" type="P/T net">
+<token id="Default" enabled="true" red="0" green="0" blue="0"/>
+<place id="buffer">
+<graphics>
+<position x="322.0" y="195.0"/>
+</graphics>
+<name>
+<value>buffer</value>
+<graphics>
+<offset x="27.0" y="-9.0"/>
+</graphics>
+</name>
+<initialMarking>
+<value>Default,0</value>
+<graphics>
+<offset x="0.0" y="0.0"/>
+</graphics>
+</initialMarking>
+<capacity>
+<value>0</value>
+</capacity>
+</place>
+<place id="m1-blocked">
+<graphics>
+<position x="143.0" y="37.0"/>
+</graphics>
+<name>
+<value>m1-blocked</value>
+<graphics>
+<offset x="27.0" y="-9.0"/>
+</graphics>
+</name>
+<initialMarking>
+<value>Default,1</value>
+<graphics>
+<offset x="0.0" y="0.0"/>
+</graphics>
+</initialMarking>
+<capacity>
+<value>0</value>
+</capacity>
+</place>
+<place id="m1-busy">
+<graphics>
+<position x="112.0" y="436.0"/>
+</graphics>
+<name>
+<value>m1-busy</value>
+<graphics>
+<offset x="27.0" y="-9.0"/>
+</graphics>
+</name>
+<initialMarking>
+<value>Default,0</value>
+<graphics>
+<offset x="0.0" y="0.0"/>
+</graphics>
+</initialMarking>
+<capacity>
+<value>0</value>
+</capacity>
+</place>
+<place id="m2-busy">
+<graphics>
+<position x="587.0" y="421.0"/>
+</graphics>
+<name>
+<value>m2-busy</value>
+<graphics>
+<offset x="67.0" y="51.0"/>
+</graphics>
+</name>
+<initialMarking>
+<value>Default,0</value>
+<graphics>
+<offset x="0.0" y="0.0"/>
+</graphics>
+</initialMarking>
+<capacity>
+<value>0</value>
+</capacity>
+</place>
+<place id="m2-starved">
+<graphics>
+<position x="524.0" y="33.0"/>
+</graphics>
+<name>
+<value>m2-starved</value>
+<graphics>
+<offset x="27.0" y="-9.0"/>
+</graphics>
+</name>
+<initialMarking>
+<value>Default,1</value>
+<graphics>
+<offset x="0.0" y="0.0"/>
+</graphics>
+</initialMarking>
+<capacity>
+<value>0</value>
+</capacity>
+</place>
+<transition id="m1-start-job-buffer-last">
+<graphics>
+<position x="122.0" y="120.0"/>
+</graphics>
+<name>
+<value>m1-start-job-buffer-last</value>
+<graphics>
+<offset x="32.0" y="1.0"/>
+</graphics>
+</name>
+<orientation>
+<value>90</value>
+</orientation>
+<rate>
+<value>0.89</value>
+</rate>
+<timed>
+<value>true</value>
+</timed>
+<infiniteServer>
+<value>false</value>
+</infiniteServer>
+<priority>
+<value>1</value>
+</priority>
+</transition>
+<transition id="m1-start-job-m1-blocked-first">
+<graphics>
+<position x="198.0" y="112.0"/>
+</graphics>
+<name>
+<value>m1-start-job-m1-blocked-first</value>
+<graphics>
+<offset x="131.0" y="-6.0"/>
+</graphics>
+</name>
+<orientation>
+<value>90</value>
+</orientation>
+<rate>
+<value>0.89</value>
+</rate>
+<timed>
+<value>true</value>
+</timed>
+<infiniteServer>
+<value>false</value>
+</infiniteServer>
+<priority>
+<value>1</value>
+</priority>
+</transition>
+<transition id="m1-start-job-m1-blocked-last">
+<graphics>
+<position x="270.0" y="114.0"/>
+</graphics>
+<name>
+<value>m1-start-job-m1-blocked-last</value>
+<graphics>
+<offset x="160.0" y="9.0"/>
+</graphics>
+</name>
+<orientation>
+<value>90</value>
+</orientation>
+<rate>
+<value>0.89</value>
+</rate>
+<timed>
+<value>true</value>
+</timed>
+<infiniteServer>
+<value>false</value>
+</infiniteServer>
+<priority>
+<value>1</value>
+</priority>
+</transition>
+<transition id="m2-start-job-buffer-first">
+<graphics>
+<position x="591.0" y="104.0"/>
+</graphics>
+<name>
+<value>m2-start-job-buffer-first</value>
+<graphics>
+<offset x="76.0" y="4.0"/>
+</graphics>
+</name>
+<orientation>
+<value>90</value>
+</orientation>
+<rate>
+<value>0.89</value>
+</rate>
+<timed>
+<value>true</value>
+</timed>
+<infiniteServer>
+<value>false</value>
+</infiniteServer>
+<priority>
+<value>1</value>
+</priority>
+</transition>
+<transition id="m2-start-job-buffer-last">
+<graphics>
+<position x="480.0" y="87.0"/>
+</graphics>
+<name>
+<value>m2-start-job-buffer-last</value>
+<graphics>
+<offset x="20.0" y="-14.0"/>
+</graphics>
+</name>
+<orientation>
+<value>90</value>
+</orientation>
+<rate>
+<value>0.89</value>
+</rate>
+<timed>
+<value>true</value>
+</timed>
+<infiniteServer>
+<value>false</value>
+</infiniteServer>
+<priority>
+<value>1</value>
+</priority>
+</transition>
+<transition id="m2-start-job-m2-starved-first">
+<graphics>
+<position x="715.0" y="94.0"/>
+</graphics>
+<name>
+<value>m2-start-job-m2-starved-first</value>
+<graphics>
+<offset x="122.0" y="1.0"/>
+</graphics>
+</name>
+<orientation>
+<value>90</value>
+</orientation>
+<rate>
+<value>0.89</value>
+</rate>
+<timed>
+<value>true</value>
+</timed>
+<infiniteServer>
+<value>false</value>
+</infiniteServer>
+<priority>
+<value>1</value>
+</priority>
+</transition>
+<transition id="m2-start-job-m2-starved-last">
+<graphics>
+<position x="382.0" y="419.0"/>
+</graphics>
+<name>
+<value>m2-start-job-m2-starved-last</value>
+<graphics>
+<offset x="27.0" y="-9.0"/>
+</graphics>
+</name>
+<orientation>
+<value>90</value>
+</orientation>
+<rate>
+<value>0.89</value>
+</rate>
+<timed>
+<value>true</value>
+</timed>
+<infiniteServer>
+<value>false</value>
+</infiniteServer>
+<priority>
+<value>1</value>
+</priority>
+</transition>
+<arc id="buffer to m1-start-job-m1-blocked-first" source="buffer" target="m1-start-job-m1-blocked-first">
+<graphics/>
+<inscription>
+<value/>
+<graphics/>
+</inscription>
+<tagged>
+<value/>
+</tagged>
+<arcpath id="000" x="321" y="198" curvePoint="false"/>
+<arcpath id="001" x="214" y="129" curvePoint="false"/>
+<type value="inhibitor"/>
+</arc>
+<arc id="buffer to m1-start-job-m1-blocked-last" source="buffer" target="m1-start-job-m1-blocked-last">
+<graphics/>
+<inscription>
+<value>Default,1</value>
+<graphics/>
+</inscription>
+<tagged>
+<value>false</value>
+</tagged>
+<arcpath id="000" x="326" y="194" curvePoint="false"/>
+<arcpath id="001" x="289" y="131" curvePoint="false"/>
+<type value="normal"/>
+</arc>
+<arc id="buffer to m2-start-job-m2-starved-first" source="buffer" target="m2-start-job-m2-starved-first">
+<graphics/>
+<inscription>
+<value/>
+<graphics/>
+</inscription>
+<tagged>
+<value/>
+</tagged>
+<arcpath id="000" x="348" y="203" curvePoint="false"/>
+<arcpath id="001" x="711" y="106" curvePoint="false"/>
+<type value="inhibitor"/>
+</arc>
+<arc id="buffer to m2-start-job-m2-starved-last" source="buffer" target="m2-start-job-m2-starved-last">
+<graphics/>
+<inscription>
+<value>Default,1</value>
+<graphics/>
+</inscription>
+<tagged>
+<value>false</value>
+</tagged>
+<arcpath id="000" x="337" y="221" curvePoint="false"/>
+<arcpath id="001" x="393" y="425" curvePoint="false"/>
+<type value="normal"/>
+</arc>
+<arc id="m1-blocked to m1-start-job-buffer-last" source="m1-blocked" target="m1-start-job-buffer-last">
+<graphics/>
+<inscription>
+<value>Default,1</value>
+<graphics/>
+</inscription>
+<tagged>
+<value>false</value>
+</tagged>
+<arcpath id="000" x="150" y="63" curvePoint="false"/>
+<arcpath id="001" x="133" y="126" curvePoint="false"/>
+<type value="normal"/>
+</arc>
+<arc id="m1-busy to m1-start-job-buffer-last" source="m1-busy" target="m1-start-job-buffer-last">
+<graphics/>
+<inscription>
+<value>Default,1</value>
+<graphics/>
+</inscription>
+<tagged>
+<value>false</value>
+</tagged>
+<arcpath id="000" x="124" y="433" curvePoint="false"/>
+<arcpath id="001" x="138" y="137" curvePoint="false"/>
+<type value="normal"/>
+</arc>
+<arc id="m1-busy to m1-start-job-m1-blocked-first" source="m1-busy" target="m1-start-job-m1-blocked-first">
+<graphics/>
+<inscription>
+<value>Default,1</value>
+<graphics/>
+</inscription>
+<tagged>
+<value>false</value>
+</tagged>
+<arcpath id="000" x="127" y="433" curvePoint="false"/>
+<arcpath id="001" x="204" y="128" curvePoint="false"/>
+<type value="normal"/>
+</arc>
+<arc id="m1-busy to m1-start-job-m1-blocked-last" source="m1-busy" target="m1-start-job-m1-blocked-last">
+<graphics/>
+<inscription>
+<value>Default,1</value>
+<graphics/>
+</inscription>
+<tagged>
+<value>false</value>
+</tagged>
+<arcpath id="000" x="130" y="434" curvePoint="false"/>
+<arcpath id="001" x="275" y="130" curvePoint="false"/>
+<type value="normal"/>
+</arc>
+<arc id="m1-busy to m2-start-job-buffer-first" source="m1-busy" target="m2-start-job-buffer-first">
+<graphics/>
+<inscription>
+<value>Default,1</value>
+<graphics/>
+</inscription>
+<tagged>
+<value>false</value>
+</tagged>
+<arcpath id="000" x="136" y="439" curvePoint="false"/>
+<arcpath id="001" x="602" y="120" curvePoint="false"/>
+<type value="normal"/>
+</arc>
+<arc id="m1-busy to m2-start-job-buffer-last" source="m1-busy" target="m2-start-job-buffer-last">
+<graphics/>
+<inscription>
+<value>Default,1</value>
+<graphics/>
+</inscription>
+<tagged>
+<value>false</value>
+</tagged>
+<arcpath id="000" x="134" y="437" curvePoint="false"/>
+<arcpath id="001" x="486" y="103" curvePoint="false"/>
+<type value="normal"/>
+</arc>
+<arc id="m1-start-job-buffer-last to m1-busy" source="m1-start-job-buffer-last" target="m1-busy">
+<graphics/>
+<inscription>
+<value>Default,1</value>
+<graphics/>
+</inscription>
+<tagged>
+<value>false</value>
+</tagged>
+<arcpath id="000" x="128" y="136" curvePoint="false"/>
+<arcpath id="001" x="124" y="433" curvePoint="false"/>
+<type value="normal"/>
+</arc>
+<arc id="m1-start-job-m1-blocked-first to m1-blocked" source="m1-start-job-m1-blocked-first" target="m1-blocked">
+<graphics/>
+<inscription>
+<value>Default,1</value>
+<graphics/>
+</inscription>
+<tagged>
+<value>false</value>
+</tagged>
+<arcpath id="000" x="209" y="118" curvePoint="false"/>
+<arcpath id="001" x="164" y="60" curvePoint="false"/>
+<type value="normal"/>
+</arc>
+<arc id="m1-start-job-m1-blocked-last to m1-busy" source="m1-start-job-m1-blocked-last" target="m1-busy">
+<graphics/>
+<inscription>
+<value>Default,1</value>
+<graphics/>
+</inscription>
+<tagged>
+<value>false</value>
+</tagged>
+<arcpath id="000" x="282" y="131" curvePoint="false"/>
+<arcpath id="001" x="130" y="434" curvePoint="false"/>
+<type value="normal"/>
+</arc>
+<arc id="m2-busy to m2-start-job-m2-starved-first" source="m2-busy" target="m2-start-job-m2-starved-first">
+<graphics/>
+<inscription>
+<value>Default,1</value>
+<graphics/>
+</inscription>
+<tagged>
+<value>false</value>
+</tagged>
+<arcpath id="000" x="604" y="419" curvePoint="false"/>
+<arcpath id="001" x="726" y="110" curvePoint="false"/>
+<type value="normal"/>
+</arc>
+<arc id="m2-busy to m2-start-job-m2-starved-last" source="m2-busy" target="m2-start-job-m2-starved-last">
+<graphics/>
+<inscription>
+<value>Default,1</value>
+<graphics/>
+</inscription>
+<tagged>
+<value>false</value>
+</tagged>
+<arcpath id="000" x="584" y="432" curvePoint="false"/>
+<arcpath id="001" x="408" y="431" curvePoint="false"/>
+<type value="normal"/>
+</arc>
+<arc id="m2-start-job-buffer-first to buffer" source="m2-start-job-buffer-first" target="buffer">
+<graphics/>
+<inscription>
+<value>Default,1</value>
+<graphics/>
+</inscription>
+<tagged>
+<value>false</value>
+</tagged>
+<arcpath id="000" x="587" y="116" curvePoint="false"/>
+<arcpath id="001" x="348" y="201" curvePoint="false"/>
+<type value="normal"/>
+</arc>
+<arc id="m2-start-job-buffer-last to m2-busy" source="m2-start-job-buffer-last" target="m2-busy">
+<graphics/>
+<inscription>
+<value>Default,1</value>
+<graphics/>
+</inscription>
+<tagged>
+<value>false</value>
+</tagged>
+<arcpath id="000" x="496" y="104" curvePoint="false"/>
+<arcpath id="001" x="594" y="418" curvePoint="false"/>
+<type value="normal"/>
+</arc>
+<arc id="m2-start-job-m2-starved-first to m2-starved" source="m2-start-job-m2-starved-first" target="m2-starved">
+<graphics/>
+<inscription>
+<value>Default,1</value>
+<graphics/>
+</inscription>
+<tagged>
+<value>false</value>
+</tagged>
+<arcpath id="000" x="711" y="106" curvePoint="false"/>
+<arcpath id="001" x="550" y="49" curvePoint="false"/>
+<type value="normal"/>
+</arc>
+<arc id="m2-start-job-m2-starved-last to m2-busy" source="m2-start-job-m2-starved-last" target="m2-busy">
+<graphics/>
+<inscription>
+<value>Default,1</value>
+<graphics/>
+</inscription>
+<tagged>
+<value>false</value>
+</tagged>
+<arcpath id="000" x="408" y="431" curvePoint="false"/>
+<arcpath id="001" x="584" y="432" curvePoint="false"/>
+<type value="normal"/>
+</arc>
+<arc id="m2-starved to m2-start-job-buffer-first" source="m2-starved" target="m2-start-job-buffer-first">
+<graphics/>
+<inscription>
+<value/>
+<graphics/>
+</inscription>
+<tagged>
+<value/>
+</tagged>
+<arcpath id="000" x="546" y="55" curvePoint="false"/>
+<arcpath id="001" x="602" y="110" curvePoint="false"/>
+<type value="inhibitor"/>
+</arc>
+<arc id="m2-starved to m2-start-job-buffer-last" source="m2-starved" target="m2-start-job-buffer-last">
+<graphics/>
+<inscription>
+<value>Default,1</value>
+<graphics/>
+</inscription>
+<tagged>
+<value>false</value>
+</tagged>
+<arcpath id="000" x="525" y="56" curvePoint="false"/>
+<arcpath id="001" x="491" y="93" curvePoint="false"/>
+<type value="normal"/>
+</arc>
+</net>
+</pnml>

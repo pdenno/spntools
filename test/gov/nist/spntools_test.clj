@@ -19,7 +19,7 @@
       (is (= (count (:transitions j3)) 13))
       (is (= (count (:places j3)) 5)))))
 
-(deftest join2-graph-test
+#_(deftest join2-graph-test
   (testing "join graph equality"
     (let [result (gspn2spn (read-pnml "data/join2.xml"))]
       (is (= (set (:places result))
@@ -94,7 +94,7 @@
 ;;;==========================================================================
 
 ;;; Ones with commas are inhibitors
-(defn j2-has-arcs-test []    
+#_(defn j2-has-arcs-test []    
   (let [j2 (gspn2spn (read-pnml "data/join2.xml"))
         data  [[:Pstart :P1-last 1] [:Pstart :P1-first 2] [:Pstart :P2-first 3] [:Pstart :P2-last 4]
                [:P1-first :P1 5]  [:P1 :P1-first, 6] [:P2 :P1-first 7]  [:P1 :P2-first, 8]  [:P2-first :P2 9]
@@ -103,7 +103,7 @@
     (println "Testing" (count data) "arcs")
     (check-every j2 data)))
 
-(defn marsan-one-step-arcs-test []    
+#_(defn marsan-one-step-arcs-test []    
   (let [j2 (one-step "data/marsan69.xml")
         data [[:P1 :Tndata 1] [:P3 :Tpar1 6] [:P4 :Tpar2 7] [:P5 :t_syn 10] [:P6 :t_syn 11]
               [:P7 :t_ko 13] [:P7 :t_ok 16] [:P8 :Tcheck 15] [:P9 :Tio 18] [:t_ko :P8 14]
@@ -112,7 +112,7 @@
     (println "Testing" (count data) "arcs")
     (check-every j2 data)))
     
-(defn marsan-two-step-arcs-test []    
+#_(defn marsan-two-step-arcs-test []    
   (let [j2 (two-step "data/marsan69.xml")
         data [[:Tio :P1 1] [:P9 :Tio 2]
               [:t_ok :P9 3] [:P7 :t_ok 4] [:P7 :t_ko 5] [:t_ko :P8 6] [:P8 :Tcheck 7] [:Tcheck :P3 8]
@@ -131,7 +131,7 @@
                     data))))
 
 ;;; Numbering (third element in the data vector) is on a printout of the diagram somewhere.
-(defn j2-weird-arcs-test []
+#_(defn j2-weird-arcs-test []
   (let [j2 (gspn2spn (read-pnml "data/join2.xml"))
         data  [[:Pstart :P1-last 1] [:Pstart :P1-first 2] [:Pstart :P2-first 3] [:Pstart :P2-last 4]
                [:P1-first :P1 5]  [:P1 :P1-first, 6] [:P2 :P1-first 7]  [:P1 :P2-first, 8]  [:P2-first :P2 9]
@@ -140,7 +140,7 @@
         cdata (map (fn [[s t _]] [s t]) data)]
     (remove (fn [a] (some #(= [(:source a) (:target a)] %) cdata)) (:arcs j2))))
 
-(defn marsan-one-step-weird-arcs-test []
+#_(defn marsan-one-step-weird-arcs-test []
   (let [j2 (one-step "data/marsan69.xml")
         data  [[:P1 :Tndata 1] [:P3 :Tpar1 6] [:P4 :Tpar2 7] [:P5 :t_syn 10] [:P6 :t_syn 11]
                [:P7 :t_ko 13] [:P7 :t_ok 16] [:P8 :Tcheck 15] [:P9 :Tio 18] [:t_ko :P8 14]
@@ -149,7 +149,7 @@
         cdata (map (fn [[s t _]] [s t]) data)]
     (remove (fn [a] (some #(= [(:source a) (:target a)] %) cdata)) (:arcs j2))))
 
-(defn marsan-two-step-weird-arcs-test []
+#_(defn marsan-two-step-weird-arcs-test []
   (let [j2 (two-step "data/marsan69.xml")
         data  [[:Tio :P1 1] [:P9 :Tio 2] [:t_ok :P9 3] [:P7 :t_ok 4] [:P7 :t_ko 5]
                [:t_ko :P8 6] [:P8 :Tcheck 7] [:Tcheck :P3 8] [:Tcheck :P4 9] [:P6-last :P7 10]

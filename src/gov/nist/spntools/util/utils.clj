@@ -121,19 +121,20 @@
     1
     (inc (apply max (map :aid (:arcs pn))))))
 
-;;; Naming convention for transitions: who is ahead of you?
 (defn strip-name
   [key]
-  (str (str (subs (str key) 1))))
+  (str (subs (str key) 1)))
 
 (defn new-name
   "Return the string naming the keyword."
-  [key suffix]
-  (keyword (str (str (subs (str key) 1)) suffix)))
+  [imm key suffix]
+  (keyword (str (strip-name imm) "-" (strip-name key) suffix)))
 
+;;; Naming convention for transitions: who is ahead of you?
 (defn new-name-ahead
-  [owner ahead]
+  [imm owner ahead]
   (new-name
+   imm
    owner
    (str "--"
         (apply str (interpose "&" (map strip-name ahead)))

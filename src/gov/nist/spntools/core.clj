@@ -42,9 +42,9 @@
   [pn imm]
   (let [arcs (:arcs pn)]
     (as-> {} ?b
-      (assoc ?b :imm-name (:name imm))
-      (assoc ?b :imm-in (some #(when (= (:imm-name ?b) (:target %)) %) arcs))
-      (assoc ?b :outs (filter #(= (:source %) (:imm-name ?b)) arcs))
+      (assoc ?b :IMM (:name imm))
+      (assoc ?b :imm-in (some #(when (= (:IMM ?b) (:target %)) %) arcs))
+      (assoc ?b :outs (filter #(= (:source %) (:IMM ?b)) arcs))
       (assoc ?b :places-out (map #(name2place pn %) (map :target (:outs ?b))))
       (assoc ?b :place (name2place pn (:source (:imm-in ?b))))
       (assoc ?b :place-ins (filter #(= (:target %) (:name (:place ?b))) arcs))
@@ -88,17 +88,17 @@
 ;;;   ___    ___
 ;;;  (   )  (   )   places-top   May be one or more
 ;;;   ---    ---
-;;;    |      |     top-ins   -- These may include things from the iplaces!!!
+;;;    |      |     top-ins   -- These may include things from the places* 
 ;;;    V      V
 ;;;   ===    ===    trans [multiple]
 ;;;    |      |     places-ins [multiple]
 ;;;   _V_    _V_
-;;;  (   )  (   )    iplaces   [Keep]
+;;;  (   )  (   )    places*   [Keep]
 ;;;   ---    ---
 ;;;    |      |
 ;;;    |      |     imm-ins 
 ;;;    V      V
-;;;   XXXXXXXXXX    imm
+;;;   XXXXXXXXXX    IMM   -- The thing we are removing, provided by find-joins.
 ;;;      |   place-bottom-in
 ;;;     _V_    
 ;;;    (___)   place-bottom      [Keep]
@@ -109,14 +109,13 @@
         trs (:transitions pn)
         places (:places pn)]
     (as-> {} ?b
-      (assoc ?b :imm-name (:name imm))
-      (assoc ?b :imm-ins (filter #(= (:imm-name ?b) (:target %)) arcs))
+      (assoc ?b :IMM (:name imm))
+      (assoc ?b :imm-ins (filter #(= (:IMM ?b) (:target %)) arcs))
       (assoc ?b :places* (map :source (:imm-ins ?b)))
-      (assoc ?b :iplaces (map #(name2place pn %) (:places* ?b)))
       (assoc ?b :places-ins (filter (fn [ar] (some #(= (:target ar) %) (:places* ?b))) arcs))
       (assoc ?b :trans (filter #(some (fn [pl] (= (:name %) (:source pl))) (:places-ins ?b)) trs))
       (assoc ?b :top-ins (filter #(some (fn [tr] (= (:name tr) (:target %))) (:trans ?b)) arcs))
-      (assoc ?b :place-bottom-in (some #(when (= (:source %) (:imm-name ?b)) %) arcs))
+      (assoc ?b :place-bottom-in (some #(when (= (:source %) (:IMM ?b)) %) arcs))
       (assoc ?b :place-bottom (some #(when (= (:name %) (:target (:place-bottom-in ?b))) %) places))
       ;; Every :normal arc with target in a trans has this place as its source.
       (let [narcs (filter (fn [ar] (and (= (:type ar) :normal)
@@ -131,6 +130,7 @@
   [pn binds owner]
   (let [owner-t (:source (some #(when (= owner (:target %)) %) (:places-ins binds)))
         rate (:rate (name2transition pn owner-t))
+        imm (:IMM binds)
         kill-trans (map :name (:trans binds))
         receive-preserves (filter #(= owner (:source %)) (:preserve-top-ins binds))
         send-preserves (filter #(= owner (:target %)) (:preserve-top-ins binds))
@@ -142,7 +142,7 @@
         (cond
           (= in-front 0)
           (recur (inc in-front)
-                 (let [n (new-name owner "-first")]
+                 (let [n (new-name imm owner "-first")]
                    (conj accum {:name n
                                 :rate rate
                                 :preserves (into (map #(assoc % :target n) receive-preserves)
@@ -152,7 +152,7 @@
                                 :send-activator owner})))
           (= in-front (count others))
           (recur (inc in-front)
-                 (let [n (new-name owner "-last")]
+                 (let [n (new-name imm owner "-last")]
                    (conj accum {:name n
                                 :rate rate
                                 :receive-tops (filter #(first (paths-to pn % owner 4)) (:places-top binds))
@@ -164,7 +164,7 @@
           (recur (inc in-front)
                  (into accum 
                        (map (fn [ahead]
-                              (let [n (new-name-ahead owner ahead)] 
+                              (let [n (new-name-ahead imm owner ahead)] 
                                 {:name n
                                  :rate rate
                                  :receive-tops (filter #(first (paths-to pn % owner 4)) (:places-top binds))
@@ -245,7 +245,7 @@
 ;;;        |   |     
 ;;;        V   V     place-ins (multiple)
 ;;;        ------
-;;;       (      )   place (owner)
+;;;       (      )   vplace (owner)
 ;;;        ------
 ;;;        |    |     place-outs (multiple)
 ;;;        V    V
@@ -260,13 +260,13 @@
   "Return a map identifying a set of things involved in the pattern shown above."
   [pn place]
   (as-> {} ?b
-    (assoc ?b :place place)
-    (assoc ?b :place-outs (arcs-outof-place pn (:name (:place ?b))))
-    (assoc ?b :trans (map #(name2transition pn (:target %)) (:place-outs ?b)))
+    (assoc ?b :VPLACE place)
+    (assoc ?b :vplace-outs (arcs-outof-place pn (:name (:VPLACE ?b))))
+    (assoc ?b :trans (map #(name2transition pn (:target %)) (:vplace-outs ?b)))
     (assoc ?b :trans-outs (mapcat #(arcs-outof-trans pn %) (map :tid (:trans ?b))))
     (assoc ?b :tplaces (map :target (:trans-outs ?b)))
-    (assoc ?b :place-ins (arcs-into-place pn (:name (:place ?b))))
-    (assoc ?b :strans (map #(name2transition pn (:source %)) (:place-ins ?b)))
+    (assoc ?b :vplace-ins (arcs-into-place pn (:name (:VPLACE ?b))))
+    (assoc ?b :strans (map #(name2transition pn (:source %)) (:vplace-ins ?b)))
     (assoc ?b :strans-ins (map (fn [tr] {:trans tr
                                          :ins (arcs-into-trans pn (:tid tr))})
                               (:strans ?b)))))
@@ -280,9 +280,9 @@
                 (reduce (fn [pn ar] (eliminate-pn pn ar)) ?pn (map :trans (:strans-ins b)))
                 (reduce (fn [pn ar] (eliminate-pn pn ar)) ?pn (mapcat :ins (:strans-ins b)))
                 (reduce (fn [pn tr] (eliminate-pn pn tr)) ?pn (:strans b))
-                (reduce (fn [pn ar] (eliminate-pn pn ar)) ?pn (:place-ins b))
-                (eliminate-pn ?pn (:place b))
-                (reduce (fn [pn ar] (eliminate-pn pn ar)) ?pn (:place-outs b))
+                (reduce (fn [pn ar] (eliminate-pn pn ar)) ?pn (:vplace-ins b))
+                (eliminate-pn ?pn (:VPLACE b))
+                (reduce (fn [pn ar] (eliminate-pn pn ar)) ?pn (:vplace-outs b))
                 (reduce (fn [pn tr] (eliminate-pn pn tr)) ?pn (:trans b))
                 (reduce (fn [pn ar] (eliminate-pn pn ar)) ?pn (:trans-outs b))
                 (reduce (fn [pn cmd]
@@ -310,7 +310,6 @@
           pn
           (find-vanish pn)))
 
-
 (defn find-vanish
   [pn]
   (filter (fn [pl]
@@ -331,28 +330,25 @@
 (defn vanish-cmd
   "Creates 'command vectors' providing instructions to create new transitions and arcs."
   [binds]
-  (let [owner (:place binds)]
-    (as-> nil ?cmd
-      (vec (reduce (fn [cmd tplace]
-                     (into cmd
-                           (map (fn [strans-in]
-                                  {:new-trans {:name (name-prime (:name (:trans strans-in)) tplace)
-                                               ;; POD rate is s-rate*t-weight, but I'm using default weight=1
-                                               :rate (/ (:rate (:trans strans-in)) (count (:trans binds)))} 
-                                   :send-to {:name tplace :gets-tokens 0}
-                                   :receive-from-make-copy (:ins strans-in)})
-                                (:strans-ins binds))))
-                   ?cmd
-                   (:tplaces binds)))
-      ;; The idea here is that the vanishing place might have a token. We should conserve it.
-      (update-in ?cmd [0 :send-to :gets-tokens]  #(+ % (:initial-marking (:place binds)))))))
+  (as-> nil ?cmd
+    (vec (reduce (fn [cmd tplace]
+                   (into cmd
+                         (map (fn [strans-in]
+                                {:new-trans {:name (name-prime (:name (:trans strans-in)) tplace)
+                                             ;; POD rate is s-rate*t-weight, but I'm using default weight=1
+                                             :rate (/ (:rate (:trans strans-in)) (count (:trans binds)))} 
+                                 :send-to {:name tplace :gets-tokens 0}
+                                 :receive-from-make-copy (:ins strans-in)})
+                              (:strans-ins binds))))
+                 ?cmd
+                 (:tplaces binds)))
+    ;; The idea here is that the vanishing place might have a token. We should conserve it.
+    (update-in ?cmd [0 :send-to :gets-tokens]  #(+ % (:initial-marking (:VPLACE binds))))))
 
 ;;;------- Diagnostic
-;;; The idea is that vanish-binds gets called in turn for each :place returned from find-vanish.
-;;; In vanish-cmd, we call that :place 'owner.'
-;;;(def m (two-step "data/marsan69.xml"))
-;;;(def bbb (vanish-binds m (first (find-vanish m))))
-;;;(ppprint (vanish-cmd bbb))
+;;;(def m (read-pnml "data/m2-inhib-bbs.xml"))
+;;;(def bbb (join-binds m (first (find-joins m))))
+;;;(ppprint (join-cmd m bbb))
 (defn zero-step
   [filename]
   (read-pnml filename))
