@@ -1,4 +1,4 @@
-(ns gov.nist.spntools.core
+(ns gov.nist.spntools
   (:require [clojure.data.xml :as xml :refer (parse-str)]
             [clojure.pprint :refer (cl-format pprint pp)]
             [clojure.math.combinatorics :as combo]
@@ -256,6 +256,21 @@
 ;;;    (   )  (   )    tplaces (multiple)
 ;;;     ---    ---
 (declare find-vanish vanish-binds vanish-cmd)
+(defn vanish-binds
+  "Return a map identifying a set of things involved in the pattern shown above."
+  [pn place]
+  (as-> {} ?b
+    (assoc ?b :place place)
+    (assoc ?b :place-outs (arcs-outof-place pn (:name (:place ?b))))
+    (assoc ?b :trans (map #(name2transition pn (:target %)) (:place-outs ?b)))
+    (assoc ?b :trans-outs (mapcat #(arcs-outof-trans pn %) (map :tid (:trans ?b))))
+    (assoc ?b :tplaces (map :target (:trans-outs ?b)))
+    (assoc ?b :place-ins (arcs-into-place pn (:name (:place ?b))))
+    (assoc ?b :strans (map #(name2transition pn (:source %)) (:place-ins ?b)))
+    (assoc ?b :strans-ins (map (fn [tr] {:trans tr
+                                         :ins (arcs-into-trans pn (:tid tr))})
+                              (:strans ?b)))))
+
 (defn vanish2spn
   "Remove vanishing places and IMMs that are attached. Add in replacements."
   [pn]
@@ -275,7 +290,15 @@
                             (as-> pn ?pnn
                               (add-pn ?pnn {:name (:name new-trans) :tid (next-tid ?pnn)
                                             :type :exponential :rate (:rate new-trans)})
-                              (add-pn ?pnn (make-arc ?pnn (:name new-trans) (:send-to cmd)))
+                              (add-pn ?pnn (make-arc ?pnn (:name new-trans) (:name (:send-to cmd))))
+                              (update ?pnn ; Add tokens lost from the vanishing place, if any. 
+                                      :places
+                                      (fn [places]
+                                        (vec (map (fn [pl] (if (= (:name pl) (:name (:send-to cmd)))
+                                                             (update-in pl [:initial-marking]
+                                                                        #(+ % (:gets-tokens (:send-to cmd))))
+                                                             pl))
+                                                  places))))
                               (reduce (fn [pn ar]
                                         (add-pn pn (make-arc pn (:source ar) (:name new-trans)
                                                              :type (:type ar)
@@ -287,20 +310,6 @@
           pn
           (find-vanish pn)))
 
-(defn vanish-binds
-  "Return a map identifying a set of things involved in the pattern shown above."
-  [pn place]
-  (as-> {} ?b
-    (assoc ?b :place place)
-    (assoc ?b :place-outs (arcs-outof-place pn (:name (:place ?b))))
-    (assoc ?b :trans (map #(name2transition pn (:target %)) (:place-outs ?b)))
-    (assoc ?b :trans-outs (mapcat #(arcs-outof-trans pn %) (map :tid (:trans ?b))))
-    (assoc ?b :tplaces (map :target (:trans-outs ?b)))
-    (assoc ?b :place-ins (arcs-into-place pn (:name (:place ?b))))
-    (assoc ?b :strans (map #(name2transition pn (:source %)) (:place-ins ?b)))
-    (assoc ?b :strans-ins (map (fn [tr] {:trans tr
-                                         :ins (arcs-into-trans pn (:tid tr))})
-                              (:strans ?b)))))
 
 (defn find-vanish
   [pn]
@@ -323,17 +332,20 @@
   "Creates 'command vectors' providing instructions to create new transitions and arcs."
   [binds]
   (let [owner (:place binds)]
-    (reduce (fn [cmd tplace]
-              (into cmd
-                    (map (fn [strans-in]
-                           {:new-trans {:name (name-prime (:name (:trans strans-in)) tplace)
-                                        ;; POD rate is s-rate*t-weight, POD NYI, since t-weight=1
-                                        :rate (/ (:rate (:trans strans-in)) (count (:trans binds)))} 
-                            :send-to tplace
-                            :receive-from-make-copy (:ins strans-in)})
-                         (:strans-ins binds))))
-            nil
-            (:tplaces binds))))
+    (as-> nil ?cmd
+      (vec (reduce (fn [cmd tplace]
+                     (into cmd
+                           (map (fn [strans-in]
+                                  {:new-trans {:name (name-prime (:name (:trans strans-in)) tplace)
+                                               ;; POD rate is s-rate*t-weight, but I'm using default weight=1
+                                               :rate (/ (:rate (:trans strans-in)) (count (:trans binds)))} 
+                                   :send-to {:name tplace :gets-tokens 0}
+                                   :receive-from-make-copy (:ins strans-in)})
+                                (:strans-ins binds))))
+                   ?cmd
+                   (:tplaces binds)))
+      ;; The idea here is that the vanishing place might have a token. We should conserve it.
+      (update-in ?cmd [0 :send-to :gets-tokens]  #(+ % (:initial-marking (:place binds)))))))
 
 ;;;------- Diagnostic
 ;;; The idea is that vanish-binds gets called in turn for each :place returned from find-vanish.
@@ -389,7 +401,6 @@
       (- (reduce #(+ %1 (:rate %2)) 0.0 (filter #(and (= (:M %) m) (not (= (:Mp %) m))) graph)))
       (reduce #(+ %1 (:rate %2)) 0.0 (filter #(and (= (:M %) m) (= (:Mp %) mp)) graph)))))
     
-
 (defn Q-matrix 
   "Calculate the infinitesimal generator matrix from the reachability graph"
   [pn & {:keys [force-ordering]}] ; force-ordering is for debugging.

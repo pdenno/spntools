@@ -3,6 +3,8 @@
             [clojure.pprint :refer (cl-format pprint pp)]
             [gov.nist.spntools.util.utils :refer :all]))
 
+;;; To Do: Implement place capacity restrictions.
+
 (defn fireable? 
   "Return true if transition is fireable under the argument marking."
   [pn mark tid]

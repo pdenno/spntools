@@ -288,6 +288,14 @@
       (is (every? (fn [[key val]]
                     (=* val (get correct key) 0.001)) result)))))
 
+(deftest steady-state-properties-3rd-step-vanishing-place
+  (testing "Steady-state properties on a PN that reduces to a self-loop"
+    (let [result (:avg-tokens-on-place (pn-steady-state (read-pnml "data/simple-vanish.xml")))
+          correct {:P1 1.0}]
+      (is (every? (fn [[key val]]
+                    (=* val (get correct key) 0.001)) result)))))
+
+
 
 
 
