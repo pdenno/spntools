@@ -121,14 +121,10 @@
     1
     (inc (apply max (map :aid (:arcs pn))))))
 
-(defn strip-name
-  [key]
-  (str (subs (str key) 1)))
-
 (defn new-name
   "Return the string naming the keyword."
   [imm key suffix]
-  (keyword (str (strip-name imm) "-" (strip-name key) suffix)))
+  (keyword (str (name imm) "-" (name key) suffix)))
 
 ;;; Naming convention for transitions: who is ahead of you?
 (defn new-name-ahead
@@ -137,7 +133,7 @@
    imm
    owner
    (str "--"
-        (apply str (interpose "&" (map strip-name ahead)))
+        (apply str (interpose "&" (map name ahead)))
         "-before")))
 
 (defn make-arc
@@ -175,6 +171,20 @@
   [v1 v2 tol]
   (every? (fn [ans] ans)
           (map #(< (- %2 tol) %1 (+ %2 tol)) v1 v2)))
+
+(defn validate-pn
+  [pn]
+  ;; All arcs are between places and transitions
+  (loop [arcs (:arcs pn)]
+    (when-not (empty? arcs)
+      (let [ar (first arcs)]
+        (if 
+            (or (and (name2transition pn (:source ar))
+                     (name2place pn (:target ar)))
+                (and (name2transition pn (:target ar))
+                     (name2place pn (:source ar))))
+          (recur (rest arcs))
+          {:reason "Arc not pointing to a place or transition" :arc ar})))))
 
 #_(defn concat-identity
   "Return A with I appended on the right (e.g. for Gauss Jordan elimination)."
