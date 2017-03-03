@@ -3,6 +3,8 @@
             [clojure.pprint :refer (cl-format pprint)]
             [gov.nist.spntools.util.utils :refer :all]))
 
+;;; To Do: Add label info to positions-from-file.
+
 (defn get-initial-marking [pl]
   (let [str
         (-> (filter #(= :initialMarking (:tag %)) (:content pl))
@@ -28,10 +30,24 @@
         (read-string (nth match 1)))
       1))) ; PIPE doesn't set multiplicity of inhibitory arcs.
 
-(defn get-pos [elem]
-  (let [elem (-> elem :content first :content first :attrs)]
-    (hash-map :x (read-string (:x elem))
-              :y (read-string (:y elem)))))
+(defn get-pos
+  "Get the position of the transition or place and its label."
+  [elem]
+  (let [pos (-> elem :content first :content first :attrs)
+        label-pos (as-> elem ?m
+                    (:content ?m)
+                    (filter #(= :name (:tag %)) ?m)
+                    (first ?m)
+                    (:content ?m)
+                    (filter #(= :graphics (:tag %)) ?m)
+                    (first ?m)
+                    (:content ?m)
+                    (first ?m)
+                    (:attrs ?m))]
+    (hash-map :x (read-string (:x pos))
+              :y (read-string (:y pos))
+              :label-x-off (read-string (:x label-pos))
+              :label-y-off (read-string (:y label-pos)))))
 
 
 (def +pid-cnt+ (atom 0))
@@ -102,20 +118,19 @@
 ;;;=================================================
 ;;;  PN ==> PNML
 ;;;=================================================
-(def ^:dynamic *place-pos* (atom {:x 0.0 :y 20.0}))
-(def ^:dynamic *trans-pos* (atom {:x 0.0 :y 400.0}))
-(def ^:dynamic *elem-pos* (atom {}))
+(def +next-trans-pos+ (atom nil))
+(def +next-place-pos+ (atom nil))
+(def +given-pos+ (atom nil))
 
-(declare position-from-file)
-(defn write-pnml [pn & {:keys [file position-file] :or {file "./data/foo.xml"}}]
-  ;;(binding [*place-pos* (atom {:x 0.0 :y 20.0})
-  ;;          *trans-pos* (atom {:x 0.0 :y 400.0})
-  ;;          *elem-pos* (atom {})]
-  (when position-file (reset! *elem-pos* (position-from-file position-file)))
-    (let [xml (pn2xml pn)] 
-      (with-open [writer (java.io.FileWriter. file)]
-        (xml/emit xml writer)))
-    true)
+(declare pn2xml place2xml transition2xml arc2xml)
+(defn write-pnml [pn & {:keys [file positions] :or {file "./data/foo.xml"}}]
+  (reset! +next-trans-pos+ {:x 0.0 :y 400.0})
+  (reset! +next-place-pos+ {:x 0.0 :y 20.0})
+  (reset! +given-pos+ (or positions {}))
+  (let [xml (pn2xml pn)] 
+    (with-open [writer (java.io.FileWriter. file)]
+      (xml/emit xml writer)))
+  true)
 
 (defn pn2xml
   [pn]
@@ -131,34 +146,38 @@
 
 ;;; The position of elements can be established by looking at 
 ;;; a file you want you PN to look like.
-(defn elem-pos!
-  "If the position of this element is already established (perhaps through
-   the *elem-pos* map made from reading another file) return that. Otherwise
-   use a new position."
-  [elem]
-  (if-let [pos ((:name elem) @*elem-pos*)]
+(defn pos!-or-given
+  "If the position of this element is provided in +given-pos+ return that;
+   otherwise update the running position values and return that."
+  [name & trans?]
+  (if-let [pos (name @+given-pos+)]
     pos
-    (if (:pid elem)
-      (swap! *place-pos* #(hash-map :x (+ (:x %)  80.0) :y (:y %)))
-      (swap! *place-pos* #(hash-map :x (+ (:x %) 110.0) :y (:y %))))))
+    (if trans?
+      (swap! +next-trans-pos+ #(hash-map :x (+ (:x %)  80.0) :y 400))
+      (swap! +next-place-pos+ #(hash-map :x (+ (:x %) 110.0) :y 20)))))
 
 (defn update-pos!
   [elem pos]
   (when-not (:status pos)
-    (swap! *elem-pos* #(assoc % (:name elem) pos))))
+    (swap! +given-pos+
+           #(assoc % (:name elem)
+                   (-> pos
+                       (assoc :label-x-off 20.0)
+                       (assoc :label-y-off 5.0))))))
 
 (defn place2xml
-  [pl & {:keys [pos] :or {pos (elem-pos! pl)}}]
+  [pl & {:keys [pos] :or {pos (pos!-or-given (:name pl))}}]
   "Serialize a place. Optional pos is {:x <x-pos> :y <y-pos>}."
   (update-pos! pl pos)
   (xml/element
-   :place {:id (strip-name (:name pl))}
+   :place {:id (name (:name pl))}
    (xml/element :graphics {}
                 (xml/element :position {:x (:x pos) :y (:y pos)}))
    (xml/element :name {}
-                (xml/element :value {} (str (strip-name (:name pl))))
+                (xml/element :value {} (str (name (:name pl))))
                 (xml/element :graphics {}
-                             (xml/element :offset {:x 27 :y -9})))
+                             (xml/element :offset {:x (or (:label-x-off pos) 20.0)
+                                                   :y (or (:label-y-off pos) 5.0)})))
    (xml/element :initialMarking {}
                 (xml/element :value {} (str "Default," (:initial-marking pl)))
                 (xml/element :graphics {}
@@ -167,16 +186,17 @@
                 (xml/element :value {} "0"))))
 
 (defn transition2xml
-  [tr & {:keys [pos] :or {pos (elem-pos! tr)}}]
+  [tr & {:keys [pos] :or {pos (pos!-or-given (:name tr) :trans? true)}}]
   (update-pos! tr pos)
   (xml/element
-   :transition {:id (strip-name (:name tr))}
+   :transition {:id (name (:name tr))}
    (xml/element :graphics {}
                 (xml/element :position {:x (:x pos) :y (:y pos)}))
    (xml/element :name {}
-                (xml/element :value {} (str (strip-name (:name tr))))
+                (xml/element :value {} (str (name (:name tr))))
                 (xml/element :graphics {}
-                             (xml/element :offset {:x 27 :y -9})))
+                             (xml/element :offset {:x (or (:label-x-off pos) 20.0)
+                                                   :y (or (:label-y-off pos) 5.0)})))
    (xml/element :orientation {}
                 (xml/element :value {} "90"))
    (xml/element :rate {}
@@ -191,24 +211,26 @@
 (defn arc2xml
   [ar]
   (xml/element
-   :arc {:id (str (strip-name (:source ar)) " to " (strip-name (:target ar)))
-         :source (strip-name (:source ar))
-         :target (strip-name (:target ar))}
+   :arc {:id (str (name (:source ar)) " to " (name (:target ar)))
+         :source (name (:source ar))
+         :target (name (:target ar))}
    (xml/element :graphics {}) ; there are in the Pipe files.
    (xml/element :inscription {}
                 (xml/element :value {} (str "Default," (:multiplicity ar)))
                 (xml/element :graphics {}))
    (xml/element :tagged {}                
-                (xml/element :value {}))
+                (xml/element :value {} "false"))
    (xml/element :arcpath {:id "000"
-                          :x (:x (get @*elem-pos* (:source ar)))
-                          :y (:y (get @*elem-pos* (:source ar)))})
+                          :x (int (:x (pos!-or-given (:source ar))))
+                          :y (int (:y (pos!-or-given (:source ar))))
+                          :curvePoint "false"})
    (xml/element :arcpath {:id "001"
-                          :x (:x (get @*elem-pos* (:target ar)))
-                          :y (:y (get @*elem-pos* (:target ar)))})
-   (xml/element :type {:value (strip-name (:type ar))})))
+                          :x (int (:x (pos!-or-given (:target ar))))
+                          :y (int (:y (pos!-or-given (:target ar))))
+                          :curvePoint "false"})
+   (xml/element :type {:value (name (:type ar))})))
 
-(defn position-from-file
+(defn positions-from-file
   "Read the positions of elements from the argument file, creating a map of them."
   [fname]
   (as-> {:raw (-> fname slurp xml/parse-str :content first :content)} ?m

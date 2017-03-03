@@ -160,12 +160,12 @@
         cdata (map (fn [[s t _]] [s t]) data)]
     (remove (fn [a] (some #(= [(:source a) (:target a)] %) cdata)) (:arcs j2))))
 
-(deftest find-missing-arcs
+#_(deftest find-missing-arcs
   (testing "PNs have all correct arcs"
     (is (j2-has-arcs-test))
     (is (marsan-one-step-arcs-test))))
 
-(deftest find-unwanted-arcs
+#_(deftest find-unwanted-arcs
   (testing "PNs do not have unexpected arcs"
     (is (empty? (j2-weird-arcs-test)))
     (is (empty? (marsan-one-step-weird-arcs-test)))

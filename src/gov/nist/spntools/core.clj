@@ -114,7 +114,9 @@
       (assoc ?b :places* (map :source (:imm-ins ?b)))
       (assoc ?b :places-ins (filter (fn [ar] (some #(= (:target ar) %) (:places* ?b))) arcs))
       (assoc ?b :trans (filter #(some (fn [pl] (= (:name %) (:source pl))) (:places-ins ?b)) trs))
+      
       (assoc ?b :top-ins (filter #(some (fn [tr] (= (:name tr) (:target %))) (:trans ?b)) arcs))
+      
       (assoc ?b :place-bottom-in (some #(when (= (:source %) (:IMM ?b)) %) arcs))
       (assoc ?b :place-bottom (some #(when (= (:name %) (:target (:place-bottom-in ?b))) %) places))
       ;; Every :normal arc with target in a trans has this place as its source.

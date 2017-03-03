@@ -41,7 +41,6 @@
             (arcs-outof-trans pn tid))))
 
 (def ^:dynamic *visited-links* nil)
-(def ^:dynamic *graph* nil)
 
 ;;; A links between markings are all the transitions from the source marking.
 ;;; Uniqueness of the link is specified as the marking at the tail
@@ -59,30 +58,36 @@
        (filter (fn [link] (not-any? (fn [vis] (= link vis)) @*visited-links*))
                (map (fn [tid] (list marking tid)) (fireables pn marking)))))
 
+(def +k-bounded+ 10)
 
 (defn reachability-aux
   [pn marking]
-  (let [nexts (next-markings pn marking)]
-    ;(println "Next " (map #(list (:M %) (:tid (name2transition pn (:fire %)))) nexts))
-    (swap! *visited-links* into (map #(list (:M %) (:tid (name2transition pn (:fire %)))) nexts)) ; POD looks wasteful
-    (swap! *graph* into nexts)
-    (doseq [nx nexts]
-      (reachability-aux pn (:Mp nx)))))
+  (if (some #(> % +k-bounded+) marking)
+    (assoc pn :failure {:reason :not-k-bounded :marking marking})
+    (let [nexts (next-markings pn marking)]
+      ;(println "Next " (map #(list (:M %) (:tid (name2transition pn (:fire %)))) nexts))
+      (swap! *visited-links* into (map #(list (:M %) (:tid (name2transition pn (:fire %)))) nexts)) ; POD looks wasteful
+      (as-> pn ?pn
+        (update-in ?pn [:reach] into (vec nexts))
+        (reduce (fn [pn nx] (reachability-aux pn (:Mp nx)))
+                ?pn
+                nexts)))))
+
 
 (declare renumber-pids)
 (defn reachability
   "Calculate the reachability of the argument gspn or spn." 
   [pn]
-  (binding [*visited-links* (atom [])
-            *graph* (atom [])]
+  (binding [*visited-links* (atom [])]
     (let [marking (initial-marking pn)
           pnn (as-> pn ?pn
                 (renumber-pids ?pn) ; initial-marking sorts the by pid too. 
                 (assoc ?pn :marking-key (:marking-key marking))
                 (assoc ?pn :initial-marking (:initial-marking marking)))]
-      (reachability-aux pnn (:initial-marking pnn))
       (as-> pnn ?pn
-        (assoc ?pn :reach @*graph*)
+        (assoc ?pn :reach [])
+        (reachability-aux pnn (:initial-marking pnn))
+        (update-in ?pn [:reach] vec)
         (let [m  (set (distinct (map #(:M %) (:reach ?pn))))
               mp (set (distinct (map #(:Mp %) (:reach ?pn))))
               m-mp (clojure.set/difference m mp)
