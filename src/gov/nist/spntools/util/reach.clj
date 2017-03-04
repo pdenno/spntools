@@ -3,12 +3,12 @@
             [clojure.pprint :refer (cl-format pprint pp)]
             [gov.nist.spntools.util.utils :refer :all]))
 
-;;; To Do: Implement place capacity restrictions.
+;;; To Do: Implement place capacity restrictions. (maybe)
 
 (defn fireable? 
   "Return true if transition is fireable under the argument marking."
-  [pn mark tid]
-  (when-let [arcs (not-empty (arcs-into-trans pn tid))]
+  [pn mark tr-name]
+  (let [arcs (arcs-into pn tr-name)]
     (let [arc-groups (group-by :type arcs)
           marking-key (:marking-key pn)]
       (and 
@@ -22,23 +22,24 @@
 (defn fireables
   "Return a vector of tids that are fireable under the argument marking."
   [pn mark]
-  (filter #(fireable? pn mark %) (map :tid (:transitions pn))))
+  (filter #(fireable? pn mark %) (map :name (:transitions pn))))
 
+;;; POD It seems like this and fireable are doing pretty much the same thing. Wasteful.
 (defn mark-at-link-head
   "Return the mark that is at the head of the argument link."
-  [pn [mark tid]]
-  ;(reset! +zippy+ (list mark tid))
+  [pn [mark tr-name]]
+   ;(reset! +diag+ (list mark tid))
   (as-> mark ?m
     (reduce (fn [mar arc]
-              (let [indx (:pid (name2place pn (:source arc)))] 
+              (let [indx (:pid (name2obj pn (:source arc)))] 
                 (update mar indx #(- % (:multiplicity arc)))))
             ?m
-            (filter #(= (:type %) :normal) (arcs-into-trans pn tid)))
+            (filter #(= (:type %) :normal) (arcs-into pn tr-name)))
     (reduce (fn [mar arc] 
-              (let [indx (:pid (name2place pn (:target arc)))] 
+              (let [indx (:pid (name2obj pn (:target arc)))] 
                 (update mar indx #(+ % (:multiplicity arc)))))
             ?m ; inhibitors don't exit transitions
-            (arcs-outof-trans pn tid))))
+            (arcs-outof pn tr-name))))
 
 (def ^:dynamic *visited-links* nil)
 
@@ -50,13 +51,13 @@
   ;; "Return a seq of maps ({:M <mark> :trans <transition that fired> :Mp <new mark>}...)"
   [pn marking]
   (map (fn [l]
-         (let [tr (tid2obj pn (second l))]
+         (let [tr (name2obj pn (second l))]
            {:M marking
             :fire (:name tr)
             :Mp (mark-at-link-head pn l)
             :rate (:rate tr)}))
        (filter (fn [link] (not-any? (fn [vis] (= link vis)) @*visited-links*))
-               (map (fn [tid] (list marking tid)) (fireables pn marking)))))
+               (map (fn [tr-name] (list marking tr-name)) (fireables pn marking)))))
 
 (def +k-bounded+ 10)
 
@@ -65,8 +66,8 @@
   (if (some #(> % +k-bounded+) marking)
     (assoc pn :failure {:reason :not-k-bounded :marking marking})
     (let [nexts (next-markings pn marking)]
-      ;(println "Next " (map #(list (:M %) (:tid (name2transition pn (:fire %)))) nexts))
-      (swap! *visited-links* into (map #(list (:M %) (:tid (name2transition pn (:fire %)))) nexts)) ; POD looks wasteful
+      (println "Next " (map #(list (:M %) (:fire %)) nexts)) ; POD is :tid helpful? I like :name!
+      (swap! *visited-links* into (map #(list (:M %) (:fire %)) nexts)) ; POD looks wasteful
       (as-> pn ?pn
         (update-in ?pn [:reach] into (vec nexts))
         (reduce (fn [pn nx] (reachability-aux pn (:Mp nx)))
@@ -96,7 +97,7 @@
             ?pn
             (assoc ?pn :failure {:reason :absorbing-states
                                  :data {:m-not-mp m-mp :mp-not-m mp-m}})))
-        (if (empty? (:reach ?pn))
+        (if (and (empty? (:reach ?pn)) (not (:failure ?pn)))
           (assoc ?pn :failure {:reason :null-reachability-graph})
           ?pn)))))
 

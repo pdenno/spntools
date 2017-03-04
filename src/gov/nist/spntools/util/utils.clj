@@ -2,6 +2,7 @@
   (:require [clojure.data.xml :as xml :refer (parse-str)]
             [clojure.pprint :refer (cl-format pprint pp)]))
 
+;;;=== General =========================
 (defn ppp []
   (binding [clojure.pprint/*print-right-margin* 120]
     (pprint *1)))
@@ -10,13 +11,21 @@
   (binding [clojure.pprint/*print-right-margin* 120]
     (pprint arg)))
 
-(defn get-id [obj]
-  (-> obj :attrs :id keyword))
+
+
+;;;=== Petri Nets =========================
+
+(def +obj-cnt+ (atom 0))
 
 ;;; POD Give arcs names and fix this. 
 (defn tid2obj
   [pn tid]
   (some #(when (= (:tid %) tid) %) (:transitions pn)))
+
+(defn tid2name
+  [pn tid]
+  (:name (some #(when (= (:tid %) tid) %) (:transitions pn))))
+
 
 (defn pid2obj
   [pn pid]
@@ -26,68 +35,69 @@
   [pn aid]
   (some #(when (= (:aid %) aid) %) (:arcs pn)))
 
+(defn arcs-into
+  "Return the arcs into the named object."
+  [pn name]
+  (filter #(= (:target %) name) (:arcs pn)))
 
-(defn arcs-into-trans
-  "Return the input arcs to a transition."
-  [pn tid]
-  (let [tr-name (:name (tid2obj pn tid))]
-    (filter #(= (:target %) tr-name) (:arcs pn))))
+(defn arcs-outof
+  "Return the arcs exiting the named object."
+  [pn name]
+  (filter #(= (:source %) name) (:arcs pn)))
 
-(defn arcs-outof-trans
-  "Return the output arcs of a transition."
-  [pn tid]
-  (let [tr-name (:name (tid2obj pn tid))]
-    (filter #(= (:source %) tr-name) (:arcs pn))))
+(defn name2obj
+  [pn name]
+  (or 
+   (some #(when (= name (:name %)) %) (:places pn))
+   (some #(when (= name (:name %)) %) (:transitions pn))
+   (some #(when (= name (:name %)) %) (:arcs pn))))
 
-(declare arcs-out-of-trans arcs-outof-place name2transition name2place)
 (defn follow-path
   "Return a sequence of places, transitions, arcs forward of OBJ."
   [pn obj]
-  (cond (:tid obj) (arcs-outof-trans pn (:tid obj)),
-        (:pid obj) (arcs-outof-place pn (:name obj)),
-        (:aid obj) (list (or (name2transition pn (:target obj))
-                             (name2place pn (:target obj))))))
+  (cond (:tid obj) (arcs-outof pn (:name obj)),
+        (:pid obj) (arcs-outof pn (:name obj)),
+        (:aid obj) (list (name2obj pn (:target obj)))))
+
+(defn follow-path-back
+  "Return a sequence of places, transitions, arcs forward of OBJ."
+  [pn obj]
+  (cond (:tid obj) (arcs-into pn (:name obj)),
+        (:pid obj) (arcs-into pn (:name obj)),
+        (:aid obj) (list (name2obj pn (:source obj)))))
 
 (def ^:dynamic *path-to* nil)
 (defn paths-to-aux
-  [pn here to nsteps & {:keys [so-far] :or {so-far []}}]
+  [pn here to nsteps & {:keys [so-far back?] :or {so-far []}}]
   (cond (= nsteps 0)
         (when (= (:name (last so-far)) to)
           (swap! *path-to* conj so-far))
         (> nsteps 0)
-        (doseq [p (follow-path pn here)]
-          (paths-to-aux pn p to (dec nsteps) :so-far (conj so-far p)))))
+        (doseq [p (if back?
+                    (follow-path-back pn here)
+                    (follow-path pn here))]
+          (paths-to-aux pn p to (dec nsteps)
+                        :so-far (conj so-far p)
+                        :back? back?))))
 
 (defn paths-to
-  "Return a path from FROM to TO (both are places) in exactly 
-   STEPS steps (counting places, transitions and arcs)."
-  [pn from to nsteps]
+  "Return a path from FROM to TO (both are names of places or transitions) 
+   in exactly STEPS steps (counting places, transitions and arcs)."
+  [pn from to nsteps & {:keys [back?]}]
   (binding [*path-to* (atom [])]
-    (paths-to-aux pn (name2place pn from) to nsteps)
+    (paths-to-aux pn (name2obj pn from) to nsteps :back? back?)
     @*path-to*))
 
-(defn name2place
-  [pn name]
-  (some #(when (= name (:name %)) %) (:places pn)))
+(defn pn? [obj]
+  (and (:places obj) (:transitions obj) (:arcs obj)))
 
-(defn name2transition
-  [pn name]
-  (some #(when (= name (:name %)) %) (:transitions pn)))
-
-;;; This one uses :name!
-(defn arcs-outof-place
-  "Return the output arcs of a place."
-  [pn pl-name]
-  (filter #(= (:source %) pl-name) (:arcs pn)))
-
-(defn arcs-into-place
-  "Return the output arcs of a place."
-  [pn pl-name]
-  (filter #(= (:target %) pl-name) (:arcs pn)))
+(defn arc? [obj] (:aid obj))
+(defn palce? [obj] (:pid obj))
+(defn transition? [obj] (:tid obj))
 
 (defn immediate?
   [pn name]
-  (= :immediate (:type (name2transition pn name))))
+  (= :immediate (:type (name2obj pn name))))
 
 (defn eliminate-pn
   "Transform the PN graph by eliminating the argument element."
@@ -114,7 +124,7 @@
     1
     (inc (apply max (map :tid (:transitions pn))))))
 
-(def +zippy+ (atom nil))
+(def +diag+ (atom nil))
 
 (defn next-aid [pn]
   (if (empty? (:arcs pn))
@@ -139,8 +149,8 @@
 (defn make-arc
   [pn source target & {:keys [type aid multiplicity]
                     :or {type :normal aid (next-aid pn) multiplicity 1}}]
-  {:aid aid :source source :target target :type type :multiplicity multiplicity})
-
+  {:aid aid :source source :target target :name (keyword (str "aa-" aid))
+   :type type :multiplicity multiplicity})
 
 (defn initial-marking
   "Return a map {:marking-key <vector of place names> :initial-marking <vector of integers>}"
@@ -174,17 +184,20 @@
 
 (defn validate-pn
   [pn]
-  ;; All arcs are between places and transitions
-  (loop [arcs (:arcs pn)]
-    (when-not (empty? arcs)
-      (let [ar (first arcs)]
-        (if 
-            (or (and (name2transition pn (:source ar))
-                     (name2place pn (:target ar)))
-                (and (name2transition pn (:target ar))
-                     (name2place pn (:source ar))))
-          (recur (rest arcs))
-          {:reason "Arc not pointing to a place or transition" :arc ar})))))
+  (let [failures (atom [])]
+    (loop [arcs (:arcs pn)]
+      (when-not (empty? arcs)
+        (let [ar (first arcs)]
+          (when-not
+              ;; All arcs are between places and transitions
+              (or (and (:pid (:source ar))
+                       (:tid (:target ar)))
+                  (and (:pid (:target ar))
+                       (:tid (:source ar))))
+            (swap! failures conj {:reason "Arc not pointing to a place or transition" :arc ar})))
+        (recur (rest arcs))))
+    ;; Every place and transition has arcs in and arcs out. 
+    @failures))
 
 #_(defn concat-identity
   "Return A with I appended on the right (e.g. for Gauss Jordan elimination)."
@@ -248,3 +261,103 @@
      :det @det ;:not-yet-correct ; @det
      :inv (vec (map #(vec (subvec % (inc size))) mat))}))
 
+;;;=== Schema =========================
+(def +schemas+ (atom {}))
+
+;;; POD Need to learn clojure.spec!
+(defn check-schema
+  [top-node]
+  (let [errors (atom [])]
+    (loop [node (:topology top-node)]
+      (when-not (contains? #{:place :immediate :normal :arc} (:type node))
+        (swap! errors conj {:reason "Bad type" :node node}))
+      (when-not (contains? #{:keep :eliminate :replace} (:plan node))
+        (swap! errors conj {:reason "Bad plan" :node node}))
+      (when-not (contains? #{-1 0 1} (first (:multiplicity node)))
+        (swap! errors conj {:reason "Bad multiplicity" :node node}))
+      (when-not (contains? #{-1 0 1} (second (:multiplicity node)))
+        (swap! errors conj {:reason "Bad multiplicity" :node node}))
+      (if-let [child (:child node)]
+        (recur child)
+        @errors))))
+
+;;; So far, don't need a macro. 
+(defn defschema
+  [name body]
+  (let [check (check-schema body)]
+    (if (empty? check)
+      (swap! +schemas+ assoc name body)
+      {:reason "failed check-schema" :fail check})))
+
+(defn schema-search-aux
+  [body search-fn]
+  (if (search-fn body)
+    body
+    (schema-search-aux (:child body) search-fn)))
+
+(defn schema-search
+  "Search the schema for a node matching the search-fn"
+  [schema-name search-fn & {:keys [truncate?]}]
+  (let [schema (schema-name @+schemas+)
+        result (schema-search-aux (:topology schema) search-fn)]
+    (if truncate?
+      (dissoc result :child)
+      result)))
+
+(defn schema-node-parent
+  [schema-name node-name]
+  (schema-search schema-name #(= (:name (:child %)) node-name)))
+    
+    
+  
+
+;;;========= PN binding to schema ===============================
+
+(defn pn-search-all
+  "Return all objects that satisfy the search-fn."
+  [pn search-fn]
+  (search-fn pn))
+
+(def +pn-search+ (atom {}))
+
+(defn pn-search-down-aux
+  [pn parent-elem elem schema-down]
+  (when schema-down
+    (swap! +pn-search+
+           assoc
+           (:name schema-down)
+           
+    
+
+      
+
+
+
+(defn pn-search-down
+  [pn pn-elem schema-down]
+  (reset! +pn-search+ {(:name schema-down) node})
+  (map #(pn-search-down-aux pn pn-elem % (:child schema-down))
+       (follow-path pn pn-elem)))
+
+(defn compose-pn-search
+  [node sspace]
+  (cond (pn? sspace)
+        (case (:type node)
+          :normal (fn [pn] (filter #(= :normal (:type %)) (:transitions pn)))
+          :immediate (fn [pn] (filter #(= :immediate (:type %)) (:transitions pn)))
+          :place (fn [pn] (:places pn))
+          :arc (fn [pn] (:arcs pn))),
+        (arc? sspace) (fn [ar] (:target ar))
+        (place? sspace) (fn [pl] 
+            
+        
+
+(defn build-patterns
+  "Instantiate the schema with all instances found in pn."
+  [schema-name pn]
+  (let [schema (schema-name @+schemas+)
+        focus-node (:focus-obj schema)
+        sfocus (schema-search schema-name #(= (:name %) focus-node))
+        centers (pn-search-all pn (compose-pn-search sfocus pn))]
+    (pn-search-down pn (first centers) sfocus)))
+  

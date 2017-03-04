@@ -8,8 +8,6 @@
             [clojure.core.matrix :as m :refer :all]
             [clojure.core.matrix.linear :as ml :refer (svd)]))
 
-;;; ToDo: * See if the name2x aid2x stuff can be simplified.
-
 ;;; Four steps to most reductions:
 ;;;  1) Find instances of the pattern.
 ;;;  2) Create bindings of elements of the instance.
@@ -45,10 +43,10 @@
       (assoc ?b :IMM (:name imm))
       (assoc ?b :imm-in (some #(when (= (:IMM ?b) (:target %)) %) arcs))
       (assoc ?b :outs (filter #(= (:source %) (:IMM ?b)) arcs))
-      (assoc ?b :places-out (map #(name2place pn %) (map :target (:outs ?b))))
-      (assoc ?b :place (name2place pn (:source (:imm-in ?b))))
+      (assoc ?b :places-out (map #(name2obj pn %) (map :target (:outs ?b)))) ; POD fix :places-out (naming convention).
+      (assoc ?b :place (name2obj pn (:source (:imm-in ?b))))
       (assoc ?b :place-ins (filter #(= (:target %) (:name (:place ?b))) arcs))
-      (assoc ?b :trans-in (map #(name2transition pn (:source %)) (:place-ins ?b))))))
+      (assoc ?b :trans-in (map #(name2obj pn (:source %)) (:place-ins ?b))))))
 
 (defn split2spn
   "Eliminate IMMs that have outbound arcs to multiple places and a single inbound arc."
@@ -102,6 +100,28 @@
 ;;;      |   place-bottom-in
 ;;;     _V_    
 ;;;    (___)   place-bottom      [Keep]
+(defschema :join
+  {:name :join
+   :focus-obj :IMM
+   :topology
+   {:name :places-top :type :place :multiplicity [1,1] :plan :keep
+    :child
+    {:name :top-ins :type :arc :multiplicity [1,-1] :plan :replace 
+     :child 
+     {:name :trans :type :normal :multiplicity [1,-1] :plan :eliminate 
+      :child 
+      {:name :places-in :type :arc :multiplicity [1,-1] :plan :eliminate 
+       :child
+       {:name :places* :type :place :multiplicity [1,-1] :plan :keep 
+        :child
+        {:name :imm-ins :multiplicity [1,-1] :plan :eliminate :type :arc 
+         :child
+         {:name :IMM :type :immediate :multiplicity [1,1] :plan :eliminate 
+          :child
+          {:name :place-bottom-in :type :normal :multiplicity [1,1] :plan :eliminate 
+           :child
+           {:name :place-bottom :type :place :multiplicity [1,1] :plan :keep}}}}}}}}}})
+
 (defn join-binds
   "Return a map identifying a set of things involved in the pattern shown above."
   [pn imm]
@@ -128,10 +148,11 @@
       (assoc ?b :top-ins (remove (fn [tin] (some #(= % tin) (:preserve-top-ins ?b))) (:top-ins ?b))))))
 
 (defn join-cmd
-  "Creates 'command vectors' providing instructions to create new transitions and arcs."
+  "Creates 'command vectors' each element of which provides instructions 
+   concerning how to create a new transition and its arcs."
   [pn binds owner]
   (let [owner-t (:source (some #(when (= owner (:target %)) %) (:places-ins binds)))
-        rate (:rate (name2transition pn owner-t))
+        rate (:rate (name2obj pn owner-t))
         imm (:IMM binds)
         kill-trans (map :name (:trans binds))
         receive-preserves (filter #(= owner (:source %)) (:preserve-top-ins binds))
@@ -161,7 +182,7 @@
                                 :preserves (into (map #(assoc % :target  n) receive-preserves)
                                                  (map #(assoc % :source n) send-preserves))
                                 :receive-activators others
-                                :send-activator (:name (:place-bottom binds))})))
+                                :send-activator (:name (:place-bottom binds))})))  
           :else
           (recur (inc in-front)
                  (into accum 
@@ -195,9 +216,9 @@
         places (:places pn)
         new-cnt (atom 0)]
     (reduce (fn [pn imm]
-              (let [b (join-binds pn imm)]
-                (as-> pn ?pn
-                  (eliminate-pn ?pn imm)
+              (let [b (join-binds pn imm)] ; Consider moving all this inside the next reduce
+                (as-> pn ?pn               ; Can't really do that because join-binds needs to 
+                  (eliminate-pn ?pn imm)   ; See the original structure.
                   (reduce (fn [pn ar] (eliminate-pn pn ar)) ?pn (:top-ins b))
                   (reduce (fn [pn ar] (eliminate-pn pn ar)) ?pn (:preserve-top-ins b)) 
                   (reduce (fn [pn tr] (eliminate-pn pn tr)) ?pn (:trans b))
@@ -240,37 +261,62 @@
             pn
             (find-joins pn))))
 
-;;;     (   ) ( )    splaces             -- Not recorded. Use strans-ins. Keep these.
-;;;      | |   |     strans-ins          -- Don't keep anything from here through trans-outs.
+
+;;;     (   ) ( )    splaces             
+;;;      | |   |     strans-ins          
 ;;;      v v   v
-;;;      XXXX XXXX   strans (multiple)   
+;;;      XXXX XXXX   strans 
 ;;;        |   |     
-;;;        V   V     place-ins (multiple)
+;;;        V   V     place-ins 
 ;;;        ------
-;;;       (      )   vplace (owner)
+;;;       (      )   VPLACE 
 ;;;        ------
-;;;        |    |     place-outs (multiple)
+;;;        |    |     place-outs 
 ;;;        V    V
-;;;     XXXX   XXXX   trans (multiple)
+;;;     XXXX   XXXX   trans (focus) 
 ;;;      |      |    
-;;;      V      V     trans-outs (multiple)
+;;;      V      V     trans-outs 
 ;;;     ---    ---
-;;;    (   )  (   )    tplaces (multiple)
+;;;    (   )  (   )    tplaces                           
 ;;;     ---    ---
+(defschema :vanish
+  {:name :vanish
+   :type :source
+   :focus-obj :trans
+   :topology
+   {:name :splaces :type :place :multiplicity [1,-1] :plan :keep
+    :child
+    {:name :strans-ins :type :arc :multiplicity [1,-1] :plan :keep 
+     :child
+     {:name :strans :type :normal :multiplicity [1,-1] :plan :keep
+      :child
+      {:name :place-ins :type :arc :multiplicity [1,-1] :plan :eliminate
+       :child
+       {:name :VPLACE :type :place :multiplicity [1,1] :plan :eliminate
+        :child
+        {:name :place-outs :type :arc :multiplicity [1,-1] :plan :eliminate
+         :child
+         {:name :trans :type :immediate :multiplicity [1,-1] :plan :eliminate ;<========= FOCUS
+          :child
+          {:name :trans-outs :type :arc :multiplicity [1,-1] :plan :eliminate
+           :child
+           {:name :tplaces :type :place :multiplicity [1,-1] :plan :keep}}}}}}}}}})
+
+
 (declare find-vanish vanish-binds vanish-cmd)
 (defn vanish-binds
   "Return a map identifying a set of things involved in the pattern shown above."
   [pn place]
   (as-> {} ?b
     (assoc ?b :VPLACE place)
-    (assoc ?b :vplace-outs (arcs-outof-place pn (:name (:VPLACE ?b))))
-    (assoc ?b :trans (map #(name2transition pn (:target %)) (:vplace-outs ?b)))
-    (assoc ?b :trans-outs (mapcat #(arcs-outof-trans pn %) (map :tid (:trans ?b))))
+    (assoc ?b :vplace-outs (arcs-outof pn (:name (:VPLACE ?b))))
+    (assoc ?b :trans (map #(name2obj pn (:target %)) (:vplace-outs ?b)))
+    (assoc ?b :trans-outs (mapcat #(arcs-outof pn %) (map :name (:trans ?b))))
     (assoc ?b :tplaces (map :target (:trans-outs ?b)))
-    (assoc ?b :vplace-ins (arcs-into-place pn (:name (:VPLACE ?b))))
-    (assoc ?b :strans (map #(name2transition pn (:source %)) (:vplace-ins ?b)))
+    (assoc ?b :vplace-ins (arcs-into pn (:name (:VPLACE ?b))))
+    (assoc ?b :strans (map #(name2obj pn (:source %)) (:vplace-ins ?b)))
     (assoc ?b :strans-ins (map (fn [tr] {:trans tr
-                                         :ins (arcs-into-trans pn (:tid tr))})
+                                         :ins (arcs-into pn (:name tr))})
                               (:strans ?b)))))
 
 (defn vanish2spn
@@ -312,17 +358,18 @@
           pn
           (find-vanish pn)))
 
+  
+
 (defn find-vanish
   [pn]
   (filter (fn [pl]
-            (let [arcs-out (arcs-outof-place pn (:name pl))
-                  trans (map :target arcs-out)
-                  tids (map #(:tid (name2transition pn %)) trans)]
+            (let [arcs-out (arcs-outof pn (:name pl))
+                  trans (map :target arcs-out)]
               (and ; POD these may be too restrictive. We'll see.
                (every? #(immediate? pn %) trans)
                ;; Each trans has just one in and one out.
-               (every? #(= 1 (count (arcs-outof-trans pn %))) tids)
-               (every? #(= 1 (count (arcs-into-trans pn %))) tids))))
+               (every? #(= 1 (count (arcs-outof pn %))) trans)
+               (every? #(= 1 (count (arcs-into pn %))) trans))))
           (:places pn)))
 
 (defn name-prime
@@ -348,7 +395,7 @@
     (update-in ?cmd [0 :send-to :gets-tokens]  #(+ % (:initial-marking (:VPLACE binds))))))
 
 ;;;------- Diagnostic
-;;;(def m (read-pnml "data/m2-inhib-bbs.xml"))
+;;;(def m (read-pnml "data/tight-join.xml"))
 ;;;(def bbb (join-binds m (first (find-joins m))))
 ;;;(ppprint (join-cmd m bbb))
 (defn zero-step

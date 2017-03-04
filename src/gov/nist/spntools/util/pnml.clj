@@ -5,6 +5,9 @@
 
 ;;; To Do: Add label info to positions-from-file.
 
+(defn get-id [obj]
+  (-> obj :attrs :id keyword))
+
 (defn get-initial-marking [pl]
   (let [str
         (-> (filter #(= :initialMarking (:tag %)) (:content pl))
@@ -49,16 +52,11 @@
               :label-x-off (read-string (:x label-pos))
               :label-y-off (read-string (:y label-pos)))))
 
-
-(def +pid-cnt+ (atom 0))
-(def +tid-cnt+ (atom 0))
-(def +aid-cnt+ (atom 0))
-
 (defn essential-place
   [pl]
   (let [mark (get-initial-marking pl)]
     {:name (get-id pl)
-     :pid (swap! +pid-cnt+ inc)
+     :pid (swap! +obj-cnt+ inc)
      :initial-marking mark}))
 
 (defn get-rate [tr]
@@ -70,15 +68,16 @@
   (let [timed? (when-let [str (-> (filter #(= :timed (:tag %)) (:content tr)) first :content first :content first)]
                  (read-string str))]
     {:name (get-id tr)
-     :tid (swap! +tid-cnt+ inc)
+     :tid (swap! +obj-cnt+ inc)
      :type (if timed? :exponential :immediate)
      :rate (get-rate tr)}))
 
 (defn essential-arc
   [ar]
-  {:aid (swap! +aid-cnt+ inc)
+  {:aid (swap! +obj-cnt+ inc)
    :source (-> ar :attrs :source keyword)
    :target (-> ar :attrs :target keyword)
+   :name (keyword (str "aa-" @+obj-cnt+)) ; POD cheezy but validate-pn checks it. 
    :type (as-> ar ?m
            (:content ?m)
            (some #(when (= (:tag %) :type) %) ?m)
@@ -91,9 +90,7 @@
   "Return a map providing the useful elements of a PNML file.
   'useful' here means things used in steady-state computation."
   [fname]
-  (reset! +pid-cnt+ 0)
-  (reset! +tid-cnt+ 0)
-  (reset! +aid-cnt+ 0)
+  (reset! +obj-cnt+ 0)
   (as-> {:raw (-> fname slurp xml/parse-str :content first :content)} ?m
     (assoc ?m :places (filter #(= :place (:tag %)) (:raw ?m)))
     (assoc ?m :places (vec (map essential-place (:places ?m))))
