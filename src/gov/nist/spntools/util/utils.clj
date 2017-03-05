@@ -11,21 +11,12 @@
   (binding [clojure.pprint/*print-right-margin* 120]
     (pprint arg)))
 
-
-
 ;;;=== Petri Nets =========================
-
 (def +obj-cnt+ (atom 0))
 
-;;; POD Give arcs names and fix this. 
 (defn tid2obj
   [pn tid]
   (some #(when (= (:tid %) tid) %) (:transitions pn)))
-
-(defn tid2name
-  [pn tid]
-  (:name (some #(when (= (:tid %) tid) %) (:transitions pn))))
-
 
 (defn pid2obj
   [pn pid]
@@ -92,8 +83,9 @@
   (and (:places obj) (:transitions obj) (:arcs obj)))
 
 (defn arc? [obj] (:aid obj))
-(defn palce? [obj] (:pid obj))
+(defn place? [obj] (:pid obj))
 (defn transition? [obj] (:tid obj))
+(defn pn-obj? [obj] (or (:aid obj) (:tid obj) (:pid obj)))
 
 (defn immediate?
   [pn name]
@@ -199,67 +191,6 @@
     ;; Every place and transition has arcs in and arcs out. 
     @failures))
 
-#_(defn concat-identity
-  "Return A with I appended on the right (e.g. for Gauss Jordan elimination)."
-  [A & {:keys [size] :or {size (count (first A))}}]
-  (vec (map #(vec (concat (nth A %)
-                          (assoc (vec (repeat size 0.0)) % 1.0)))
-            (range size))))
-
-#_(defn concat-vector
-  "Return A with b appended on the right (e.g. for Gauss Jordan elimination)."
-  [A b]
-  (vec (reduce (fn [AA i] (update AA i #(conj % (nth b i))))
-               A
-               (range (count b)))))
-
-;;; POD: Most Gauss-Jordan programs include a search of the matrix to place the largest element on
-;;; the diagonal prior to division by that element so as to minimize the effects of round off error.
-;;; POD: Also, get it it banded form. 
-#_(defn gj-explicit
-  "Return the inverse of A, determinant and solution for argument b using Gauss-Jordan elimination."
-  [A b]
-  (let [size (count b)
-        Ab (concat-vector A b)
-        AbI (concat-identity Ab :size size)
-        det (atom 1)
-        mat (as-> AbI ?AAA
-              (reduce (fn [AAA ii] ; solve forward for 1 on diagonal
-                        (as-> AAA ?A
-                          (reduce (fn [A i] ; Normalize every row by lead element.
-                                    (let [ai1 (nth (nth A i) ii)] ; some extra * by 0 here on map.
-                                      (if (not (zero? ai1))
-                                        (do (swap! det * ai1)
-                                            ;(println "ai1 =" ai1)
-                                            (assoc A i (vec (map #(/ % ai1) (nth A i)))))
-                                        A)))
-                                  ?A
-                                  (range ii size))
-                          (reduce (fn [AA i]
-                                    (reduce (fn [A j] ; Subtract first row from all the remaining rows.
-                                              (if (= i j)
-                                                A
-                                                (if (not (zero? (nth (nth A j) ii))) ; POD force 0 here?
-                                                  (assoc A j (vec (map #(- %1 %2) (nth A i) (nth A j)))) 
-                                                  A)))
-                                            AA
-                                            (range i size)))
-                                  ?A
-                                  (range ii size))))
-                      ?AAA
-                      (range size))
-              (reduce (fn [AA icol] ; backward solve. Note icol designates row in the assoc.
-                        (reduce (fn [A irow] ; subtract 'upwards' one column at a time to form identity matrix on left. 
-                                  (if-let [val (if (zero? (nth (nth A irow) (inc icol))) false (nth (nth A irow) (inc icol)))]
-                                    (assoc A irow (vec (map #(- %1 (* val %2)) (nth A irow) (nth A (inc icol)))))
-                                    A))
-                                AA
-                                (reverse (range (inc icol)))))
-                      ?AAA
-                      (reverse (range (dec size)))))]
-    {:x (vec (map #(nth % size) mat)) 
-     :det @det ;:not-yet-correct ; @det
-     :inv (vec (map #(vec (subvec % (inc size))) mat))}))
 
 ;;;=== Schema =========================
 (def +schemas+ (atom {}))
@@ -269,7 +200,7 @@
   [top-node]
   (let [errors (atom [])]
     (loop [node (:topology top-node)]
-      (when-not (contains? #{:place :immediate :normal :arc} (:type node))
+      (when-not (contains? #{:place :immediate :normal :arc :focus} (:type node))
         (swap! errors conj {:reason "Bad type" :node node}))
       (when-not (contains? #{:keep :eliminate :replace} (:plan node))
         (swap! errors conj {:reason "Bad plan" :node node}))
@@ -291,9 +222,8 @@
 
 (defn schema-search-aux
   [body search-fn]
-  (if (search-fn body)
-    body
-    (schema-search-aux (:child body) search-fn)))
+  (cond (search-fn body) body
+        (:child body) (schema-search-aux (:child body) search-fn)))
 
 (defn schema-search
   "Search the schema for a node matching the search-fn"
@@ -307,57 +237,57 @@
 (defn schema-node-parent
   [schema-name node-name]
   (schema-search schema-name #(= (:name (:child %)) node-name)))
-    
-    
-  
 
 ;;;========= PN binding to schema ===============================
+(def +schema-binds+ (atom {}))
+(def ^:dynamic *schema-name*)
 
-(defn pn-search-all
-  "Return all objects that satisfy the search-fn."
-  [pn search-fn]
-  (search-fn pn))
-
-(def +pn-search+ (atom {}))
-
-(defn pn-search-down-aux
+(defn schema-binds-nav-fn
+  [pn elem node & {:keys [dir] :or {dir :search}}]
+  ;; For now, just this. Might want argument info in schema.
+  (when-let [search-fn (dir node)]
+    (let [result (search-fn pn elem)]
+      (if (pn-obj? result)
+        (vector result)
+        result))))
+  
+(defn schema-binds-down-aux
   [pn parent-elem elem schema-down]
   (when schema-down
-    (swap! +pn-search+
-           assoc
-           (:name schema-down)
-           
-    
+    (swap! +schema-binds+ update-in [(:name schema-down)] conj elem)
+    (map #(schema-binds-down-aux pn elem % (:child schema-down))
+         (schema-binds-nav-fn pn elem schema-down))))
 
-      
-
-
-
-(defn pn-search-down
+(defn schema-binds-down
   [pn pn-elem schema-down]
-  (reset! +pn-search+ {(:name schema-down) node})
-  (map #(pn-search-down-aux pn pn-elem % (:child schema-down))
+  (map #(schema-binds-down-aux pn pn-elem % schema-down)
        (follow-path pn pn-elem)))
 
-(defn compose-pn-search
-  [node sspace]
-  (cond (pn? sspace)
-        (case (:type node)
-          :normal (fn [pn] (filter #(= :normal (:type %)) (:transitions pn)))
-          :immediate (fn [pn] (filter #(= :immediate (:type %)) (:transitions pn)))
-          :place (fn [pn] (:places pn))
-          :arc (fn [pn] (:arcs pn))),
-        (arc? sspace) (fn [ar] (:target ar))
-        (place? sspace) (fn [pl] 
-            
-        
+(defn schema-binds-up-aux
+  [pn parent-elem elem schema-up]
+  (when schema-up
+    (swap! +schema-binds+ update-in [(:name schema-up)] conj elem)
+    (map #(schema-binds-up-aux pn elem % (schema-node-parent *schema-name* (:name schema-up)))
+         (schema-binds-nav-fn pn elem schema-up :dir :search-up))))
+
+(defn schema-binds-up
+  [pn pn-elem schema-up]
+  (map #(schema-binds-up-aux pn pn-elem % schema-up)
+       (follow-path-back pn pn-elem)))
 
 (defn build-patterns
   "Instantiate the schema with all instances found in pn."
   [schema-name pn]
-  (let [schema (schema-name @+schemas+)
-        focus-node (:focus-obj schema)
-        sfocus (schema-search schema-name #(= (:name %) focus-node))
-        centers (pn-search-all pn (compose-pn-search sfocus pn))]
-    (pn-search-down pn (first centers) sfocus)))
+  (binding [*schema-name* schema-name]
+    (let [schema (schema-name @+schemas+)
+          focus-node (schema-search schema-name #(= :focus (:type %)))
+          centers ((:select focus-node) pn)]
+      (map (fn [center]
+             (reset! +schema-binds+ {(:name focus-node) center})
+             (schema-binds-down pn center (:child focus-node))
+             (schema-binds-up pn center (schema-node-parent schema-name (:name focus-node))))
+           centers))
+    @+schema-binds+))
+
+      
   

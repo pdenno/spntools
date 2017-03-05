@@ -273,32 +273,41 @@
 ;;;        ------
 ;;;        |    |     place-outs 
 ;;;        V    V
-;;;     XXXX   XXXX   trans (focus) 
+;;;     XXXX   XXXX   trans (focus, immediates) 
 ;;;      |      |    
 ;;;      V      V     trans-outs 
 ;;;     ---    ---
 ;;;    (   )  (   )    tplaces                           
 ;;;     ---    ---
 (defschema :vanish
-  {:name :vanish
-   :type :source
-   :focus-obj :trans
+  {:name :vanish,
+   :type :source,
    :topology
-   {:name :splaces :type :place :multiplicity [1,-1] :plan :keep
+   {:name :splaces, :type :place, :multiplicity [1,-1], :plan :keep,
+    :search #(arcs-into %1 %2),
     :child
-    {:name :strans-ins :type :arc :multiplicity [1,-1] :plan :keep 
+    {:name :strans-ins, :type :arc, :multiplicity [1,-1], :plan :keep,
+     :search-up #(name2obj %1 (:source %2)) 
      :child
-     {:name :strans :type :normal :multiplicity [1,-1] :plan :keep
+     {:name :strans, :type :normal, :multiplicity [1,-1], :plan :keep,
+      :search-up #(arcs-into %1 %2),
       :child
-      {:name :place-ins :type :arc :multiplicity [1,-1] :plan :eliminate
+      {:name :place-ins, :type :arc, :multiplicity [1,-1], :plan :eliminate,
+       :search-up #(name2obj %1 (:source %2)) 
        :child
-       {:name :VPLACE :type :place :multiplicity [1,1] :plan :eliminate
+       {:name :VPLACE, :type :place, :multiplicity [1,1], :plan :eliminate,
+        :search #(arcs-into %1 %2),
         :child
-        {:name :place-outs :type :arc :multiplicity [1,-1] :plan :eliminate
+        {:name :place-outs, :type :arc, :multiplicity [1,-1], :plan :eliminate,
+         :search-up #(name2obj %1 (:source %2)) 
          :child
-         {:name :trans :type :immediate :multiplicity [1,-1] :plan :eliminate ;<========= FOCUS
+         {:name :trans, :type :focus, :multiplicity [1,-1], :plan :eliminate, ; <======= FOCUS
+          :select #(filter (fn [x] (= :immediate (:type x))) (:transitions %)),
+          :search #(arcs-outof %1 %2),
+          :search-up #(arcs-into %1 %2),
           :child
-          {:name :trans-outs :type :arc :multiplicity [1,-1] :plan :eliminate
+          {:name :trans-outs, :type :arc, :multiplicity [1,-1], :plan :eliminate,
+           :search #(name2obj %1 (:target %2)),
            :child
            {:name :tplaces :type :place :multiplicity [1,-1] :plan :keep}}}}}}}}}})
 

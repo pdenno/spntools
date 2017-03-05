@@ -84,7 +84,7 @@
            (:attrs ?m)
            (:value ?m)
            (keyword ?m))
-   :multiplicity (get-multiplicity ar)}) 
+   :multiplicity (get-multiplicity ar)})
 
 (defn read-pnml
   "Return a map providing the useful elements of a PNML file.
