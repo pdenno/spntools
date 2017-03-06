@@ -8,6 +8,10 @@
             [clojure.core.matrix :as m :refer :all]
             [clojure.core.matrix.linear :as ml :refer (svd)]))
 
+;;; ToDo: Remove :preserves or :receives-top from join-cmd.
+;;;         (1) use aids, not arcs. 
+;;;         (2) call it :preserves tops. 
+
 ;;; Four steps to most reductions:
 ;;;  1) Find instances of the pattern.
 ;;;  2) Create bindings of elements of the instance.
@@ -86,8 +90,8 @@
 ;;;   ___    ___
 ;;;  (   )  (   )   places-top   May be one or more
 ;;;   ---    ---
-;;;    |      |     top-ins   -- These may include things from the places* 
-;;;    V      V
+;;;    |      ^     trans-ins, top-arcs (everything to/from places-top) -- Ephemeral trans-in&outs include things from the places* 
+;;;    V      |
 ;;;   ===    ===    trans [multiple]
 ;;;    |      |     places-ins [multiple]
 ;;;   _V_    _V_
@@ -100,28 +104,6 @@
 ;;;      |   place-bottom-in
 ;;;     _V_    
 ;;;    (___)   place-bottom      [Keep]
-(defschema :join
-  {:name :join
-   :focus-obj :IMM
-   :topology
-   {:name :places-top :type :place :multiplicity [1,1] :plan :keep
-    :child
-    {:name :top-ins :type :arc :multiplicity [1,-1] :plan :replace 
-     :child 
-     {:name :trans :type :normal :multiplicity [1,-1] :plan :eliminate 
-      :child 
-      {:name :places-in :type :arc :multiplicity [1,-1] :plan :eliminate 
-       :child
-       {:name :places* :type :place :multiplicity [1,-1] :plan :keep 
-        :child
-        {:name :imm-ins :multiplicity [1,-1] :plan :eliminate :type :arc 
-         :child
-         {:name :IMM :type :immediate :multiplicity [1,1] :plan :eliminate 
-          :child
-          {:name :place-bottom-in :type :normal :multiplicity [1,1] :plan :eliminate 
-           :child
-           {:name :place-bottom :type :place :multiplicity [1,1] :plan :keep}}}}}}}}}})
-
 (defn join-binds
   "Return a map identifying a set of things involved in the pattern shown above."
   [pn imm]
@@ -131,73 +113,90 @@
     (as-> {} ?b
       (assoc ?b :IMM (:name imm))
       (assoc ?b :imm-ins (filter #(= (:IMM ?b) (:target %)) arcs))
-      (assoc ?b :places* (map :source (:imm-ins ?b)))
-      (assoc ?b :places-ins (filter (fn [ar] (some #(= (:target ar) %) (:places* ?b))) arcs))
-      (assoc ?b :trans (filter #(some (fn [pl] (= (:name %) (:source pl))) (:places-ins ?b)) trs))
-      
-      (assoc ?b :top-ins (filter #(some (fn [tr] (= (:name tr) (:target %))) (:trans ?b)) arcs))
-      
+      (assoc ?b :places* (set (map :source (:imm-ins ?b))))
+      (assoc ?b :places-ins (set (filter (fn [ar] (some #(= (:target ar) %) (:places* ?b))) arcs)))
+      (assoc ?b :trans (set (map :name (filter #(some (fn [pl] (= (:name %) (:source pl))) (:places-ins ?b)) trs))))
+      (assoc ?b :trans-in&outs  (set (filter #(or (contains? (:trans ?b) (:source %))
+                                                  (contains? (:trans ?b) (:target %))) arcs)))
       (assoc ?b :place-bottom-in (some #(when (= (:source %) (:IMM ?b)) %) arcs))
-      (assoc ?b :place-bottom (some #(when (= (:name %) (:target (:place-bottom-in ?b))) %) places))
-      ;; Every :normal arc with target in a trans has this place as its source.
-      (let [narcs (filter (fn [ar] (and (= (:type ar) :normal)
-                                        (some #(= (:target ar) (:name %)) (:trans ?b))))
-                          (:top-ins ?b))]
-        (assoc ?b :places-top (distinct (map :source narcs))))
-      (assoc ?b :preserve-top-ins (remove (fn [tin] (some #(= (:source tin) %) (:places-top ?b))) (:top-ins ?b)))
-      (assoc ?b :top-ins (remove (fn [tin] (some #(= % tin) (:preserve-top-ins ?b))) (:top-ins ?b))))))
+      (assoc ?b :place-bottom (:name (some #(when (= (:name %) (:target (:place-bottom-in ?b))) %) places)))
+      (assoc ?b :places-top (set
+                             (map :source
+                                  (remove #(or (contains? (:trans ?b) (:source %))
+                                               (contains? (:places* ?b) (:source %)))
+                                          (:trans-in&outs ?b)))))
+      (assoc ?b :top-arcs (filter #(or (contains? (:places-top ?b) (:source %))
+                                       (contains? (:places-top ?b) (:target %))) arcs))
+      (assoc ?b :trans-ins (vec (clojure.set/difference
+                                     (set (:trans-in&outs ?b))
+                                     (set (:top-arcs ?b)))))
+      (reduce (fn [b key] (update-in b [key] vec)) ?b [:trans :places-top :places-ins :places*])
+      (dissoc ?b :trans-in&outs))))
 
+(declare join-cmd-aux join-cmd-first&last join-cmd-middles join-cmd-every)
 (defn join-cmd
   "Creates 'command vectors' each element of which provides instructions 
    concerning how to create a new transition and its arcs."
   [pn binds owner]
+  (let [problem (some #(when (= % (:name (:place-bottom binds))) %) (:places-top binds))]
+    (join-cmd-aux pn binds owner :tight? problem)))
+
+(defn join-cmd-aux
+  [pn binds owner & {:keys [tight?]}]
+  (let [m1 (dec (count (:places* binds)))]
+    (reduce (fn [accum in-front]
+              (cond
+                (= in-front 0)  (conj accum (join-cmd-first&last owner binds pn true  :tight? tight?)),
+                (= in-front m1) (conj accum (join-cmd-first&last owner binds pn false :tight? tight?)),
+                :else           (into accum (join-cmd-middles owner binds pn in-front))))
+            []
+            (range (inc m1)))))
+
+(defn join-cmd-every
+  [name owner binds pn & {:keys [tight?]}]
+  (let [owner-t (:source (some #(when (= owner (:target %)) %) (:places-ins binds)))
+        rate (:rate (name2obj pn owner-t))]
+    {:name name
+     :tight? tight?
+     :rate rate
+     :receive-tops (filter #(first (paths-to pn % owner 4)) (:places-top binds))}))
+
+(defn join-cmd-first&last
+  [owner binds pn first?  & {:keys [tight?]}]
+  (let [imm (:IMM binds)
+        others (remove #(= % owner) (:places* binds))
+        name (new-name imm owner (if first? "-first" "-last"))
+        receive-preserves (filter #(= owner (:source %)) (:trans-ins binds))
+        send-preserves (filter #(= owner (:target %)) (:trans-ins binds))]
+    (as-> (join-cmd-every name owner binds pn :tight? tight?) ?cmd
+      (if first?
+        (assoc ?cmd ; :preserves don't make new ones, they reuse!
+               :preserves (into (map #(assoc % :target name) receive-preserves) 
+                                (map #(assoc % :source name) send-preserves))
+               :receive-inhibitors (if tight? (conj others owner) others)
+               #_:send-activators #_(if tight? (conj (:places-top binds) owner) (vector owner)))
+        (assoc ?cmd
+               :receive-inhibitors (if tight? (conj others owner) (vector owner))
+               :receive-activators others
+               :send-activators (if tight?
+                                  (conj (:places-top binds) (:place-bottom binds))
+                                  (vector (:place-bottom binds))))))))
+
+(defn join-cmd-middles
+  [owner binds pn in-front & {:keys [tight?]}] ; POD More to do here for :tight?
   (let [owner-t (:source (some #(when (= owner (:target %)) %) (:places-ins binds)))
         rate (:rate (name2obj pn owner-t))
         imm (:IMM binds)
-        kill-trans (map :name (:trans binds))
-        receive-preserves (filter #(= owner (:source %)) (:preserve-top-ins binds))
-        send-preserves (filter #(= owner (:target %)) (:preserve-top-ins binds))
         others (remove #(= % owner) (:places* binds))]
-    (loop [in-front 0
-           accum []]
-      (if (> in-front (count others))
-        accum
-        (cond
-          (= in-front 0)
-          (recur (inc in-front)
-                 (let [n (new-name imm owner "-first")]
-                   (conj accum {:name n
-                                :rate rate
-                                :preserves (into (map #(assoc % :target n) receive-preserves)
-                                                 (map #(assoc % :source % n) send-preserves))
-                                :receive-tops (filter #(first (paths-to pn % owner 4)) (:places-top binds))
-                                :receive-inhibitors others
-                                :send-activator owner})))
-          (= in-front (count others))
-          (recur (inc in-front)
-                 (let [n (new-name imm owner "-last")]
-                   (conj accum {:name n
-                                :rate rate
-                                :receive-tops (filter #(first (paths-to pn % owner 4)) (:places-top binds))
-                                :preserves (into (map #(assoc % :target  n) receive-preserves)
-                                                 (map #(assoc % :source n) send-preserves))
-                                :receive-activators others
-                                :send-activator (:name (:place-bottom binds))})))  
-          :else
-          (recur (inc in-front)
-                 (into accum 
-                       (map (fn [ahead]
-                              (let [n (new-name-ahead imm owner ahead)] 
-                                {:name n
-                                 :rate rate
-                                 :receive-tops (filter #(first (paths-to pn % owner 4)) (:places-top binds))
-                                 :preserves (into (map #(assoc % :target n) receive-preserves)
-                                                  (map #(assoc % :source n) send-preserves))
-                                 :receive-inhibitors (remove (fn [o] (some #(when (= o %) %) ahead)) others)
-                                 :send&receive-activators ahead
-                                 :send-activator owner}))
-                              (combo/combinations others in-front)))))))))
-                                    
+    (map (fn [ahead]
+           (let [name (new-name-ahead imm owner ahead)]
+             (-> (join-cmd-every name owner binds pn :tight? tight?)
+                 (assoc 
+                  :receive-inhibitors (remove (fn [o] (some #(when (= o %) %) ahead)) others)
+                  :send&receive-activators ahead
+                  :send-activators (vector owner)))))
+         (combo/combinations others in-front))))
+
 (defn find-joins
   "Return IMMs that have multiple inbound arcs."
   [pn]
@@ -208,110 +207,91 @@
                      (> (count (filter (fn [ar] (= (:target ar) tr-name)) arcs)) 1))))
             (:transitions pn))))
 
+(defn join2spn-adds [pn cmd binds]
+  (as-> pn ?pn
+    (add-pn ?pn {:name (:name cmd) :tid (next-tid ?pn)
+                 :type :exponential :rate (:rate cmd)})
+    ;;(when (:tight? cmd)
+    ;;(eliminate-pn pn ar)) ?pn (:top-arcs b)))  <=====  TODO
+    (if (:tight? cmd) ; On tight, both of the trans above the imm get replaced
+      (reduce (fn [pn tr]
+                (reduce (fn [pn ar] (eliminate-pn pn ar))
+                        pn
+                        (filter #(or (= (:source %) (:name tr)) (= (:target %) (:name tr))) (:arcs pn))))
+              ?pn
+              (:trans binds))
+      ?pn)
+    (reduce (fn [pn receiver] ; POD 2017-02-13
+              (add-pn pn (make-arc pn receiver (:name cmd))))
+            ?pn
+            (:receive-tops cmd))
+    (reduce (fn [pn psv]
+              (add-pn pn (make-arc pn (:source psv) (:target psv)
+                                   :type (:type psv) :multiplicity (:multiplicity psv))))
+            ?pn
+            (:preserves cmd))
+    (reduce (fn [pn activ]
+              (add-pn ?pn (make-arc ?pn (:name cmd) activ)))
+            ?pn
+            (:send-activators cmd))
+    (reduce (fn [pn inhib]
+              (add-pn pn (make-arc pn inhib (:name cmd) :type :inhibitor)))
+            ?pn
+            (:receive-inhibitors cmd))
+    (reduce (fn [pn activ]
+              (add-pn pn (make-arc pn activ (:name cmd))))
+            ?pn
+            (:receive-activators cmd))
+    (reduce (fn [pn active]
+              (as-> pn ?pn2
+                (add-pn ?pn2 (make-arc ?pn2 (:name cmd) active))
+                (add-pn ?pn2 (make-arc ?pn2 active (:name cmd)))))
+            ?pn
+            (:send&receive-activators cmd))))
+
 (defn join2spn
   "Eliminate IMMs that have outbound arcs to multiple places and (a single???) inbound arc."
   [pn]
-  (let [arcs (:arcs pn)
-        trs (:transitions pn)
-        places (:places pn)
-        new-cnt (atom 0)]
-    (reduce (fn [pn imm]
-              (let [b (join-binds pn imm)] ; Consider moving all this inside the next reduce
-                (as-> pn ?pn               ; Can't really do that because join-binds needs to 
-                  (eliminate-pn ?pn imm)   ; See the original structure.
-                  (reduce (fn [pn ar] (eliminate-pn pn ar)) ?pn (:top-ins b))
-                  (reduce (fn [pn ar] (eliminate-pn pn ar)) ?pn (:preserve-top-ins b)) 
-                  (reduce (fn [pn tr] (eliminate-pn pn tr)) ?pn (:trans b))
-                  (reduce (fn [pn ar] (eliminate-pn pn ar)) ?pn (:places-ins b))
-                  (reduce (fn [pn ar] (eliminate-pn pn ar)) ?pn (:imm-ins b))
-                  (eliminate-pn ?pn (:place-bottom-in b))
-                  (reduce (fn [pn cmd-vec] ; cmd-vec, from join-cmd is commands over one of :places*
-                            (reduce (fn [pnn cmd] ; each cmd creates a new transition and the arcs to/from it.
-                                      (as-> pnn ?pnp
-                                        (add-pn ?pnp {:name (:name cmd) :tid (next-tid ?pnp)
-                                                      :type :exponential :rate (:rate cmd)})
-                                        (reduce (fn [pn receiver] ; POD 2017-02-13
-                                                  (add-pn pn (make-arc pn receiver (:name cmd))))
-                                                ?pnp
-                                                (:receive-tops cmd))
-                                        (reduce (fn [pn psv]
-                                                  (add-pn pn (make-arc pn (:source psv) (:target psv)
-                                                                       :type (:type psv) :multiplicity (:multiplicity psv))))
-                                                ?pnp
-                                                (:preserves cmd))
-                                        (add-pn ?pnp (make-arc ?pnp (:name cmd) (:send-activator cmd)))
-                                        (reduce (fn [pn inhib]
-                                                  (add-pn pn (make-arc pn inhib (:name cmd) :type :inhibitor)))
-                                                ?pnp
-                                                (:receive-inhibitors cmd))
-                                        (reduce (fn [pn activ]
-                                                  (add-pn pn (make-arc pn activ (:name cmd))))
-                                                ?pnp
-                                                (:receive-activators cmd))
-                                        (reduce (fn [pn active]
-                                                  (as-> pn ?pn2
-                                                    (add-pn ?pn2 (make-arc ?pn2 (:name cmd) active))
-                                                    (add-pn ?pn2 (make-arc ?pn2 active (:name cmd)))))
-                                                ?pnp
-                                                (:send&receive-activators cmd))))
-                                    pn
-                                    cmd-vec))
-                          ?pn 
-                          (map #(join-cmd pn b %) (:places* b))))))
-            pn
-            (find-joins pn))))
+  (reduce (fn [pn imm]
+            (let [b (join-binds pn imm)
+                  set-trans (set (:trans b))]
+              (as-> pn ?pn               
+                (eliminate-pn ?pn imm)   
+                (let [nimm (:name imm)]
+                  (reduce (fn [pn ar] (eliminate-pn pn ar)) ; Remove any arc that references the IMM.
+                          ?pn (filter #(or (= (:source %) nimm) (= (:target %) nimm)) (:arcs ?pn))))
+                (reduce (fn [pn ar] (eliminate-pn pn ar)) ?pn (:trans-ins b))
+                (reduce (fn [pn ar] (eliminate-pn pn ar)) ?pn
+                        (filter #(or (contains? set-trans (:source %))
+                                     (contains? set-trans (:target %)))
+                                (:top-arcs b))) ; Don't delete the innocent unrelated top arcs.
+                (reduce (fn [pn tr] (eliminate-pn pn tr)) ?pn (map #(name2obj ?pn %) (:trans b)))
+                (reduce (fn [pn ar] (eliminate-pn pn ar)) ?pn (:places-ins b))
+                ;; cmd-vec, from join-cmd is commands over one of :places* ('owner')
+                ;; each cmd creates a new transition and the arcs to/from it.
+                (reduce (fn [pn cmd-vec] (reduce (fn [pn cmd] (join2spn-adds pn cmd b)) pn cmd-vec)) 
+                        ?pn 
+                        (map #(join-cmd pn b %) (:places* b)))))) 
+          pn 
+          (find-joins pn)))
 
-
-;;;     (   ) ( )    splaces             
-;;;      | |   |     strans-ins          
+;;;     (   ) ( )    splaces             -- Not recorded. Use strans-ins. Keep these.
+;;;      | |   |     strans-ins          -- Don't keep anything from here through trans-outs.
 ;;;      v v   v
-;;;      XXXX XXXX   strans 
+;;;      XXXX XXXX   strans (multiple)   
 ;;;        |   |     
-;;;        V   V     place-ins 
+;;;        V   V     place-ins (multiple)
 ;;;        ------
-;;;       (      )   VPLACE 
+;;;       (      )   vplace (owner)
 ;;;        ------
-;;;        |    |     place-outs 
+;;;        |    |     place-outs (multiple)
 ;;;        V    V
-;;;     XXXX   XXXX   trans (focus, immediates) 
+;;;     XXXX   XXXX   trans (multiple)
 ;;;      |      |    
-;;;      V      V     trans-outs 
+;;;      V      V     trans-outs (multiple)
 ;;;     ---    ---
-;;;    (   )  (   )    tplaces                           
+;;;    (   )  (   )    tplaces (multiple)
 ;;;     ---    ---
-(defschema :vanish
-  {:name :vanish,
-   :type :source,
-   :topology
-   {:name :splaces, :type :place, :multiplicity [1,-1], :plan :keep,
-    :search #(arcs-into %1 %2),
-    :child
-    {:name :strans-ins, :type :arc, :multiplicity [1,-1], :plan :keep,
-     :search-up #(name2obj %1 (:source %2)) 
-     :child
-     {:name :strans, :type :normal, :multiplicity [1,-1], :plan :keep,
-      :search-up #(arcs-into %1 %2),
-      :child
-      {:name :place-ins, :type :arc, :multiplicity [1,-1], :plan :eliminate,
-       :search-up #(name2obj %1 (:source %2)) 
-       :child
-       {:name :VPLACE, :type :place, :multiplicity [1,1], :plan :eliminate,
-        :search #(arcs-into %1 %2),
-        :child
-        {:name :place-outs, :type :arc, :multiplicity [1,-1], :plan :eliminate,
-         :search-up #(name2obj %1 (:source %2)) 
-         :child
-         {:name :trans, :type :focus, :multiplicity [1,-1], :plan :eliminate, ; <======= FOCUS
-          :select #(filter (fn [x] (= :immediate (:type x))) (:transitions %)),
-          :search #(arcs-outof %1 %2),
-          :search-up #(arcs-into %1 %2),
-          :child
-          {:name :trans-outs, :type :arc, :multiplicity [1,-1], :plan :eliminate,
-           :search #(name2obj %1 (:target %2)),
-           :child
-           {:name :tplaces :type :place :multiplicity [1,-1] :plan :keep}}}}}}}}}})
-
-
 (declare find-vanish vanish-binds vanish-cmd)
 (defn vanish-binds
   "Return a map identifying a set of things involved in the pattern shown above."
@@ -367,8 +347,6 @@
           pn
           (find-vanish pn)))
 
-  
-
 (defn find-vanish
   [pn]
   (filter (fn [pl]
@@ -404,9 +382,15 @@
     (update-in ?cmd [0 :send-to :gets-tokens]  #(+ % (:initial-marking (:VPLACE binds))))))
 
 ;;;------- Diagnostic
+
 ;;;(def m (read-pnml "data/tight-join.xml"))
 ;;;(def bbb (join-binds m (first (find-joins m))))
-;;;(ppprint (join-cmd m bbb))
+;;;(ppprint (join-cmd m bbb (first (:places* bbb))))
+
+;;;(def m (read-pnml "data/join2.xml"))
+;;;(def bbb (join-binds m (first (find-joins m))))
+;;;(ppprint (join-cmd m bbb (first (:places* bbb))))
+
 (defn zero-step
   [filename]
   (read-pnml filename))
@@ -514,5 +498,4 @@
 
 
 
-                            
                              

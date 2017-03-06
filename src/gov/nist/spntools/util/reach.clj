@@ -66,14 +66,13 @@
   (if (some #(> % +k-bounded+) marking)
     (assoc pn :failure {:reason :not-k-bounded :marking marking})
     (let [nexts (next-markings pn marking)]
-      (println "Next " (map #(list (:M %) (:fire %)) nexts)) ; POD is :tid helpful? I like :name!
+      ;(println "Next " (map #(list (:M %) (:fire %)) nexts)) ; POD is :tid helpful? I like :name!
       (swap! *visited-links* into (map #(list (:M %) (:fire %)) nexts)) ; POD looks wasteful
       (as-> pn ?pn
         (update-in ?pn [:reach] into (vec nexts))
         (reduce (fn [pn nx] (reachability-aux pn (:Mp nx)))
                 ?pn
                 nexts)))))
-
 
 (declare renumber-pids)
 (defn reachability

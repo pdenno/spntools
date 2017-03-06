@@ -4,11 +4,11 @@
 
 ;;;=== General =========================
 (defn ppp []
-  (binding [clojure.pprint/*print-right-margin* 120]
+  (binding [clojure.pprint/*print-right-margin* 130]
     (pprint *1)))
 
 (defn ppprint [arg]
-  (binding [clojure.pprint/*print-right-margin* 120]
+  (binding [clojure.pprint/*print-right-margin* 130]
     (pprint arg)))
 
 ;;;=== Petri Nets =========================
@@ -182,112 +182,12 @@
         (let [ar (first arcs)]
           (when-not
               ;; All arcs are between places and transitions
-              (or (and (:pid (:source ar))
-                       (:tid (:target ar)))
-                  (and (:pid (:target ar))
-                       (:tid (:source ar))))
+              (or (and (:pid (name2obj pn (:source ar)))
+                       (:tid (name2obj pn (:target ar))))
+                  (and (:pid (name2obj pn (:target ar)))
+                       (:tid (name2obj pn (:source ar)))))
             (swap! failures conj {:reason "Arc not pointing to a place or transition" :arc ar})))
         (recur (rest arcs))))
     ;; Every place and transition has arcs in and arcs out. 
     @failures))
 
-
-;;;=== Schema =========================
-(def +schemas+ (atom {}))
-
-;;; POD Need to learn clojure.spec!
-(defn check-schema
-  [top-node]
-  (let [errors (atom [])]
-    (loop [node (:topology top-node)]
-      (when-not (contains? #{:place :immediate :normal :arc :focus} (:type node))
-        (swap! errors conj {:reason "Bad type" :node node}))
-      (when-not (contains? #{:keep :eliminate :replace} (:plan node))
-        (swap! errors conj {:reason "Bad plan" :node node}))
-      (when-not (contains? #{-1 0 1} (first (:multiplicity node)))
-        (swap! errors conj {:reason "Bad multiplicity" :node node}))
-      (when-not (contains? #{-1 0 1} (second (:multiplicity node)))
-        (swap! errors conj {:reason "Bad multiplicity" :node node}))
-      (if-let [child (:child node)]
-        (recur child)
-        @errors))))
-
-;;; So far, don't need a macro. 
-(defn defschema
-  [name body]
-  (let [check (check-schema body)]
-    (if (empty? check)
-      (swap! +schemas+ assoc name body)
-      {:reason "failed check-schema" :fail check})))
-
-(defn schema-search-aux
-  [body search-fn]
-  (cond (search-fn body) body
-        (:child body) (schema-search-aux (:child body) search-fn)))
-
-(defn schema-search
-  "Search the schema for a node matching the search-fn"
-  [schema-name search-fn & {:keys [truncate?]}]
-  (let [schema (schema-name @+schemas+)
-        result (schema-search-aux (:topology schema) search-fn)]
-    (if truncate?
-      (dissoc result :child)
-      result)))
-
-(defn schema-node-parent
-  [schema-name node-name]
-  (schema-search schema-name #(= (:name (:child %)) node-name)))
-
-;;;========= PN binding to schema ===============================
-(def +schema-binds+ (atom {}))
-(def ^:dynamic *schema-name*)
-
-(defn schema-binds-nav-fn
-  [pn elem node & {:keys [dir] :or {dir :search}}]
-  ;; For now, just this. Might want argument info in schema.
-  (when-let [search-fn (dir node)]
-    (let [result (search-fn pn elem)]
-      (if (pn-obj? result)
-        (vector result)
-        result))))
-  
-(defn schema-binds-down-aux
-  [pn parent-elem elem schema-down]
-  (when schema-down
-    (swap! +schema-binds+ update-in [(:name schema-down)] conj elem)
-    (map #(schema-binds-down-aux pn elem % (:child schema-down))
-         (schema-binds-nav-fn pn elem schema-down))))
-
-(defn schema-binds-down
-  [pn pn-elem schema-down]
-  (map #(schema-binds-down-aux pn pn-elem % schema-down)
-       (follow-path pn pn-elem)))
-
-(defn schema-binds-up-aux
-  [pn parent-elem elem schema-up]
-  (when schema-up
-    (swap! +schema-binds+ update-in [(:name schema-up)] conj elem)
-    (map #(schema-binds-up-aux pn elem % (schema-node-parent *schema-name* (:name schema-up)))
-         (schema-binds-nav-fn pn elem schema-up :dir :search-up))))
-
-(defn schema-binds-up
-  [pn pn-elem schema-up]
-  (map #(schema-binds-up-aux pn pn-elem % schema-up)
-       (follow-path-back pn pn-elem)))
-
-(defn build-patterns
-  "Instantiate the schema with all instances found in pn."
-  [schema-name pn]
-  (binding [*schema-name* schema-name]
-    (let [schema (schema-name @+schemas+)
-          focus-node (schema-search schema-name #(= :focus (:type %)))
-          centers ((:select focus-node) pn)]
-      (map (fn [center]
-             (reset! +schema-binds+ {(:name focus-node) center})
-             (schema-binds-down pn center (:child focus-node))
-             (schema-binds-up pn center (schema-node-parent schema-name (:name focus-node))))
-           centers))
-    @+schema-binds+))
-
-      
-  
