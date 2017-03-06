@@ -139,10 +139,11 @@
         "-before")))
 
 (defn make-arc
-  [pn source target & {:keys [type aid multiplicity]
-                    :or {type :normal aid (next-aid pn) multiplicity 1}}]
-  {:aid aid :source source :target target :name (keyword (str "aa-" aid))
-   :type type :multiplicity multiplicity})
+  [pn source target & {:keys [type aid multiplicity debug]
+                       :or {type :normal aid (next-aid pn) multiplicity 1}}]
+  (as-> {:aid aid :source source :target target :name (keyword (str "aa-" aid))
+         :type type :multiplicity multiplicity} ?ar
+      (if debug (assoc ?ar :debug debug) ?ar)))
 
 (defn initial-marking
   "Return a map {:marking-key <vector of place names> :initial-marking <vector of integers>}"
