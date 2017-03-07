@@ -3,7 +3,7 @@
 <token id="Default" enabled="true" red="0" green="0" blue="0"/>
 <place id="P1">
 <graphics>
-<position x="183.0" y="153.0"/>
+<position x="184.0" y="154.0"/>
 </graphics>
 <name>
 <value>P1</value>
@@ -23,7 +23,7 @@
 </place>
 <place id="P2">
 <graphics>
-<position x="276.0" y="156.0"/>
+<position x="277.0" y="157.0"/>
 </graphics>
 <name>
 <value>P2</value>
@@ -43,7 +43,7 @@
 </place>
 <place id="P3">
 <graphics>
-<position x="356.0" y="153.0"/>
+<position x="357.0" y="154.0"/>
 </graphics>
 <name>
 <value>P3</value>
@@ -63,7 +63,7 @@
 </place>
 <place id="Pjoin">
 <graphics>
-<position x="273.0" y="423.0"/>
+<position x="274.0" y="424.0"/>
 </graphics>
 <name>
 <value>Pjoin</value>
@@ -83,7 +83,7 @@
 </place>
 <place id="Pstart">
 <graphics>
-<position x="273.0" y="18.0"/>
+<position x="274.0" y="19.0"/>
 </graphics>
 <name>
 <value>Pstart</value>
@@ -103,7 +103,7 @@
 </place>
 <transition id="IMM">
 <graphics>
-<position x="273.0" y="273.0"/>
+<position x="274.0" y="274.0"/>
 </graphics>
 <name>
 <value>IMM</value>
@@ -129,7 +129,7 @@
 </transition>
 <transition id="T1">
 <graphics>
-<position x="183.0" y="78.0"/>
+<position x="184.0" y="79.0"/>
 </graphics>
 <name>
 <value>T1</value>
@@ -141,7 +141,7 @@
 <value>90</value>
 </orientation>
 <rate>
-<value>1.1</value>
+<value>1.0</value>
 </rate>
 <timed>
 <value>true</value>
@@ -155,7 +155,7 @@
 </transition>
 <transition id="T2">
 <graphics>
-<position x="273.0" y="79.0"/>
+<position x="274.0" y="80.0"/>
 </graphics>
 <name>
 <value>T2</value>
@@ -167,7 +167,7 @@
 <value>90</value>
 </orientation>
 <rate>
-<value>1.2</value>
+<value>1.0</value>
 </rate>
 <timed>
 <value>true</value>
@@ -181,7 +181,7 @@
 </transition>
 <transition id="T3">
 <graphics>
-<position x="356.0" y="83.0"/>
+<position x="357.0" y="84.0"/>
 </graphics>
 <name>
 <value>T3</value>
@@ -193,7 +193,7 @@
 <value>90</value>
 </orientation>
 <rate>
-<value>1.3</value>
+<value>1.0</value>
 </rate>
 <timed>
 <value>true</value>
@@ -207,7 +207,7 @@
 </transition>
 <transition id="Tassemble">
 <graphics>
-<position x="498.0" y="198.0"/>
+<position x="499.0" y="199.0"/>
 </graphics>
 <name>
 <value>Tassemble</value>
@@ -240,8 +240,8 @@
 <tagged>
 <value>false</value>
 </tagged>
-<arcpath id="000" x="284" y="289" curvePoint="false"/>
-<arcpath id="001" x="284" y="420" curvePoint="false"/>
+<arcpath id="000" x="285" y="290" curvePoint="false"/>
+<arcpath id="001" x="285" y="421" curvePoint="false"/>
 <type value="normal"/>
 </arc>
 <arc id="P1 to IMM" source="P1" target="IMM">
@@ -253,8 +253,8 @@
 <tagged>
 <value>false</value>
 </tagged>
-<arcpath id="000" x="203" y="177" curvePoint="false"/>
-<arcpath id="001" x="276" y="279" curvePoint="false"/>
+<arcpath id="000" x="205" y="177" curvePoint="false"/>
+<arcpath id="001" x="277" y="280" curvePoint="false"/>
 <type value="normal"/>
 </arc>
 <arc id="P1 to T1" source="P1" target="T1">
@@ -266,8 +266,8 @@
 <tagged>
 <value/>
 </tagged>
-<arcpath id="000" x="196" y="150" curvePoint="false"/>
-<arcpath id="001" x="199" y="95" curvePoint="false"/>
+<arcpath id="000" x="195" y="151" curvePoint="false"/>
+<arcpath id="001" x="200" y="96" curvePoint="false"/>
 <type value="inhibitor"/>
 </arc>
 <arc id="P2 to IMM" source="P2" target="IMM">
@@ -279,8 +279,8 @@
 <tagged>
 <value>false</value>
 </tagged>
-<arcpath id="000" x="287" y="182" curvePoint="false"/>
-<arcpath id="001" x="283" y="279" curvePoint="false"/>
+<arcpath id="000" x="289" y="183" curvePoint="false"/>
+<arcpath id="001" x="284" y="280" curvePoint="false"/>
 <type value="normal"/>
 </arc>
 <arc id="P2 to T2" source="P2" target="T2">
@@ -292,8 +292,8 @@
 <tagged>
 <value/>
 </tagged>
-<arcpath id="000" x="286" y="153" curvePoint="false"/>
-<arcpath id="001" x="279" y="95" curvePoint="false"/>
+<arcpath id="000" x="288" y="154" curvePoint="false"/>
+<arcpath id="001" x="280" y="96" curvePoint="false"/>
 <type value="inhibitor"/>
 </arc>
 <arc id="P3 to IMM" source="P3" target="IMM">
@@ -305,8 +305,8 @@
 <tagged>
 <value>false</value>
 </tagged>
-<arcpath id="000" x="359" y="177" curvePoint="false"/>
-<arcpath id="001" x="290" y="280" curvePoint="false"/>
+<arcpath id="000" x="360" y="178" curvePoint="false"/>
+<arcpath id="001" x="291" y="281" curvePoint="false"/>
 <type value="normal"/>
 </arc>
 <arc id="P3 to T3" source="P3" target="T3">
@@ -318,8 +318,8 @@
 <tagged>
 <value/>
 </tagged>
-<arcpath id="000" x="366" y="150" curvePoint="false"/>
-<arcpath id="001" x="362" y="99" curvePoint="false"/>
+<arcpath id="000" x="368" y="151" curvePoint="false"/>
+<arcpath id="001" x="363" y="100" curvePoint="false"/>
 <type value="inhibitor"/>
 </arc>
 <arc id="Pjoin to Treturn" source="Pjoin" target="Tassemble">
@@ -331,8 +331,8 @@
 <tagged>
 <value>false</value>
 </tagged>
-<arcpath id="000" x="295" y="424" curvePoint="false"/>
-<arcpath id="001" x="504" y="214" curvePoint="false"/>
+<arcpath id="000" x="296" y="425" curvePoint="false"/>
+<arcpath id="001" x="505" y="215" curvePoint="false"/>
 <type value="normal"/>
 </arc>
 <arc id="Pstart to T1" source="Pstart" target="T1">
@@ -344,8 +344,8 @@
 <tagged>
 <value>false</value>
 </tagged>
-<arcpath id="000" x="272" y="37" curvePoint="false"/>
-<arcpath id="001" x="194" y="84" curvePoint="false"/>
+<arcpath id="000" x="273" y="38" curvePoint="false"/>
+<arcpath id="001" x="195" y="85" curvePoint="false"/>
 <type value="normal"/>
 </arc>
 <arc id="Pstart to T2" source="Pstart" target="T2">
@@ -357,8 +357,8 @@
 <tagged>
 <value>false</value>
 </tagged>
-<arcpath id="000" x="284" y="44" curvePoint="false"/>
-<arcpath id="001" x="284" y="85" curvePoint="false"/>
+<arcpath id="000" x="285" y="45" curvePoint="false"/>
+<arcpath id="001" x="285" y="86" curvePoint="false"/>
 <type value="normal"/>
 </arc>
 <arc id="Pstart to T3" source="Pstart" target="T3">
@@ -370,8 +370,8 @@
 <tagged>
 <value>false</value>
 </tagged>
-<arcpath id="000" x="297" y="38" curvePoint="false"/>
-<arcpath id="001" x="367" y="89" curvePoint="false"/>
+<arcpath id="000" x="298" y="39" curvePoint="false"/>
+<arcpath id="001" x="368" y="90" curvePoint="false"/>
 <type value="normal"/>
 </arc>
 <arc id="T1 to P1" source="T1" target="P1">
@@ -383,8 +383,8 @@
 <tagged>
 <value>false</value>
 </tagged>
-<arcpath id="000" x="189" y="94" curvePoint="false"/>
-<arcpath id="001" x="193" y="150" curvePoint="false"/>
+<arcpath id="000" x="190" y="95" curvePoint="false"/>
+<arcpath id="001" x="194" y="151" curvePoint="false"/>
 <type value="normal"/>
 </arc>
 <arc id="T2 to P2" source="T2" target="P2">
@@ -396,8 +396,8 @@
 <tagged>
 <value>false</value>
 </tagged>
-<arcpath id="000" x="289" y="96" curvePoint="false"/>
-<arcpath id="001" x="288" y="153" curvePoint="false"/>
+<arcpath id="000" x="290" y="97" curvePoint="false"/>
+<arcpath id="001" x="289" y="154" curvePoint="false"/>
 <type value="normal"/>
 </arc>
 <arc id="T3 to P3" source="T3" target="P3">
@@ -409,8 +409,8 @@
 <tagged>
 <value>false</value>
 </tagged>
-<arcpath id="000" x="372" y="100" curvePoint="false"/>
-<arcpath id="001" x="369" y="150" curvePoint="false"/>
+<arcpath id="000" x="373" y="101" curvePoint="false"/>
+<arcpath id="001" x="370" y="151" curvePoint="false"/>
 <type value="normal"/>
 </arc>
 <arc id="Treturn to Pstart" source="Tassemble" target="Pstart">
@@ -422,11 +422,11 @@
 <tagged>
 <value>false</value>
 </tagged>
-<arcpath id="000" x="514" y="215" curvePoint="false"/>
-<arcpath id="001" x="510" y="210" curvePoint="false"/>
-<arcpath id="002" x="510" y="210" curvePoint="false"/>
-<arcpath id="003" x="509" y="32" curvePoint="false"/>
-<arcpath id="004" x="299" y="30" curvePoint="false"/>
+<arcpath id="000" x="515" y="216" curvePoint="false"/>
+<arcpath id="001" x="511" y="211" curvePoint="false"/>
+<arcpath id="002" x="511" y="211" curvePoint="false"/>
+<arcpath id="003" x="510" y="33" curvePoint="false"/>
+<arcpath id="004" x="300" y="31" curvePoint="false"/>
 <type value="normal"/>
 </arc>
 </net>

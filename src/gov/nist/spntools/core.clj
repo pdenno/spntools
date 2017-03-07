@@ -86,7 +86,7 @@
                      (= (count (filter (fn [ar] (= (:target ar) tr-name)) arcs)) 1))))
             (:transitions pn))))
 
-(declare join2spn)
+(declare join2spn join-cmd-every)
 ;;;   ___    ___
 ;;;  (   )  (   )   places-top   May be one or more
 ;;;   ---    ---
@@ -112,16 +112,17 @@
         others (remove #(= % owner) (:places* binds))]
     (map (fn [ahead]
            (let [name (new-name-ahead imm owner ahead)]
-             (as-> (join-cmd-every name owner binds pn :tight? tight?) ?c
-               (assoc ?c
+             (as-> (join-cmd-every name owner binds pn :tight? tight?) ?cmd
+               (assoc ?cmd
                       :receive-inhibitors (vec (clojure.set/difference (set others) (set ahead)))
                       :send&receive-activators ahead
                       :send-activators (vector owner))
-               (assoc ?c :psv-trans&places (remove (fn [p] (some #(and (= (:type p) :normal)
-                                                                (= (:source p) (:source %))
-                                                                (= (:target p) (:target %)))
-                                                          (:send-and-receive-activators ?c)))
-                                            (:psv-trans&places ?c))))))
+               ;; Remove stuff from :psv-trans&places that isn't part of middles
+               (assoc ?cmd
+                      :psv-trans&places
+                      (remove #(or (and (= :normal (:type %))    (= owner (:target %)) (= name (:source %)))
+                                   #_(and (= :inhibitor (:type %)) (= owner (:source %)) (= name (:target %))))
+                              (:psv-trans&places ?cmd))))))
          (combo/combinations others in-front))))
 
 (defn join-cmd-every
@@ -137,16 +138,6 @@
                              (map #(assoc % :source name) send-preserves))
      :receive-tops (filter #(first (paths-to pn % owner 4)) (:places-top binds))}))
 
-#_(if (some #
-            (:psv-trans&places ?cmd)))
-
-
-#_(if (some #(and (= :normal (:type %))
-                (= owner (:target %))
-                (= name (:source %)))
-          (:psv-trans&places ?cmd)))
-                                   
-
 (defn join-cmd-first&last
   [owner binds pn first?  & {:keys [tight?]}]
   (let [imm (:IMM binds)
@@ -158,7 +149,7 @@
       (if first?
         (assoc ?cmd
                :receive-inhibitors (if tight? (conj others owner) others))
-        ;; Remove stuff from :psv-trans&places that is done
+        ;; Remove stuff from :psv-trans&places that isn't part of -last.
         (as-> ?cmd ?c
           (assoc ?c
                  :psv-trans&places
@@ -171,10 +162,6 @@
                  :send-activators (if tight?
                                     (conj (:places-top binds) (:place-bottom binds))
                                     (vector (:place-bottom binds)))))))))
-
-
-
-
 (defn join-binds
   "Return a map identifying a set of things involved in the pattern shown above."
   [pn imm]
@@ -444,6 +431,13 @@
   [filename]
   (-> (read-pnml filename)
       (gspn2spn)))
+
+(defn run-step
+  [filename]
+  (-> (read-pnml filename)
+      (gspn2spn)
+      (pn-steady-state)))
+
       
 (defn find-arc
   [pn source target]
