@@ -3,7 +3,7 @@
 <token id="Default" enabled="true" red="0" green="0" blue="0"/>
 <place id="buffer">
 <graphics>
-<position x="326.0" y="314.0"/>
+<position x="329.0" y="300.0"/>
 </graphics>
 <name>
 <value>buffer</value>
@@ -21,14 +21,14 @@
 <value>0</value>
 </capacity>
 </place>
-<place id="m1-blocked">
+<place id="m1-busy">
 <graphics>
-<position x="195.0" y="152.0"/>
+<position x="192.0" y="270.0"/>
 </graphics>
 <name>
-<value>m1-blocked</value>
+<value>m1-busy</value>
 <graphics>
-<offset x="0.0" y="0.0"/>
+<offset x="38.0" y="-3.0"/>
 </graphics>
 </name>
 <initialMarking>
@@ -41,29 +41,9 @@
 <value>0</value>
 </capacity>
 </place>
-<place id="m1-busy">
-<graphics>
-<position x="192.0" y="316.0"/>
-</graphics>
-<name>
-<value>m1-busy</value>
-<graphics>
-<offset x="-3.0" y="22.0"/>
-</graphics>
-</name>
-<initialMarking>
-<value>Default,0</value>
-<graphics>
-<offset x="0.0" y="0.0"/>
-</graphics>
-</initialMarking>
-<capacity>
-<value>0</value>
-</capacity>
-</place>
 <place id="m2-busy">
 <graphics>
-<position x="436.0" y="306.0"/>
+<position x="436.0" y="316.0"/>
 </graphics>
 <name>
 <value>m2-busy</value>
@@ -83,7 +63,7 @@
 </place>
 <place id="m2-starved">
 <graphics>
-<position x="429.0" y="149.0"/>
+<position x="436.0" y="151.0"/>
 </graphics>
 <name>
 <value>m2-starved</value>
@@ -103,7 +83,7 @@
 </place>
 <transition id="m1-complete-job">
 <graphics>
-<position x="193.0" y="382.0"/>
+<position x="196.0" y="391.0"/>
 </graphics>
 <name>
 <value>m1-complete-job</value>
@@ -115,7 +95,7 @@
 <value>90</value>
 </orientation>
 <rate>
-<value>1.4</value>
+<value>0.5</value>
 </rate>
 <timed>
 <value>true</value>
@@ -127,35 +107,9 @@
 <value>1</value>
 </priority>
 </transition>
-<transition id="m1-start-job">
-<graphics>
-<position x="197.0" y="212.0"/>
-</graphics>
-<name>
-<value>m1-start-job</value>
-<graphics>
-<offset x="-7.0" y="21.0"/>
-</graphics>
-</name>
-<orientation>
-<value>90</value>
-</orientation>
-<rate>
-<value>1.0</value>
-</rate>
-<timed>
-<value>false</value>
-</timed>
-<infiniteServer>
-<value>false</value>
-</infiniteServer>
-<priority>
-<value>1</value>
-</priority>
-</transition>
 <transition id="m2-complete-job">
 <graphics>
-<position x="437.0" y="378.0"/>
+<position x="436.0" y="376.0"/>
 </graphics>
 <name>
 <value>m2-complete-job</value>
@@ -181,7 +135,7 @@
 </transition>
 <transition id="m2-start-job">
 <graphics>
-<position x="431.0" y="212.0"/>
+<position x="436.0" y="211.0"/>
 </graphics>
 <name>
 <value>m2-start-job</value>
@@ -205,7 +159,7 @@
 <value>1</value>
 </priority>
 </transition>
-<arc id="buffer to m1-start-job" source="buffer" target="m1-start-job">
+<arc id="buffer to m1-complete-job" source="buffer" target="m1-complete-job">
 <graphics/>
 <inscription>
 <value/>
@@ -214,8 +168,8 @@
 <tagged>
 <value/>
 </tagged>
-<arcpath id="000" x="326" y="316" curvePoint="false"/>
-<arcpath id="001" x="213" y="229" curvePoint="false"/>
+<arcpath id="000" x="328" y="320" curvePoint="false"/>
+<arcpath id="001" x="213" y="398" curvePoint="false"/>
 <type value="inhibitor"/>
 </arc>
 <arc id="buffer to m2-start-job" source="buffer" target="m2-start-job">
@@ -227,8 +181,8 @@
 <tagged>
 <value>false</value>
 </tagged>
-<arcpath id="000" x="348" y="315" curvePoint="false"/>
-<arcpath id="001" x="437" y="228" curvePoint="false"/>
+<arcpath id="000" x="352" y="302" curvePoint="false"/>
+<arcpath id="001" x="442" y="227" curvePoint="false"/>
 <type value="normal"/>
 </arc>
 <arc id="m1-busy to m1-complete-job" source="m1-busy" target="m1-complete-job">
@@ -240,8 +194,8 @@
 <tagged>
 <value>false</value>
 </tagged>
-<arcpath id="000" x="204" y="342" curvePoint="false"/>
-<arcpath id="001" x="204" y="388" curvePoint="false"/>
+<arcpath id="000" x="203" y="296" curvePoint="false"/>
+<arcpath id="001" x="199" y="397" curvePoint="false"/>
 <type value="normal"/>
 </arc>
 <arc id="m1-complete-job to buffer" source="m1-complete-job" target="buffer">
@@ -253,11 +207,11 @@
 <tagged>
 <value>false</value>
 </tagged>
-<arcpath id="000" x="219" y="394" curvePoint="false"/>
-<arcpath id="001" x="325" y="333" curvePoint="false"/>
+<arcpath id="000" x="206" y="397" curvePoint="false"/>
+<arcpath id="001" x="328" y="320" curvePoint="false"/>
 <type value="normal"/>
 </arc>
-<arc id="m1-complete-job to m1-blocked" source="m1-complete-job" target="m1-blocked">
+<arc id="m1-complete-job to m1-busy" source="m1-complete-job" target="m1-busy">
 <graphics/>
 <inscription>
 <value>Default,1</value>
@@ -266,36 +220,10 @@
 <tagged>
 <value>false</value>
 </tagged>
-<arcpath id="000" x="189" y="394" curvePoint="false"/>
-<arcpath id="001" x="46" y="395" curvePoint="false"/>
-<arcpath id="002" x="46" y="165" curvePoint="false"/>
-<arcpath id="003" x="192" y="164" curvePoint="false"/>
-<type value="normal"/>
-</arc>
-<arc id="m1-idle to m1-start-job" source="m1-blocked" target="m1-start-job">
-<graphics/>
-<inscription>
-<value>Default,1</value>
-<graphics/>
-</inscription>
-<tagged>
-<value>false</value>
-</tagged>
-<arcpath id="000" x="207" y="178" curvePoint="false"/>
-<arcpath id="001" x="208" y="218" curvePoint="false"/>
-<type value="normal"/>
-</arc>
-<arc id="m1-start-job to m1-busy" source="m1-start-job" target="m1-busy">
-<graphics/>
-<inscription>
-<value>Default,1</value>
-<graphics/>
-</inscription>
-<tagged>
-<value>false</value>
-</tagged>
-<arcpath id="000" x="203" y="228" curvePoint="false"/>
-<arcpath id="001" x="203" y="313" curvePoint="false"/>
+<arcpath id="000" x="192" y="403" curvePoint="false"/>
+<arcpath id="001" x="102" y="405" curvePoint="false"/>
+<arcpath id="002" x="101" y="281" curvePoint="false"/>
+<arcpath id="003" x="189" y="281" curvePoint="false"/>
 <type value="normal"/>
 </arc>
 <arc id="m2-busy to m2-job-complete" source="m2-busy" target="m2-complete-job">
@@ -307,8 +235,8 @@
 <tagged>
 <value>false</value>
 </tagged>
-<arcpath id="000" x="448" y="332" curvePoint="false"/>
-<arcpath id="001" x="448" y="384" curvePoint="false"/>
+<arcpath id="000" x="447" y="342" curvePoint="false"/>
+<arcpath id="001" x="447" y="382" curvePoint="false"/>
 <type value="normal"/>
 </arc>
 <arc id="m2-idle to m2-start-job" source="m2-starved" target="m2-start-job">
@@ -320,8 +248,8 @@
 <tagged>
 <value>false</value>
 </tagged>
-<arcpath id="000" x="441" y="175" curvePoint="false"/>
-<arcpath id="001" x="442" y="218" curvePoint="false"/>
+<arcpath id="000" x="447" y="177" curvePoint="false"/>
+<arcpath id="001" x="447" y="217" curvePoint="false"/>
 <type value="normal"/>
 </arc>
 <arc id="m2-job-complete to m2-idle" source="m2-complete-job" target="m2-starved">
@@ -333,11 +261,11 @@
 <tagged>
 <value>false</value>
 </tagged>
-<arcpath id="000" x="463" y="390" curvePoint="false"/>
-<arcpath id="001" x="539" y="391" curvePoint="true"/>
-<arcpath id="002" x="612" y="393" curvePoint="false"/>
-<arcpath id="003" x="612" y="164" curvePoint="false"/>
-<arcpath id="004" x="455" y="161" curvePoint="false"/>
+<arcpath id="000" x="462" y="388" curvePoint="false"/>
+<arcpath id="001" x="542" y="392" curvePoint="true"/>
+<arcpath id="002" x="615" y="396" curvePoint="false"/>
+<arcpath id="003" x="616" y="163" curvePoint="false"/>
+<arcpath id="004" x="463" y="163" curvePoint="false"/>
 <type value="normal"/>
 </arc>
 <arc id="m2-start-job to m2-busy" source="m2-start-job" target="m2-busy">
@@ -349,8 +277,8 @@
 <tagged>
 <value>false</value>
 </tagged>
-<arcpath id="000" x="447" y="229" curvePoint="false"/>
-<arcpath id="001" x="447" y="303" curvePoint="false"/>
+<arcpath id="000" x="452" y="228" curvePoint="false"/>
+<arcpath id="001" x="448" y="313" curvePoint="false"/>
 <type value="normal"/>
 </arc>
 </net>
