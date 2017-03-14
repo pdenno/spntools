@@ -8,9 +8,12 @@
             [clojure.core.matrix :as m :refer :all]
             [clojure.core.matrix.linear :as ml :refer (svd)]))
 
-;;; ToDo: Remove :preserves or :receives-top from join-cmd.
-;;;         (1) use aids, not arcs. 
-;;;         (2) call it :preserves tops. 
+;;; ToDo: 
+;;;  * Test variations of the basic reductions.
+;;;       - Challenge problems Chiola's fig 1.2, 1.7, 1.8. 
+;;;  * Review Chiola's algorithm
+;;;  * Implement the matrix procedure for situations where immediates remain.
+;;;  * Implement Marsan's matrix procedure for deterministic.
 
 ;;; Four steps to most reductions:
 ;;;  1) Find instances of the pattern.
@@ -91,6 +94,7 @@
 ;;;  (   )  (   )   places-top   May be one or more
 ;;;   ---    ---
 ;;;    |      ^     top-arcs (everything to/from places-top) -- Ephemeral trans-in&outs include things from the places* 
+;;;    |      |     These come in and out of transitions 4 steps from IMM (i.e. :trans) but not connecting :places*.
 ;;;    V      |
 ;;;   ===    ===    trans [multiple]
 ;;;    |      |     places-ins, places-in&outs [multiple]
@@ -104,64 +108,6 @@
 ;;;      |   place-bottom-in
 ;;;     _V_    
 ;;;    (___)   place-bottom      [Keep]
-(defn join-cmd-middles
-  [owner binds pn in-front & {:keys [tight?]}] ; POD More to do here for :tight?
-  (let [owner-t (:source (some #(when (= owner (:target %)) %) (:places-ins binds)))
-        rate (:rate (name2obj pn owner-t))
-        imm (:IMM binds)
-        others (remove #(= % owner) (:places* binds))]
-    (map (fn [ahead]
-           (let [name (new-name-ahead imm owner ahead)]
-             (as-> (join-cmd-every name owner binds pn :tight? tight?) ?cmd
-               (assoc ?cmd
-                      :receive-inhibitors (vec (clojure.set/difference (set others) (set ahead)))
-                      :send&receive-activators ahead
-                      :send-activators (vector owner))
-               ;; Remove stuff from :psv-trans&places that isn't part of middles
-               (assoc ?cmd
-                      :psv-trans&places
-                      (remove #(or (and (= :normal (:type %))    (= owner (:target %)) (= name (:source %)))
-                                   #_(and (= :inhibitor (:type %)) (= owner (:source %)) (= name (:target %))))
-                              (:psv-trans&places ?cmd))))))
-         (combo/combinations others in-front))))
-
-(defn join-cmd-every
-  [name owner binds pn & {:keys [tight?]}]
-  (let [owner-t (:source (some #(when (= owner (:target %)) %) (:places-ins binds)))
-        rate (:rate (name2obj pn owner-t))
-        receive-preserves (filter #(= owner (:source %)) (:places-in&outs binds))
-        send-preserves (filter #(= owner (:target %)) (:places-in&outs binds))]
-    {:name name
-     :tight? tight?
-     :rate rate ; :psv-trans&places don't make new ones, they reuse!
-     :psv-trans&places (into (map #(assoc % :target name) receive-preserves) 
-                             (map #(assoc % :source name) send-preserves))
-     :receive-tops (filter #(first (paths-to pn % owner 4)) (:places-top binds))}))
-
-(defn join-cmd-first&last
-  [owner binds pn first?  & {:keys [tight?]}]
-  (let [imm (:IMM binds)
-        others (remove #(= % owner) (:places* binds))
-        name (new-name imm owner (if first? "-first" "-last"))
-        receive-preserves (filter #(= owner (:source %)) (:places-in&outs binds))
-        send-preserves (filter #(= owner (:target %)) (:places-in&outs binds))]
-    (as-> (join-cmd-every name owner binds pn :tight? tight?) ?cmd
-      (if first?
-        (assoc ?cmd
-               :receive-inhibitors (if tight? (conj others owner) others))
-        ;; Remove stuff from :psv-trans&places that isn't part of -last.
-        (as-> ?cmd ?c
-          (assoc ?c
-                 :psv-trans&places
-                 (remove #(or (and (= :normal (:type %))    (= owner (:target %)) (= name (:source %)))
-                              (and (= :inhibitor (:type %)) (= owner (:source %)) (= name (:target %))))
-                         (:psv-trans&places ?c)))
-          (assoc ?c
-                 :receive-inhibitors (if tight? (conj others owner) (vector owner))
-                 :receive-activators others
-                 :send-activators (if tight?
-                                    (conj (:places-top binds) (:place-bottom binds))
-                                    (vector (:place-bottom binds)))))))))
 (defn join-binds
   "Return a map identifying a set of things involved in the pattern shown above."
   [pn imm]
@@ -176,13 +122,13 @@
       (assoc ?b :trans (set (map :name (filter #(some (fn [pl] (= (:name %) (:source pl))) (:places-ins ?b)) trs))))
       (assoc ?b :trans-in&outs  (set (filter #(or (contains? (:trans ?b) (:source %))
                                                   (contains? (:trans ?b) (:target %))) arcs)))
-      (assoc ?b :place-bottom-in (some #(when (= (:source %) (:IMM ?b)) %) arcs))
+      (assoc ?b :place-bottom-in (some #(when (= (:source %) (:IMM ?b)) %) arcs)) 
       (assoc ?b :place-bottom (:name (some #(when (= (:name %) (:target (:place-bottom-in ?b))) %) places)))
-      (assoc ?b :places-top (set
-                             (map :source
-                                  (remove #(or (contains? (:trans ?b) (:source %))
-                                               (contains? (:places* ?b) (:source %)))
-                                          (:trans-in&outs ?b)))))
+      (assoc ?b :places-top
+             (into (set (remove #(empty? (paths-to pn (:IMM ?b) % 6)) (map :name places)))
+                   (remove #(empty? (paths-to pn % (:IMM ?b) 6)) (map :name places))))
+      (assoc ?b :tight? (when (contains? (:places-top ?b) (:place-bottom ?b)) (:place-bottom ?b)))
+      (assoc ?b :places-top (set (remove #(= % (:place-bottom ?b)) (:places-top ?b))))
       (assoc ?b :top-arcs (filter #(or (contains? (:places-top ?b) (:source %))
                                        (contains? (:places-top ?b) (:target %))) arcs))
       (assoc ?b :places-in&outs (vec (clojure.set/difference
@@ -191,25 +137,131 @@
       (reduce (fn [b key] (update-in b [key] vec)) ?b [:trans :places-top :places-ins :places*])
       (dissoc ?b :trans-in&outs))))
 
-(declare join-cmd-aux join-cmd-first&last join-cmd-middles join-cmd-every)
+(defn join-cmd-middles
+  [owner binds pn in-front & {:keys [tight?]}] ; POD More to do here for :tight?
+  (let [owner-t (:source (some #(when (= owner (:target %)) %) (:places-ins binds)))
+        rate (:rate (name2obj pn owner-t))
+        imm (:IMM binds)
+        others (remove #(= % owner) (:places* binds))]
+    (map (fn [ahead]
+           (let [name (new-name-ahead imm owner ahead)]
+             (as-> (join-cmd-every name owner binds pn) ?cmd
+               (assoc ?cmd
+                      :receive-inhibitors (vec (clojure.set/difference (set others) (set ahead)))
+                      :send&receive-activators ahead
+                      :send-activators (vector owner))
+               ;; Remove stuff from :psv-trans&places that isn't part of middles
+               (assoc ?cmd
+                      :psv-trans&places
+                      (remove #(or (and (= :normal (:type %))    (= owner (:target %)) (= name (:source %)))
+                                   #_(and (= :inhibitor (:type %)) (= owner (:source %)) (= name (:target %))))
+                              (:psv-trans&places ?cmd))))))
+         (combo/combinations others in-front))))
+
+(defn join-cmd-every
+  [name owner binds pn]
+  (let [owner-t (:source (some #(when (= owner (:target %)) %) (:places-ins binds)))
+        rate (:rate (name2obj pn owner-t))
+        receive-preserves (filter #(= owner (:source %)) (:places-in&outs binds))
+        send-preserves (filter #(= owner (:target %)) (:places-in&outs binds))]
+    {:name name
+     :tight? (:tight? binds)
+     :owner owner
+     :rate rate ; :psv-trans&places reuse existing arcs, renaming
+     :psv-trans&places (into (map #(assoc % :target name) receive-preserves) 
+                             (map #(assoc % :source name) send-preserves))
+     :receive-tops (filter #(first (paths-to pn % owner 4)) (:places-top binds))}))
+
+(defn join-cmd-first&last
+  [owner binds pn first?]
+  (let [imm (:IMM binds)
+        others (remove #(= % owner) (:places* binds))
+        name (new-name imm owner (if first? "-first" "-last"))]
+    (as-> (join-cmd-every name owner binds pn) ?cmd
+      (if first?
+        (assoc ?cmd :receive-inhibitors others)
+        (as-> ?cmd ?c
+          (assoc ?c
+                 :psv-trans&places
+                 (remove #(or (and (= :normal (:type %))    (= owner (:target %)) (= name (:source %)))
+                              (and (= :inhibitor (:type %)) (= owner (:source %)) (= name (:target %))))
+                         (:psv-trans&places ?c)))
+          (assoc ?c
+                 :receive-inhibitors (vector owner)
+                 :receive-activators others
+                 :send-activators (vector (:place-bottom binds))))))))
+
+(defn join-cmd-first&last-tight
+  [owner binds pn first?]
+  (let [imm (:IMM binds)
+        others (remove #(= % owner) (:places* binds))
+        name (new-name imm owner (if first? "-first" "-last"))
+        problem? (contains? (set (:places-top binds)) owner)
+        start (join-cmd-every name owner binds pn)]
+    (if problem?
+      (if first?
+        (as-> start ?cmd
+          (assoc ?cmd
+                 :problem true
+                 :receive-activators (vector (:tight? ?cmd))
+                 :send-activators (vector owner)
+                 :receive-inhibitors others))
+        (-> start
+            (assoc
+             :problem true
+             :receive-activators (conj others (:place-bottom binds))
+             :send-activators (vector (:place-bottom binds)))))
+      (if first?
+        (as-> start ?cmd
+          (assoc ?cmd
+                 :problem false
+                 :send-activators (vector owner (:tight? ?cmd))
+                 :receive-activators (vector (:tight? ?cmd))
+                 :psv-trans&places 
+                 (let [repl (first (:receive-tops ?cmd))] ; POD hack!
+                   (map #(cond (= owner (:target %))
+                               (assoc % :target repl :type :normal)
+                               (= owner (:source %))
+                               (assoc % :source repl :type :normal)
+                               :else %)
+                   (:psv-trans&places ?cmd)))
+                 :receive-inhibitors (conj others owner))
+          (dissoc ?cmd :receive-tops))
+        (as-> start ?cmd
+            (assoc ?cmd
+                   :problem false
+                   :psv-trans&places 
+                   (let [repl (first (:receive-tops ?cmd))] ; POD hack!
+                     (map #(cond (= owner (:target %))
+                                 (assoc % :target repl :type :normal)
+                                 (= owner (:source %))
+                                 (assoc % :source repl :type :normal)
+                                 :else %)
+                          (:psv-trans&places ?cmd)))
+                   :receive-inhibitors (vector owner (:tight? ?cmd))
+                   :receive-activators others
+                   :send-activators (vector (:place-bottom binds)))
+            (dissoc ?cmd :receive-tops))))))
+
+(declare join-cmd-aux join-cmd-first&last join-cmd-first&last-tight join-cmd-middles join-cmd-every)
 (defn join-cmd
   "Creates 'command vectors' each element of which provides instructions 
    concerning how to create a new transition and its arcs."
   [pn binds owner]
-  (let [problem (some #(when (= % (:name (:place-bottom binds))) %) (:places-top binds))]
-    (join-cmd-aux pn binds owner :tight? problem)))
+  (join-cmd-aux pn binds owner))
 
 (defn join-cmd-aux
-  [pn binds owner & {:keys [tight?]}]
-  (let [m1 (dec (count (:places* binds)))]
+  [pn binds owner]
+  (let [m1 (dec (count (:places* binds)))
+        tight? (:tight? binds)
+        f&l-fn (if tight? join-cmd-first&last-tight join-cmd-first&last)]
     (reduce (fn [accum in-front]
               (cond
-                (= in-front 0)  (conj accum (join-cmd-first&last owner binds pn true  :tight? tight?)),
-                (= in-front m1) (conj accum (join-cmd-first&last owner binds pn false :tight? tight?)),
+                (= in-front 0)  (conj accum (f&l-fn owner binds pn true)),
+                (= in-front m1) (conj accum (f&l-fn owner binds pn false)),
                 :else           (into accum (join-cmd-middles owner binds pn in-front))))
             []
             (range (inc m1)))))
-
 
 (defn find-joins
   "Return IMMs that have multiple inbound arcs."
@@ -222,31 +274,22 @@
             (:transitions pn))))
 
 (defn join2spn-adds [pn cmd binds]
+  (reset-ids! pn)
   (as-> pn ?pn
     (add-pn ?pn {:name (:name cmd) :tid (next-tid ?pn)
                  :type :exponential :rate (:rate cmd)})
-    ;;(when (:tight? cmd)
-    ;;(eliminate-pn pn ar)) ?pn (:top-arcs b)))  <=====  TODO
-    (if (:tight? cmd) ; On tight, both of the trans above the imm get replaced
-      (reduce (fn [pn tr]
-                (reduce (fn [pn ar] (eliminate-pn pn ar))
-                        pn
-                        (filter #(or (= (:source %) (:name tr)) (= (:target %) (:name tr))) (:arcs pn))))
-              ?pn
-              (:trans binds))
-      ?pn)
-    (reduce (fn [pn receiver] ; POD 2017-02-13
+    (reduce (fn [pn receiver]
               (add-pn pn (make-arc pn receiver (:name cmd) :debug :receive-tops)))
             ?pn
             (:receive-tops cmd))
     (reduce (fn [pn psv]
               (add-pn pn (make-arc pn (:source psv) (:target psv) 
                                    :type (:type psv) :multiplicity (:multiplicity psv)
-                                   :debug (:debug :psv-trans&places))))
+                                   :debug :psv-trans&places)))
             ?pn
             (:psv-trans&places cmd))
     (reduce (fn [pn activ]
-              (add-pn ?pn (make-arc ?pn (:name cmd) activ :debug :send-activators)))
+              (add-pn pn (make-arc ?pn (:name cmd) activ :debug :send-activators)))
             ?pn
             (:send-activators cmd))
     (reduce (fn [pn inhib]
@@ -409,8 +452,10 @@
 ;;;(def m (read-pnml "data/join3.xml"))
 ;;;(def bbb (join-binds m (first (find-joins m))))
 ;;;(ppprint (join-cmd m bbb (first (:places* bbb))))
-
-
+(defn arc-involves
+  [pn name]
+  (filter #(or (= name (:source %)) (= name (:target %)))
+          (:arcs pn)))
 
 (defn zero-step
   [filename]
@@ -432,13 +477,13 @@
   (-> (read-pnml filename)
       (gspn2spn)))
 
+(declare pn-steady-state)
 (defn run-step
   [filename]
   (-> (read-pnml filename)
       (gspn2spn)
       (pn-steady-state)))
 
-      
 (defn find-arc
   [pn source target]
   (filter #(and (= (:source %) source)
@@ -462,7 +507,7 @@
 (defn calc-rate 
   "Return the transition rate between marking M and Mp."
   [pn m mp]
-  (let [graph (:reach pn)]
+  (let [graph (:M2Mp pn)]
     (if (= m mp)
       (- (reduce #(+ %1 (:rate %2)) 0.0 (filter #(and (= (:M %) m) (not (= (:Mp %) m))) graph)))
       (reduce #(+ %1 (:rate %2)) 0.0 (filter #(and (= (:M %) m) (= (:Mp %) mp)) graph)))))
@@ -472,7 +517,7 @@
   [pn & {:keys [force-ordering]}] ; force-ordering is for debugging.
   (if (:failure pn)
     pn
-    (let [states (or force-ordering (distinct (map :M (:reach pn))))
+    (let [states (or force-ordering (distinct (map :M (:M2Mp pn))))
           size (count states)]
       (as-> pn ?pn
         (assoc ?pn :Q ; POD someday, this will be parametric. 
@@ -521,9 +566,5 @@
                              0.0
                              steady)))
                  mk))))
-
-
-
-
 
                              

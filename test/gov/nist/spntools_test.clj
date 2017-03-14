@@ -170,10 +170,10 @@
 ;;;==========================================================================
 (defn get-misc-arc-count
   [file]
-  [(count (:reach (reachability (zero-step file))))
-   (count (:reach (reachability (one-step file))))
-   (count (:reach (reachability (two-step file))))
-   (count (:reach (reachability (full-step file))))])
+  [(count (:M2Mp (reachability (zero-step file))))
+   (count (:M2Mp (reachability (one-step file))))
+   (count (:M2Mp (reachability (two-step file))))
+   (count (:M2Mp (reachability (full-step file))))])
 
 (deftest reachability-test
   (testing "Reachability graph size"
@@ -270,7 +270,7 @@
         (as-> (two-step "data/m6.xml") ?pn
           (reorder-places ?pn [:Pact1 :Preq1 :Pacc1 :Pidle :Pact2 :Preq2 :Pacc2])
           (reachability ?pn)
-          (distinct (map :M (:reach ?pn))))))))
+          (distinct (map :M (:M2Mp ?pn))))))))
         
 ;;;========================================================
 ;;; Infinitesimal Generator
@@ -379,14 +379,46 @@
                     (=* val (get correct key) 0.001)) result)))))
 
 
+(deftest tight-join-first-bind
+  (testing "Tight join binding")
+  (let [m (read-pnml "data/tight-join.xml")]
+        (is (= (as-> (join-binds m (first (find-joins m))) ?b
+                 (update ?b :places-in&outs set)
+                 (update ?b :places* set)
+                 (update ?b :top-arcs set)
+                 (update ?b :places-ins set)
+                 (update ?b :places-top set)
+                 (update ?b :imm-ins set)
+                 (update ?b :trans set))
+               {:places-in&outs
+                #{{:aid 11, :source :m1-complete-job, :target :buffer, :name :aa-11, :type :normal, :multiplicity 1}
+                  {:aid 8, :source :buffer, :target :m1-complete-job, :name :aa-8, :type :inhibitor, :multiplicity 1}
+                  {:aid 13, :source :m2-busy, :target :m2-complete-job, :name :aa-13, :type :normal, :multiplicity 1}},
+                :IMM :m2-start-job,
+                :places* #{:m2-starved :buffer},
+                :place-bottom-in {:aid 16, :source :m2-start-job, :target :m2-busy, :name :aa-16, :type :normal, :multiplicity 1},
+                :top-arcs
+                #{{:aid 15, :source :m2-complete-job, :target :m2-starved, :name :aa-15, :type :normal, :multiplicity 1}
+                  {:aid 12, :source :m1-complete-job, :target :m1-busy, :name :aa-12, :type :normal, :multiplicity 1}
+                  {:aid 10, :source :m1-busy, :target :m1-complete-job, :name :aa-10, :type :normal, :multiplicity 1}
+                  {:aid 14, :source :m2-starved, :target :m2-start-job, :name :aa-14, :type :normal, :multiplicity 1}},
+                :tight? :m2-busy,
+                :places-ins
+                #{{:aid 11, :source :m1-complete-job, :target :buffer, :name :aa-11, :type :normal, :multiplicity 1}
+                  {:aid 15, :source :m2-complete-job, :target :m2-starved, :name :aa-15, :type :normal, :multiplicity 1}},
+                :place-bottom :m2-busy,
+                :places-top #{:m2-starved :m1-busy},
+                :imm-ins
+                #{{:aid 14, :source :m2-starved, :target :m2-start-job, :name :aa-14, :type :normal, :multiplicity 1}
+                  {:aid 9, :source :buffer, :target :m2-start-job, :name :aa-9, :type :normal, :multiplicity 1}},
+                :trans #{:m1-complete-job :m2-complete-job}}))))
 
-
-
-
-
-      
-
-
+(deftest steady-state-properties-3rd-step-vanishing-place
+  (testing "Steady-state properties on a PN that reduces to a self-loop"
+    (let [result (:avg-tokens-on-place (pn-steady-state (read-pnml "data/tight-join.xml")))
+          correct {:buffer 0.16811 :m1-busy 1 :m2-busy 0.46735 :m2-starved 0.53265 }]
+      (is (every? (fn [[key val]]
+                    (=* val (get correct key) 0.001)) result)))))
 
 
 

@@ -69,14 +69,15 @@
       ;(println "Next " (map #(list (:M %) (:fire %)) nexts)) ; POD is :tid helpful? I like :name!
       (swap! *visited-links* into (map #(list (:M %) (:fire %)) nexts)) ; POD looks wasteful
       (as-> pn ?pn
-        (update-in ?pn [:reach] into (vec nexts))
+        (update-in ?pn [:M2Mp] into (vec nexts))
         (reduce (fn [pn nx] (reachability-aux pn (:Mp nx)))
                 ?pn
                 nexts)))))
 
+
 (declare renumber-pids)
 (defn reachability
-  "Calculate the reachability of the argument gspn or spn." 
+  "Calculate the reachability of the argument graph." 
   [pn]
   (binding [*visited-links* (atom [])]
     (let [marking (initial-marking pn)
@@ -85,20 +86,42 @@
                 (assoc ?pn :marking-key (:marking-key marking))
                 (assoc ?pn :initial-marking (:initial-marking marking)))]
       (as-> pnn ?pn
-        (assoc ?pn :reach [])
+        (assoc ?pn :M2Mp [])
         (reachability-aux pnn (:initial-marking pnn))
-        (update-in ?pn [:reach] vec)
-        (let [m  (set (distinct (map #(:M %) (:reach ?pn))))
-              mp (set (distinct (map #(:Mp %) (:reach ?pn))))
+        (update-in ?pn [:M2Mp] vec)
+        (let [m  (set (distinct (map #(:M %) (:M2Mp ?pn))))
+              mp (set (distinct (map #(:Mp %) (:M2Mp ?pn))))
               m-mp (clojure.set/difference m mp)
               mp-m (clojure.set/difference mp m)]
           (if (and (empty? m-mp) (empty? mp-m))
             ?pn
             (assoc ?pn :failure {:reason :absorbing-states
                                  :data {:m-not-mp m-mp :mp-not-m mp-m}})))
-        (if (and (empty? (:reach ?pn)) (not (:failure ?pn)))
+        (if (and (empty? (:M2Mp ?pn)) (not (:failure ?pn)))
           (assoc ?pn :failure {:reason :null-reachability-graph})
           ?pn)))))
+
+;;; (def m (reachability (pnml/read-pnml "data/marsan69.xml")))
+
+(defn tangible? [pn m]
+  "Return true if marking M is tangible. A marking is tangible if it
+   enables an immediate transitions. "
+  (let [trans (map :fire (filter #(= m (:M %)) (:M2Mp pn)))]
+    (not-any? #(immediate? pn %) trans)))
+
+(defn trs
+  "Associate the tangible reachability set with the argument Petri net."
+  [pn]
+  (assoc pn :TRS (vec (filter #(tangible? pn %) (distinct (map :M (:M2Mp pn)))))))
+
+(defn trg
+  "Associate the tangible reachability graph with the argument Petri net.
+   Its nodes are the TRS. It has one arc for each possible PATH in the corresponding
+   RG between the same two nodes. There is some complication for the ECS."
+  [pn]
+  (for [from (:trs pn)
+        to (:trs pn)] :foo))
+  
 
 ;;; Reachability-specific utilities ---------------------------------------------
 (defn markings2source

@@ -4,11 +4,11 @@
 
 ;;;=== General =========================
 (defn ppp []
-  (binding [clojure.pprint/*print-right-margin* 130]
+  (binding [clojure.pprint/*print-right-margin* 150]
     (pprint *1)))
 
 (defn ppprint [arg]
-  (binding [clojure.pprint/*print-right-margin* 130]
+  (binding [clojure.pprint/*print-right-margin* 150]
     (pprint arg)))
 
 ;;;=== Petri Nets =========================
@@ -43,21 +43,28 @@
    (some #(when (= name (:name %)) %) (:transitions pn))
    (some #(when (= name (:name %)) %) (:arcs pn))))
 
+(def ^:dynamic *path-to* nil)
+(def ^:dynamic *visited* nil)
 (defn follow-path
   "Return a sequence of places, transitions, arcs forward of OBJ."
   [pn obj]
   (cond (:tid obj) (arcs-outof pn (:name obj)),
         (:pid obj) (arcs-outof pn (:name obj)),
-        (:aid obj) (list (name2obj pn (:target obj)))))
+        (:aid obj) (if (contains? @*visited* (:target obj))
+                     nil
+                     (do (swap! *visited* conj (:target obj))
+                         (list (name2obj pn (:target obj)))))))
 
 (defn follow-path-back
   "Return a sequence of places, transitions, arcs forward of OBJ."
   [pn obj]
   (cond (:tid obj) (arcs-into pn (:name obj)),
         (:pid obj) (arcs-into pn (:name obj)),
-        (:aid obj) (list (name2obj pn (:source obj)))))
+        (:aid obj) (if (contains? @*visited* (:source obj))
+                     nil
+                     (do (swap! *visited* conj (:source obj))
+                         (list (name2obj pn (:source obj)))))))
 
-(def ^:dynamic *path-to* nil)
 (defn paths-to-aux
   [pn here to nsteps & {:keys [so-far back?] :or {so-far []}}]
   (cond (= nsteps 0)
@@ -72,10 +79,11 @@
                         :back? back?))))
 
 (defn paths-to
-  "Return a path from FROM to TO (both are names of places or transitions) 
+  "Return the paths from FROM to TO (both are names of places or transitions) 
    in exactly STEPS steps (counting places, transitions and arcs)."
   [pn from to nsteps & {:keys [back?]}]
-  (binding [*path-to* (atom [])]
+  (binding [*path-to* (atom [])
+            *visited* (atom #{from})]
     (paths-to-aux pn (name2obj pn from) to nsteps :back? back?)
     @*path-to*))
 
@@ -111,17 +119,15 @@
         (:aid elem) ; It is an arc
         (assoc pn :arcs (conj (:arcs pn) elem))))
 
-(defn next-tid [pn]
-  (if (empty? (:transitions pn))
-    1
-    (inc (apply max (map :tid (:transitions pn))))))
-
 (def +diag+ (atom nil))
+(def +next-tid+ (atom 0))
+(def +next-aid+ (atom 0))
+(defn reset-ids! [pn]
+  (reset! +next-tid+ (if (empty? (:transitions pn)) 0 (apply max (map :tid (:transitions pn)))))
+  (reset! +next-aid+ (if (empty? (:arcs pn)) 0 (apply max (map :aid (:arcs pn))))))
 
-(defn next-aid [pn]
-  (if (empty? (:arcs pn))
-    1
-    (inc (apply max (map :aid (:arcs pn))))))
+(defn next-tid [pn] (swap! +next-tid+ inc))
+(defn next-aid [pn] (swap! +next-aid+ inc))
 
 (defn new-name
   "Return the string naming the keyword."
