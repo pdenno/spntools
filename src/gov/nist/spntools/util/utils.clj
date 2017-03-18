@@ -87,8 +87,10 @@
     (paths-to-aux pn (name2obj pn from) to nsteps :back? back?)
     @*path-to*))
 
-(defn pn? [obj]
-  (and (:places obj) (:transitions obj) (:arcs obj)))
+(defn pn?
+  "If the argument is a Petri net, return it; otherwise return false."
+  [obj]
+  (and (:places obj) (:transitions obj) (:arcs obj) obj))
 
 (defn arc? [obj] (:aid obj))
 (defn place? [obj] (:pid obj))
@@ -122,12 +124,15 @@
 (def +diag+ (atom nil))
 (def +next-tid+ (atom 0))
 (def +next-aid+ (atom 0))
+(def +next-pid+ (atom 0))
 (defn reset-ids! [pn]
   (reset! +next-tid+ (if (empty? (:transitions pn)) 0 (apply max (map :tid (:transitions pn)))))
-  (reset! +next-aid+ (if (empty? (:arcs pn)) 0 (apply max (map :aid (:arcs pn))))))
+  (reset! +next-aid+ (if (empty? (:arcs pn)) 0 (apply max (map :aid (:arcs pn)))))
+  (reset! +next-pid+ (if (empty? (:places pn)) 0 (apply max (map :pid (:places pn))))))
 
 (defn next-tid [pn] (swap! +next-tid+ inc))
 (defn next-aid [pn] (swap! +next-aid+ inc))
+(defn next-pid [pn] (swap! +next-pid+ inc))
 
 (defn new-name
   "Return the string naming the keyword."
@@ -149,7 +154,22 @@
                        :or {type :normal aid (next-aid pn) multiplicity 1}}]
   (as-> {:aid aid :source source :target target :name (keyword (str "aa-" aid))
          :type type :multiplicity multiplicity} ?ar
-      (if debug (assoc ?ar :debug debug) ?ar)))
+    (if debug (assoc ?ar :debug debug) ?ar)))
+
+(defn make-place
+  [pn & {:keys [name pid initial-marking]
+         :or {name (keyword (str "Place-" (inc @+next-pid+)))
+              pid (next-pid pn)
+              initial-marking 0}}]
+  {:name name :pid pid :initial-marking initial-marking})
+
+(defn make-transition
+  [pn & {:keys [name tid rate type]
+         :or {name (keyword (str "Trans-" (inc @+next-tid+)))
+              type :exponential
+              tid (next-tid pn)
+              rate 1.0}}]
+  {:name name :tid tid :type type :rate rate})
 
 (defn initial-marking
   "Return a map {:marking-key <vector of place names> :initial-marking <vector of integers>}"
@@ -181,6 +201,28 @@
   (every? (fn [ans] ans)
           (map #(< (- %2 tol) %1 (+ %2 tol)) v1 v2)))
 
+;;; POD This check should not be necessary in bug-free code. 
+(defn bipartite? [pn]
+  (every? #(or (and (:pid (name2obj pn (:source %)))
+                    (:tid (name2obj pn (:target %))))
+               (and (:pid (name2obj pn (:target %)))
+                    (:tid (name2obj pn (:source %)))))
+          (:arcs pn)))
+
+(defn enter-and-exit-places? [pn]
+  "A state is absorbing in pjj = 1. This doesn't test that directly (steady-state calc does).
+   This only checks that every place has arcs in and arcs out."
+  (every? (fn [pl] (and (some #(= (:source %) pl) (:arcs pn))
+                        (some #(= (:target %) pl) (:arcs pn))))
+          (map :name (:places pn))))
+
+(defn enter-and-exit-trans? [pn]
+  "A state is absorbing in pjj = 1. This doesn't test that directly (steady-state calc does).
+   This only checks that every place has arcs in and arcs out."
+  (every? (fn [pl] (and (some #(= (:source %) pl) (:arcs pn))
+                        (some #(= (:target %) pl) (:arcs pn))))
+          (map :name (:transitions pn))))
+
 (defn validate-pn
   [pn]
   (let [failures (atom [])]
@@ -193,7 +235,7 @@
                        (:tid (name2obj pn (:target ar))))
                   (and (:pid (name2obj pn (:target ar)))
                        (:tid (name2obj pn (:source ar)))))
-            (swap! failures conj {:reason "Arc not pointing to a place or transition" :arc ar})))
+            (swap! failures conj {:reason "PN not bipartite" :arc ar})))
         (recur (rest arcs))))
     ;; Every place and transition has arcs in and arcs out. 
     @failures))

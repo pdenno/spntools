@@ -178,4 +178,17 @@
                         (assoc-in order [id :pid] id))
                       order
                       (range (count order)))))))
+
+(defn possible-live? [pn]
+  "A Petri net certainly isn't live if it doesn't have a token in some place.
+   This can be checked before doing a reachability graph."
+  (some #(> (:initial-marking %) 0) (:places pn)))
+  
+(defn live? [pn]
+  "A Petri net is live if all its transitions are live (enabled in some marking)
+   Reachability has already been calculated."
+  (let [m2mp (:M2Mp pn)]
+    (every?
+     (fn [tr] (some #(= tr (:fire %)) m2mp))
+     (map :name (:transitions pn)))))
   
