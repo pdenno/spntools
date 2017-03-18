@@ -2,6 +2,28 @@
   (:require [clojure.data.xml :as xml :refer (parse-str)]
             [clojure.pprint :refer (cl-format pprint pp)]))
 
+(defmacro pn-ok->
+  "Macro to thread a Petri net through forms binding VAR until the end is reach or it picks up a :failure key."
+  [pn & forms]
+  (let [g (gensym)
+        steps (map (fn [step] `(if (:failure ~g) ~g (-> ~g ~step)))
+                   forms)]
+    `(let [~g ~pn
+           ~@(interleave (repeat g) (butlast steps))]
+       ~(if (empty? steps)
+          g
+          (last steps)))))
+
+(defmacro as-pn-ok->
+  [pn name & forms]
+  (let [steps (map (fn [step] `(if (:failure ~name) ~name ~step))
+                   forms)]
+    `(let [~name ~pn
+           ~@(interleave (repeat name) (butlast steps))]
+       ~(if (empty? forms)
+          name
+          (last forms)))))
+
 ;;;=== General =========================
 (defn ppp []
   (binding [clojure.pprint/*print-right-margin* 150]
@@ -212,16 +234,20 @@
 (defn enter-and-exit-places? [pn]
   "A state is absorbing in pjj = 1. This doesn't test that directly (steady-state calc does).
    This only checks that every place has arcs in and arcs out."
-  (every? (fn [pl] (and (some #(= (:source %) pl) (:arcs pn))
-                        (some #(= (:target %) pl) (:arcs pn))))
-          (map :name (:places pn))))
+  (if (every? (fn [pl] (and (some #(= (:source %) pl) (:arcs pn))
+                            (some #(= (:target %) pl) (:arcs pn))))
+              (map :name (:places pn)))
+    pn
+    (assoc pn :failure {:reason :enter-and-exit-places})))
 
 (defn enter-and-exit-trans? [pn]
   "A state is absorbing in pjj = 1. This doesn't test that directly (steady-state calc does).
    This only checks that every place has arcs in and arcs out."
-  (every? (fn [pl] (and (some #(= (:source %) pl) (:arcs pn))
-                        (some #(= (:target %) pl) (:arcs pn))))
-          (map :name (:transitions pn))))
+  (if (every? (fn [pl] (and (some #(= (:source %) pl) (:arcs pn))
+                            (some #(= (:target %) pl) (:arcs pn))))
+              (map :name (:transitions pn)))
+    pn
+    (assoc pn :failure {:reason :enter-and-exit-trans})))
 
 (defn validate-pn
   [pn]

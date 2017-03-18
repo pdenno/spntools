@@ -1,6 +1,6 @@
 (ns gov.nist.spntools-test
   (:require [clojure.test :refer :all]
-            [gov.nist.spntools :refer :all]
+            [gov.nist.spntools.core :refer :all]
             [gov.nist.spntools.util.pnml :refer :all]
             [gov.nist.spntools.util.utils :refer :all]
             [gov.nist.spntools.util.reach :refer :all]))

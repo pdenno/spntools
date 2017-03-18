@@ -70,36 +70,34 @@
       (swap! *visited-links* into (map #(list (:M %) (:fire %)) nexts)) ; POD looks wasteful
       (as-> pn ?pn
         (update-in ?pn [:M2Mp] into (vec nexts))
-        (reduce (fn [pn nx] (reachability-aux pn (:Mp nx)))
+        (reduce (fn [pn nx] (if (:failure pn) pn (reachability-aux pn (:Mp nx))))
                 ?pn
                 nexts)))))
-
 
 (declare renumber-pids)
 (defn reachability
   "Calculate the reachability of the argument graph." 
   [pn]
   (binding [*visited-links* (atom [])]
-    (let [marking (initial-marking pn)
-          pnn (as-> pn ?pn
-                (renumber-pids ?pn) ; initial-marking sorts the by pid too. 
-                (assoc ?pn :marking-key (:marking-key marking))
-                (assoc ?pn :initial-marking (:initial-marking marking)))]
-      (as-> pnn ?pn
-        (assoc ?pn :M2Mp [])
-        (reachability-aux pnn (:initial-marking pnn))
-        (update-in ?pn [:M2Mp] vec)
-        (let [m  (set (distinct (map #(:M %) (:M2Mp ?pn))))
-              mp (set (distinct (map #(:Mp %) (:M2Mp ?pn))))
-              m-mp (clojure.set/difference m mp)
-              mp-m (clojure.set/difference mp m)]
-          (if (and (empty? m-mp) (empty? mp-m))
-            ?pn
-            (assoc ?pn :failure {:reason :absorbing-states
-                                 :data {:m-not-mp m-mp :mp-not-m mp-m}})))
-        (if (and (empty? (:M2Mp ?pn)) (not (:failure ?pn)))
-          (assoc ?pn :failure {:reason :null-reachability-graph})
-          ?pn)))))
+    (let [marking (initial-marking pn)]
+      (as-pn-ok-> pn ?pn
+                  (renumber-pids ?pn) ; initial-marking sorts the by pid too. 
+                  (assoc ?pn :marking-key (:marking-key marking))
+                  (assoc ?pn :initial-marking (:initial-marking marking))
+                  (assoc ?pn :M2Mp [])
+                  (reachability-aux ?pn (:initial-marking ?pn))
+                  (update ?pn :M2Mp vec)
+                  (let [m  (set (distinct (map #(:M %) (:M2Mp ?pn))))
+                        mp (set (distinct (map #(:Mp %) (:M2Mp ?pn))))
+                        m-mp (clojure.set/difference m mp)
+                        mp-m (clojure.set/difference mp m)]
+                    (if (and (empty? m-mp) (empty? mp-m))
+                      ?pn
+                      (assoc ?pn :failure {:reason :absorbing-states
+                                           :data {:m-not-mp m-mp :mp-not-m mp-m}})))
+                  (if (empty? (:M2Mp ?pn))
+                    (assoc ?pn :failure {:reason :null-reachability-graph})
+                    ?pn)))))
 
 ;;; (def m (reachability (pnml/read-pnml "data/marsan69.xml")))
 
@@ -182,13 +180,17 @@
 (defn possible-live? [pn]
   "A Petri net certainly isn't live if it doesn't have a token in some place.
    This can be checked before doing a reachability graph."
-  (some #(> (:initial-marking %) 0) (:places pn)))
+  (if (some #(> (:initial-marking %) 0) (:places pn))
+    pn
+    (assoc pn :failure {:reason :possible-live})))
   
 (defn live? [pn]
   "A Petri net is live if all its transitions are live (enabled in some marking)
    Reachability has already been calculated."
   (let [m2mp (:M2Mp pn)]
-    (every?
-     (fn [tr] (some #(= tr (:fire %)) m2mp))
-     (map :name (:transitions pn)))))
+    (if (every?
+         (fn [tr] (some #(= tr (:fire %)) m2mp))
+         (map :name (:transitions pn)))
+      pn
+      (assoc pn :failure {:reason :live?}))))
   

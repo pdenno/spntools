@@ -495,11 +495,11 @@
 (defn pn-steady-state
   [pn]
   "Calculate and add steady-state properties to the argument PN."
-  (-> pn
-      (gspn2spn)
-      (reachability)
-      (Q-matrix)
-      (steady-state-props)))
+  (pn-ok-> pn
+           gspn2spn
+           reachability
+           Q-matrix
+           steady-state-props))
 
 ;;; The transition rate M --> Mp  (i not= j) is the sum of the firing rates of
 ;;; the transitions enabled by the markings Mi that generate Mj. 
