@@ -194,7 +194,8 @@
   {:name name :tid tid :type type :rate rate})
 
 (defn initial-marking
-  "Return a map {:marking-key <vector of place names> :initial-marking <vector of integers>}"
+  "Return a map {:marking-key <vector of place names> :initial-marking <vector of integers>}
+   This doesn't care what the actual pid numbers are, just there relative ordering."
   [pn]
   (let [sorted (sort #(< (:pid %1) (:pid %2)) (:places pn))]
     {:marking-key (vec (map :name sorted))

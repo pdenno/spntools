@@ -26,9 +26,9 @@
 (declare join2spn split2spn find-splits vanish2spn)
 (defn gspn2spn [pn]
   (-> pn
-   (split2spn)
-   (join2spn)
-   (vanish2spn)))
+      split2spn
+      join2spn
+      vanish2spn))
 
 ;;;   === ===  trans-in [multiple]
 ;;;     | |  place-ins [multiple]

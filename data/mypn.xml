@@ -1,0 +1,430 @@
+<?xml version="1.0" encoding="ISO-8859-1"?><pnml>
+<net id="Net-One" type="P/T net">
+<token id="Default" enabled="true" red="0" green="0" blue="0"/>
+<place id="buffer">
+<graphics>
+<position x="375.0" y="450.0"/>
+</graphics>
+<name>
+<value>buffer</value>
+<graphics>
+<offset x="20.0" y="5.0"/>
+</graphics>
+</name>
+<initialMarking>
+<value>Default,1</value>
+<graphics>
+<offset x="0.0" y="0.0"/>
+</graphics>
+</initialMarking>
+<capacity>
+<value>0</value>
+</capacity>
+</place>
+<place id="m1-blocked">
+<graphics>
+<position x="600.0" y="135.0"/>
+</graphics>
+<name>
+<value>m1-blocked</value>
+<graphics>
+<offset x="20.0" y="5.0"/>
+</graphics>
+</name>
+<initialMarking>
+<value>Default,0</value>
+<graphics>
+<offset x="0.0" y="0.0"/>
+</graphics>
+</initialMarking>
+<capacity>
+<value>0</value>
+</capacity>
+</place>
+<place id="m1-busy">
+<graphics>
+<position x="405.0" y="45.0"/>
+</graphics>
+<name>
+<value>m1-busy</value>
+<graphics>
+<offset x="20.0" y="5.0"/>
+</graphics>
+</name>
+<initialMarking>
+<value>Default,2</value>
+<graphics>
+<offset x="0.0" y="0.0"/>
+</graphics>
+</initialMarking>
+<capacity>
+<value>0</value>
+</capacity>
+</place>
+<place id="m2busy">
+<graphics>
+<position x="225.0" y="105.0"/>
+</graphics>
+<name>
+<value>m2busy</value>
+<graphics>
+<offset x="20.0" y="5.0"/>
+</graphics>
+</name>
+<initialMarking>
+<value>Default,1</value>
+<graphics>
+<offset x="0.0" y="0.0"/>
+</graphics>
+</initialMarking>
+<capacity>
+<value>0</value>
+</capacity>
+</place>
+<place id="m2-starved">
+<graphics>
+<position x="90.0" y="225.0"/>
+</graphics>
+<name>
+<value>m2-starved</value>
+<graphics>
+<offset x="20.0" y="5.0"/>
+</graphics>
+</name>
+<initialMarking>
+<value>Default,0</value>
+<graphics>
+<offset x="0.0" y="0.0"/>
+</graphics>
+</initialMarking>
+<capacity>
+<value>0</value>
+</capacity>
+</place>
+<transition id="m1-finished">
+<graphics>
+<position x="120.0" y="390.0"/>
+</graphics>
+<name>
+<value>m1-finished</value>
+<graphics>
+<offset x="20.0" y="5.0"/>
+</graphics>
+</name>
+<orientation>
+<value>90</value>
+</orientation>
+<rate>
+<value>1.0</value>
+</rate>
+<timed>
+<value>true</value>
+</timed>
+<infiniteServer>
+<value>false</value>
+</infiniteServer>
+<priority>
+<value>1</value>
+</priority>
+</transition>
+<transition id="m2-finished">
+<graphics>
+<position x="135.0" y="150.0"/>
+</graphics>
+<name>
+<value>m2-finished</value>
+<graphics>
+<offset x="20.0" y="5.0"/>
+</graphics>
+</name>
+<orientation>
+<value>90</value>
+</orientation>
+<rate>
+<value>1.0</value>
+</rate>
+<timed>
+<value>true</value>
+</timed>
+<infiniteServer>
+<value>false</value>
+</infiniteServer>
+<priority>
+<value>1</value>
+</priority>
+</transition>
+<transition id="tadd-1">
+<graphics>
+<position x="300.0" y="45.0"/>
+</graphics>
+<name>
+<value>tadd-1</value>
+<graphics>
+<offset x="20.0" y="5.0"/>
+</graphics>
+</name>
+<orientation>
+<value>90</value>
+</orientation>
+<rate>
+<value>1.0</value>
+</rate>
+<timed>
+<value>true</value>
+</timed>
+<infiniteServer>
+<value>false</value>
+</infiniteServer>
+<priority>
+<value>1</value>
+</priority>
+</transition>
+<transition id="tadd-2">
+<graphics>
+<position x="495.0" y="60.0"/>
+</graphics>
+<name>
+<value>tadd-2</value>
+<graphics>
+<offset x="20.0" y="5.0"/>
+</graphics>
+</name>
+<orientation>
+<value>90</value>
+</orientation>
+<rate>
+<value>1.0</value>
+</rate>
+<timed>
+<value>true</value>
+</timed>
+<infiniteServer>
+<value>false</value>
+</infiniteServer>
+<priority>
+<value>1</value>
+</priority>
+</transition>
+<transition id="tadd-3">
+<graphics>
+<position x="555.0" y="390.0"/>
+</graphics>
+<name>
+<value>tadd-3</value>
+<graphics>
+<offset x="20.0" y="5.0"/>
+</graphics>
+</name>
+<orientation>
+<value>90</value>
+</orientation>
+<rate>
+<value>1.0</value>
+</rate>
+<timed>
+<value>true</value>
+</timed>
+<infiniteServer>
+<value>false</value>
+</infiniteServer>
+<priority>
+<value>1</value>
+</priority>
+</transition>
+<transition id="Trans-11">
+<graphics>
+<position x="405.0" y="240.0"/>
+</graphics>
+<name>
+<value>Trans-11</value>
+<graphics>
+<offset x="20.0" y="5.0"/>
+</graphics>
+</name>
+<orientation>
+<value>90</value>
+</orientation>
+<rate>
+<value>1.0</value>
+</rate>
+<timed>
+<value>true</value>
+</timed>
+<infiniteServer>
+<value>false</value>
+</infiniteServer>
+<priority>
+<value>1</value>
+</priority>
+</transition>
+<arc id="buffer to m1-finished" source="buffer" target="m1-finished">
+<graphics/>
+<inscription>
+<value>Default,1</value>
+<graphics/>
+</inscription>
+<tagged>
+<value>false</value>
+</tagged>
+<arcpath id="000" x="372" y="458" curvePoint="false"/>
+<arcpath id="001" x="146" y="402" curvePoint="false"/>
+<type value="normal"/>
+</arc>
+<arc id="m1-blocked to tadd-3" source="m1-blocked" target="tadd-3">
+<graphics/>
+<inscription>
+<value>Default,1</value>
+<graphics/>
+</inscription>
+<tagged>
+<value>false</value>
+</tagged>
+<arcpath id="000" x="609" y="161" curvePoint="false"/>
+<arcpath id="001" x="566" y="396" curvePoint="false"/>
+<type value="normal"/>
+</arc>
+<arc id="m1-blocked to Trans-11" source="m1-blocked" target="Trans-11">
+<graphics/>
+<inscription>
+<value>Default,1</value>
+<graphics/>
+</inscription>
+<tagged>
+<value>false</value>
+</tagged>
+<arcpath id="000" x="599" y="154" curvePoint="false"/>
+<arcpath id="001" x="431" y="252" curvePoint="false"/>
+<type value="normal"/>
+</arc>
+<arc id="m1-busy to tadd-2" source="m1-busy" target="tadd-2">
+<graphics/>
+<inscription>
+<value>Default,1</value>
+<graphics/>
+</inscription>
+<tagged>
+<value>false</value>
+</tagged>
+<arcpath id="000" x="431" y="59" curvePoint="false"/>
+<arcpath id="001" x="491" y="72" curvePoint="false"/>
+<type value="normal"/>
+</arc>
+<arc id="m1-finished to m2-starved" source="m1-finished" target="m2-starved">
+<graphics/>
+<inscription>
+<value>Default,1</value>
+<graphics/>
+</inscription>
+<tagged>
+<value>false</value>
+</tagged>
+<arcpath id="000" x="131" y="396" curvePoint="false"/>
+<arcpath id="001" x="104" y="251" curvePoint="false"/>
+<type value="normal"/>
+</arc>
+<arc id="m2busy to tadd-1" source="m2busy" target="tadd-1">
+<graphics/>
+<inscription>
+<value>Default,1</value>
+<graphics/>
+</inscription>
+<tagged>
+<value>false</value>
+</tagged>
+<arcpath id="000" x="249" y="108" curvePoint="false"/>
+<arcpath id="001" x="311" y="61" curvePoint="false"/>
+<type value="normal"/>
+</arc>
+<arc id="m2-finished to m2busy" source="m2-finished" target="m2busy">
+<graphics/>
+<inscription>
+<value>Default,1</value>
+<graphics/>
+</inscription>
+<tagged>
+<value>false</value>
+</tagged>
+<arcpath id="000" x="161" y="162" curvePoint="false"/>
+<arcpath id="001" x="224" y="124" curvePoint="false"/>
+<type value="normal"/>
+</arc>
+<arc id="m2-starved to m2-finished" source="m2-starved" target="m2-finished">
+<graphics/>
+<inscription>
+<value>Default,1</value>
+<graphics/>
+</inscription>
+<tagged>
+<value>false</value>
+</tagged>
+<arcpath id="000" x="110" y="224" curvePoint="false"/>
+<arcpath id="001" x="146" y="166" curvePoint="false"/>
+<type value="normal"/>
+</arc>
+<arc id="tadd-1 to m1-busy" source="tadd-1" target="m1-busy">
+<graphics/>
+<inscription>
+<value>Default,1</value>
+<graphics/>
+</inscription>
+<tagged>
+<value>false</value>
+</tagged>
+<arcpath id="000" x="326" y="57" curvePoint="false"/>
+<arcpath id="001" x="402" y="57" curvePoint="false"/>
+<type value="normal"/>
+</arc>
+<arc id="tadd-2 to m1-blocked" source="tadd-2" target="m1-blocked">
+<graphics/>
+<inscription>
+<value>Default,1</value>
+<graphics/>
+</inscription>
+<tagged>
+<value>false</value>
+</tagged>
+<arcpath id="000" x="506" y="76" curvePoint="false"/>
+<arcpath id="001" x="599" y="138" curvePoint="false"/>
+<type value="normal"/>
+</arc>
+<arc id="tadd-3 to buffer" source="tadd-3" target="buffer">
+<graphics/>
+<inscription>
+<value>Default,1</value>
+<graphics/>
+</inscription>
+<tagged>
+<value>false</value>
+</tagged>
+<arcpath id="000" x="551" y="402" curvePoint="false"/>
+<arcpath id="001" x="401" y="456" curvePoint="false"/>
+<type value="normal"/>
+</arc>
+<arc id="Trans-11 to m1-blocked" source="Trans-11" target="m1-blocked">
+<graphics/>
+<inscription>
+<value/>
+<graphics/>
+</inscription>
+<tagged>
+<value/>
+</tagged>
+<arcpath id="000" x="431" y="252" curvePoint="false"/>
+<arcpath id="001" x="599" y="154" curvePoint="false"/>
+<type value="inhibitor"/>
+</arc>
+<arc id="Trans-11 to m1-busy" source="Trans-11" target="m1-busy">
+<graphics/>
+<inscription>
+<value>Default,1</value>
+<graphics/>
+</inscription>
+<tagged>
+<value>false</value>
+</tagged>
+<arcpath id="000" x="416" y="246" curvePoint="false"/>
+<arcpath id="001" x="416" y="71" curvePoint="false"/>
+<type value="normal"/>
+</arc>
+</net>
+</pnml>
