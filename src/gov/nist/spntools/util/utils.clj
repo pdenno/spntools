@@ -6,7 +6,7 @@
   "Macro to thread a Petri net through forms binding VAR until the end is reach or it picks up a :failure key."
   [pn & forms]
   (let [g (gensym)
-        steps (map (fn [step] `(if (:failure ~g) ~g (-> ~g ~step)))
+        steps (map (fn [step] `(if (contains? ~g :failure) ~g (-> ~g ~step)))
                    forms)]
     `(let [~g ~pn
            ~@(interleave (repeat g) (butlast steps))]
@@ -16,7 +16,7 @@
 
 (defmacro as-pn-ok->
   [pn name & forms]
-  (let [steps (map (fn [step] `(if (:failure ~name) ~name ~step))
+  (let [steps (map (fn [step] `(if (contains? ~name :failure) ~name ~step))
                    forms)]
     `(let [~name ~pn
            ~@(interleave (repeat name) (butlast steps))]
@@ -271,6 +271,7 @@
   "Calculate the size of the PN as a counting of its structural components."
   [pn]
   (+ (count (:places pn))
+     (reduce (fn [sum pl] (+ sum (:initial-marking pl))) 0 (:places pn))
      (count (:transitions pn))
      (count (:arc pn))))
 

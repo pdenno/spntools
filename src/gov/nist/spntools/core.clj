@@ -515,18 +515,17 @@
 (defn Q-matrix 
   "Calculate the infinitesimal generator matrix from the reachability graph"
   [pn & {:keys [force-ordering]}] ; force-ordering is for debugging.
-  (if (:failure pn)
-    pn
-    (let [states (or force-ordering (distinct (map :M (:M2Mp pn))))
-          size (count states)]
-      (as-> pn ?pn
-        (assoc ?pn :Q ; POD someday, this will be parametric. 
-               (vec (map
-                     (fn [irow]
-                       (vec (map (fn [icol] (calc-rate ?pn (nth states (dec irow)) (nth states (dec icol))))
-                                 (range 1 (inc size)))))
-                     (range 1 (inc size)))))
-        (assoc ?pn :states states)))))
+  (let [states (or force-ordering (distinct (map :M (:M2Mp pn))))
+        size (count states)]
+    (as-pn-ok-> pn ?pn
+      (if (< size 2) (assoc ?pn :failure {:error :Q-matrix :reason "Just one state."}) ?pn)
+      (assoc ?pn :Q ; POD someday, this will be parametric. 
+             (vec (map
+                   (fn [irow]
+                     (vec (map (fn [icol] (calc-rate ?pn (nth states (dec irow)) (nth states (dec icol))))
+                               (range 1 (inc size)))))
+                   (range 1 (inc size)))))
+      (assoc ?pn :states states))))
 
 (defn zero-pos
   "Return the position of the value closest to zero."
