@@ -267,3 +267,13 @@
     ;; Every place and transition has arcs in and arcs out. 
     @failures))
 
+(defn pn-size
+  "Calculate the size of the PN as a counting of its structural components."
+  [pn]
+  (+ (count (:places pn))
+     (count (:transitions pn))
+     (count (:arc pn))))
+
+(defn avg [vals]
+  (/ (float (apply + vals))
+     (count vals)))
