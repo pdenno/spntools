@@ -4,6 +4,9 @@
             [gov.nist.spntools.util.utils :refer :all]))
 
 ;;; To Do: Implement place capacity restrictions. (maybe)
+;;;        - Instead of all these +max-rs+ etc. might want a system wide ^:dynamice
+;;;          binding of variable values in a map. (Call the current things +default-...)
+
 (def +zippy+ (atom nil))
 
 (defn fireable? 
@@ -52,6 +55,7 @@
                (filter #(fireable? pn marking %) (map :name (:transitions pn))))))
 
 (def +k-bounded+ (atom 10)) ; Maybe better than (or addition to) k-bounded would be size of :M2Mp
+(def +max-rs+  "reachability set size" (atom 5000)) 
 (declare renumber-pids reach-checking)
 
 (defn reachability
@@ -68,8 +72,10 @@
           (loop [pn ?pnn
                  explore unexplored]
             (cond (empty? explore) pn,
-                  (some #(> % @+k-bounded+) (:Mp (first explore)))
+                  (some #(> % @+k-bounded+) (:Mp (first explore))) ; POD first? sufficient?
                   (assoc pn :failure {:reason :not-k-bounded :marking (:Mp (first explore))}),
+                  (> (count (:M2Mp pn)) @+max-rs+)
+                  (assoc pn :failure {:reason :exceeds-max-rs :set-size (count (:M2Mp pn))}),
                   :else
                   (let [nexts (next-markings pn (:Mp (first explore)))]
                     (recur
@@ -89,6 +95,9 @@
                 ?pn
                 (assoc ?pn :failure {:reason :absorbing-states
                                      :data {:m-not-mp m-mp :mp-not-m mp-m}}))
+              (if (> (count (:M2mp pn)) @+max-rs+)
+                (assoc pn :failure {:reason :exceeds-max-rs :set-size (count (:M2Mp ?pn))})
+                ?pn)
               (if (empty? (:M2Mp ?pn))
                 (assoc ?pn :failure {:reason :null-reachability-graph})
                 ?pn))))

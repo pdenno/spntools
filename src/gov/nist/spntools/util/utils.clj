@@ -273,7 +273,7 @@
   (+ (count (:places pn))
      (reduce (fn [sum pl] (+ sum (:initial-marking pl))) 0 (:places pn))
      (count (:transitions pn))
-     (count (:arc pn))))
+     (count (:arcs pn))))
 
 (defn avg [vals]
   (/ (float (apply + vals))
