@@ -511,13 +511,16 @@
     (if (= m mp)
       (- (reduce #(+ %1 (:rate %2)) 0.0 (filter #(and (= (:M %) m) (not (= (:Mp %) m))) graph)))
       (reduce #(+ %1 (:rate %2)) 0.0 (filter #(and (= (:M %) m) (= (:Mp %) mp)) graph)))))
-    
+
+(def +max-states+ (atom 200))
+
 (defn Q-matrix 
   "Calculate the infinitesimal generator matrix from the reachability graph"
   [pn & {:keys [force-ordering]}] ; force-ordering is for debugging.
   (let [states (or force-ordering (distinct (map :M (:M2Mp pn))))
         size (count states)]
     (as-pn-ok-> pn ?pn
+      (if (> size @+max-states+) (assoc ?pn :failure {:reason :Q-exceeds-max-states :states size}) ?pn)
       (if (< size 2) (assoc ?pn :failure {:error :Q-matrix :reason "Just one state."}) ?pn)
       (assoc ?pn :Q ; POD someday, this will be parametric. 
              (vec (map
