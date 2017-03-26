@@ -3,7 +3,10 @@
             [clojure.pprint :refer (cl-format pprint)]
             [gov.nist.spntools.util.utils :refer :all]))
 
-;;; To Do: Add label info to positions-from-file.
+;;; To Do:
+;;;       - Add label info to positions-from-file.
+;;;       - Update IMM :rate (weight) information to be probabilities so that
+;;;         these can be used in the on-the-fly state-space generation algorithm.
 
 (defn get-id [obj]
   (-> obj :attrs :id keyword))

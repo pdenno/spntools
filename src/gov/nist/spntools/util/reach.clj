@@ -4,14 +4,16 @@
             [gov.nist.spntools.util.utils :refer :all]))
 
 ;;; To Do: Implement place capacity restrictions. (maybe)
-;;;        - Instead of all these +max-rs+ etc. might want a system wide ^:dynamice
+;;;        * Instead of all these +max-rs+ etc. might want a system wide ^:dynamice
 ;;;          binding of variable values in a map. (Call the current things +default-...)
+;;;        * Why am I keeping :Mp and :fire ? Replace links with markings. 
 
 (def +zippy+ (atom nil))
 
 (defn fireable? 
   "Return true if transition is fireable under the argument marking."
   [pn mark tr-name]
+  (reset! +zippy+ (list mark tr-name))
   (let [arcs (arcs-into pn tr-name)
         arc-groups (group-by :type arcs)
         marking-key (:marking-key pn)]
@@ -43,83 +45,107 @@
 (defn next-markings
   "Return a seq of maps ({:M <tail-marking> :trans <transition that fired> :Mp <head-marking>}...)
    which contain the argument state :M and unexplored states, :Mp reachable by firing :trans"
-  [pn marking]
-  (map (fn [trn]
-         {:M marking
-          :fire trn
-          :Mp (mark-at-link-head pn marking trn)
-          :rate (:rate (name2obj pn trn))})
-       (filter (fn [trn] (not-any? (fn [visited] (and (= marking (:M visited))
-                                                      (= trn (:fire visited))))
-                                   (:M2Mp pn)))
-               (filter #(fireable? pn marking %) (map :name (:transitions pn))))))
+  ([pn marking]
+   (next-markings pn marking true))
+  ([pn marking check-visited?]
+   (map (fn [trn]
+          {:M marking
+           :fire trn
+           :Mp (mark-at-link-head pn marking trn)
+           :rate (:rate (name2obj pn trn))})
+        (if check-visited?
+          (filter (fn [trn] (not-any? (fn [visited] (and (= marking (:M visited))
+                                                         (= trn (:fire visited))))
+                                      (:explored pn)))
+                  (filter #(fireable? pn marking %) (map :name (:transitions pn))))
+          (filter #(fireable? pn marking %) (map :name (:transitions pn)))))))
+          
 
-(def +k-bounded+ (atom 10)) ; Maybe better than (or addition to) k-bounded would be size of :M2Mp
+(def +k-bounded+ (atom 10)) ; Maybe better than (or addition to) k-bounded would be size of :explored
 (def +max-rs+  "reachability set size" (atom 5000)) 
 (declare renumber-pids reach-checking)
 
-(defn reachability
-  "Compute the reachability graph (:M2Mp) starting at the initial marking."
+(defn tanvan
+  "Partition markings into {:tangible ... :vanishing ...}"
+  [pn markings]
+  (let [parts (partition-by #(tangible? pn (:M %)) markings)]
+    (if (tangible? pn (:M (first (first parts))))
+      {:tangible (vec (first parts))
+       :vanishing (map vec (second parts))}
+      {:tangible (vec (second parts))
+       :vanishing (vec (first parts))})))
+
+(defn initial-tangible-states
+  "Return the initial tangible states, give an initial state that might not be tangible."
   [pn]
-  (let [im (initial-marking pn)]
-    (as-pn-ok-> pn ?pn
-      (renumber-pids ?pn)
-      (assoc ?pn :marking-key (:marking-key im))
-      (assoc ?pn :initial-marking (:initial-marking im))
-      (let [unexplored (next-markings ?pn (:initial-marking im))]
-        (as-> ?pn ?pnn
-          (assoc ?pnn :M2Mp (vec unexplored))
-          (loop [pn ?pnn
-                 explore unexplored]
-            (cond (empty? explore) pn,
-                  (some #(> % @+k-bounded+) (:Mp (first explore))) ; POD first? sufficient?
-                  (assoc pn :failure {:reason :not-k-bounded :marking (:Mp (first explore))}),
-                  (> (count (:M2Mp pn)) @+max-rs+)
-                  (assoc pn :failure {:reason :exceeds-max-rs :set-size (count (:M2Mp pn))}),
-                  :else
-                  (let [nexts (next-markings pn (:Mp (first explore)))]
-                    (recur
-                     (update pn :M2Mp into nexts)
-                     (into nexts (rest explore))))))))
-      (reach-checking ?pn))))
+  (let [im (:initial-marking pn)]
+    (if (tangible? pn im)
+      (next-markings pn im)
+      (throw (ex-info {:in "initial-tangible-states" :reason "NYI"})))))
+  
+;;; POD should strip it down to just markings, not :M2MP {:M ... :fire ... :mp ...}
+(defn reachability
+  "Compute the reachability graph (:explored) depth-first starting at the initial marking, 
+   removing vanishing states on-the-fly using the algorithm of Knottenbelt, 1996."
+  [pn]
+  (as-pn-ok-> pn ?pn
+    (dissoc ?pn :explored)
+    (renumber-pids ?pn)
+    (assoc ?pn :explored (vec (initial-tangible-states pn)))
+    (assoc ?pn :St (:explored ?pn))
+    (assoc ?pn :Sv [])
+    (loop [pn ?pn]
+      (println "St = " (:St pn))
+      ;(println "Sv = " (:Sv pn))
+      (as-> pn ?pns
+        (if (empty? (:Sv ?pns))
+          ?pns
+          (let [pn pn #_(-> pn (dissoc :explored))]
+            ;; loop to update rates exploring vanishing
+            ?pns))
+        (cond (empty? (:St ?pns)) ?pns,
+              (some #(> % @+k-bounded+) (:Mp (first (:St ?pns)))) ; POD first? sufficient?
+              (assoc ?pns :failure {:reason :not-k-bounded :marking (:Mp (first (:St ?pns)))}),
+              (> (count (:explored ?pns)) @+max-rs+)
+              (assoc ?pns :failure {:reason :exceeds-max-rs :set-size (count (:explored ?pns))}),
+              :else
+              (let [nexts (next-markings pn (:Mp (first (:St ?pns))))
+                    tan-van (tanvan ?pns nexts)]
+                (recur
+                 (-> ?pns 
+                     (update :explored into nexts)
+                     (assoc  :St (into (:tangible tan-van) (vec (rest (:St ?pns)))))
+                     (assoc  :Sv (into (:vanishing tan-van) (:Sv ?pns)))))))))
+    (reach-checking ?pn)))
 
 (defn reach-checking
   "Check for reachability-related errors."
   [pn]
-  (let [m  (set (distinct (map #(:M %) (:M2Mp pn))))
-        mp (set (distinct (map #(:Mp %) (:M2Mp pn))))
+  (let [m  (set (distinct (map #(:M %) (:explored pn))))
+        mp (set (distinct (map #(:Mp %) (:explored pn))))
         m-mp (clojure.set/difference m mp)
         mp-m (clojure.set/difference mp m)]
   (as-pn-ok-> pn ?pn
-              (if (and (empty? m-mp) (empty? mp-m))
-                ?pn
-                (assoc ?pn :failure {:reason :absorbing-states
-                                     :data {:m-not-mp m-mp :mp-not-m mp-m}}))
-              (if (> (count (:M2mp pn)) @+max-rs+)
-                (assoc pn :failure {:reason :exceeds-max-rs :set-size (count (:M2Mp ?pn))})
-                ?pn)
-              (if (empty? (:M2Mp ?pn))
-                (assoc ?pn :failure {:reason :null-reachability-graph})
-                ?pn))))
+    (if (and (empty? m-mp) (empty? mp-m))
+      ?pn
+      (assoc ?pn :failure {:reason :absorbing-states
+                           :data {:m-not-mp m-mp :mp-not-m mp-m}}))
+    (if (> (count (:M2mp pn)) @+max-rs+)
+      (assoc pn :failure {:reason :exceeds-max-rs :set-size (count (:explored ?pn))})
+      ?pn)
+    (if (empty? (:explored ?pn))
+      (assoc ?pn :failure {:reason :null-reachability-graph})
+      ?pn))))
 
-(defn tangible? [pn m]
-  "Return true if marking M is tangible. A marking is tangible if it
+(defn tangible? [pn mark]
+  "Return true if marking M (not a link) is tangible. A marking is vanishing if it
    enables an immediate transitions. "
-  (let [trans (map :fire (filter #(= m (:M %)) (:M2Mp pn)))]
-    (not-any? #(immediate? pn %) trans)))
+  (not-any? #(immediate? pn %) (map :fire (next-markings pn mark false))))
 
-(defn trs
-  "Associate the tangible reachability set with the argument Petri net."
-  [pn]
-  (assoc pn :TRS (vec (filter #(tangible? pn %) (distinct (map :M (:M2Mp pn)))))))
-
-(defn trg
-  "Associate the tangible reachability graph with the argument Petri net.
-   Its nodes are the TRS. It has one arc for each possible PATH in the corresponding
-   RG between the same two nodes. There is some complication for the ECS."
-  [pn]
-  (for [from (:trs pn)
-        to (:trs pn)] :foo))
+(defn tryme []
+  (-> "data/knottenbelt.xml"
+      gov.nist.spntools.util.pnml/read-pnml
+      reachability))
 
 ;;; Reachability-specific utilities ---------------------------------------------
 (defn markings2source
@@ -167,15 +193,22 @@
 
 (defn renumber-pids
   "Number the pids from 0 so that they can be used as an index into the marker.
-   Reduction makes this necessary."
+   Reduction makes this necessary. ALSO (no really this is the right way) set
+   the :marking-key and :initial-marking"
   [pn]
-  (update pn :places
-          (fn [places]
-            (let [order (vec (sort #(< (:pid %1) (:pid %2)) places))]
-              (reduce (fn [order id]
-                        (assoc-in order [id :pid] id))
-                      order
-                      (range (count order)))))))
+  (as-> pn ?pn
+    (update ?pn :places
+            (fn [places]
+              (let [order (vec (sort #(< (:pid %1) (:pid %2)) places))]
+                (reduce (fn [order id]
+                          (assoc-in order [id :pid] id))
+                        order
+                        (range (count order))))))
+    (let [im (initial-marking ?pn)]
+      (as-> ?pn ?pn2
+        (assoc ?pn2 :marking-key (:marking-key im))
+        (assoc ?pn2 :initial-marking (:initial-marking im))))))
+
 
 (defn possible-live? [pn]
   "A Petri net certainly isn't live if it doesn't have a token in some place.
@@ -187,7 +220,7 @@
 (defn live? [pn]
   "A Petri net is live if all its transitions are live (enabled in some marking)
    Reachability has already been calculated."
-  (let [m2mp (:M2Mp pn)]
+  (let [m2mp (:explored pn)]
     (if (every?
          (fn [tr] (some #(= tr (:fire %)) m2mp))
          (map :name (:transitions pn)))

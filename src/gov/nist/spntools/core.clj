@@ -2,9 +2,9 @@
   (:require [clojure.data.xml :as xml :refer (parse-str)]
             [clojure.pprint :refer (cl-format pprint pp)]
             [clojure.math.combinatorics :as combo]
-            [gov.nist.spntools.util.reach :as reach :refer (reachability)]
+            [gov.nist.spntools.util.reach :as pnr :refer (reachability)]
             [gov.nist.spntools.util.pnml :as pnml :refer (read-pnml reorder-places)]
-            [gov.nist.spntools.util.utils :as utils :refer :all]
+            [gov.nist.spntools.util.utils :as pnu :refer :all]
             [clojure.core.matrix :as m :refer :all]
             [clojure.core.matrix.linear :as ml :refer (svd)]))
 
