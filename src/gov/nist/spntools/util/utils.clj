@@ -179,11 +179,11 @@
     (if debug (assoc ?ar :debug debug) ?ar)))
 
 (defn make-place
-  [pn & {:keys [name pid initial-marking]
+  [pn & {:keys [name pid initial-tokens]
          :or {name (keyword (str "Place-" (inc @+next-pid+)))
               pid (next-pid pn)
-              initial-marking 0}}]
-  {:name name :pid pid :initial-marking initial-marking})
+              initial-tokens 0}}]
+  {:name name :pid pid :initial-tokens initial-tokens})
 
 (defn make-transition
   [pn & {:keys [name tid rate type]
@@ -200,7 +200,7 @@
   (let [sorted (sort #(< (:pid %1) (:pid %2)) (:places pn))]
     {:marking-key (vec (map :name sorted))
      :initial-marking
-     (vec (map :initial-marking (sort #(< (:pid %1) (:pid %2)) sorted)))}))
+     (vec (map :initial-tokens (sort #(< (:pid %1) (:pid %2)) sorted)))}))
 
 (defn reorder-markings
   "Reorder the markings calculated from the reachability graph so as to match a textbook example."
@@ -271,7 +271,7 @@
   "Calculate the size of the PN as a counting of its structural components."
   [pn]
   (+ (count (:places pn))
-     (reduce (fn [sum pl] (+ sum (:initial-marking pl))) 0 (:places pn))
+     (reduce (fn [sum pl] (+ sum (:initial-tokens pl))) 0 (:places pn))
      (count (:transitions pn))
      (count (:arcs pn))))
 

@@ -11,7 +11,7 @@
 (defn get-id [obj]
   (-> obj :attrs :id keyword))
 
-(defn get-initial-marking [pl]
+(defn get-initial-tokens [pl]
   (let [str
         (-> (filter #(= :initialMarking (:tag %)) (:content pl))
             first 
@@ -57,10 +57,10 @@
 
 (defn essential-place
   [pl]
-  (let [mark (get-initial-marking pl)]
+  (let [mark (get-initial-tokens pl)]
     {:name (get-id pl)
      :pid (swap! +obj-cnt+ inc)
-     :initial-marking mark}))
+     :initial-tokens mark}))
 
 (defn get-rate [tr]
     (when-let [str (-> (filter #(= :rate (:tag %)) (:content tr)) first :content first :content first)]
@@ -113,7 +113,7 @@
                (sort #(< (:pid %1) (:pid %2))
                      (map #(assoc % :pid (inc (.indexOf order (:name %)))) places)))))
     (assoc ?pn :marking-key order)
-    (assoc ?pn :initial-marking (vec (map :initial-marking (:places ?pn))))))
+    (assoc ?pn :initial-marking (vec (map :initial-tokens (:places ?pn))))))
     
 ;;;=================================================
 ;;;  PN ==> PNML
@@ -179,7 +179,7 @@
                              (xml/element :offset {:x (or (:label-x-off pos) 20.0)
                                                    :y (or (:label-y-off pos) 5.0)})))
    (xml/element :initialMarking {}
-                (xml/element :value {} (str "Default," (:initial-marking pl)))
+                (xml/element :value {} (str "Default," (:initial-tokens pl)))
                 (xml/element :graphics {}
                              (xml/element :offset {:x 0.0 :y 0.0})))
    (xml/element :capacity {}

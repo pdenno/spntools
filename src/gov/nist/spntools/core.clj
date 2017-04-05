@@ -2,7 +2,7 @@
   (:require [clojure.data.xml :as xml :refer (parse-str)]
             [clojure.pprint :refer (cl-format pprint pp)]
             [clojure.math.combinatorics :as combo]
-            [gov.nist.spntools.util.reach :as pnr :refer (reachability)]
+            [gov.nist.spntools.util.reach :as pnr :refer :all #_(reachability)]
             [gov.nist.spntools.util.pnml :as pnml :refer (read-pnml reorder-places)]
             [gov.nist.spntools.util.utils :as pnu :refer :all]
             [clojure.core.matrix :as m :refer :all]
@@ -390,7 +390,7 @@
                                       :places
                                       (fn [places]
                                         (vec (map (fn [pl] (if (= (:name pl) (:name (:send-to cmd)))
-                                                             (update-in pl [:initial-marking]
+                                                             (update-in pl [:initial-tokens]
                                                                         #(+ % (:gets-tokens (:send-to cmd))))
                                                              pl))
                                                   places))))
@@ -437,7 +437,7 @@
                  ?cmd
                  (:tplaces binds)))
     ;; The idea here is that the vanishing place might have a token. We should conserve it.
-    (update-in ?cmd [0 :send-to :gets-tokens]  #(+ % (:initial-marking (:VPLACE binds))))))
+    (update-in ?cmd [0 :send-to :gets-tokens]  #(+ % (:initial-tokens (:VPLACE binds))))))
 
 ;;;------- Diagnostic
 
