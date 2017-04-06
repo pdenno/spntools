@@ -8,7 +8,9 @@
 ;;; To Do: Implement place capacity restrictions. (maybe)
 ;;;     * Instead of all these +max-rs+ etc. might want a system wide ^:dynamice
 ;;;       binding of variable values in a map. (Call the current things +default-...)
-;;;     * Why am I keeping :Mp and :fire ? Replace links with markings. 
+;;;     * Why am I keeping :Mp and :fire ? Replace links with markings. - NOT GONNA DO IT
+;;;     * I think vanishing places that are inside a network (like P4 in qo10) can be
+;;;       removed from the analysis.
 
 (def +zippy+ (atom nil))
 
@@ -42,6 +44,12 @@
             ?m ; inhibitors don't exit transitions
             (arcs-outof pn tr-name))))
 
+(defn visited?
+  ([pn mark tr]
+   (some #(and (= mark (:M %)) (= tr (:fire %))) (:explored pn)))
+  ([pn link]
+   (visited? pn (:M link) (:fire link))))
+
 ;;; The target marking is completely specified by the source (marking at tail) and the transition.
 (defn next-links
   "Return a seq of maps ({:M <tail-marking> :trans <transition that fired> :Mp <head-marking>}...)
@@ -54,16 +62,12 @@
            :fire trn
            :Mp (mark-at-link-head pn mark trn)
            :rate (:rate (name2obj pn trn))})
-        (if check-visited?
-          (filter (fn [trn] (not-any? (fn [visited] (and (= mark (:M visited))
-                                                         (= trn (:fire visited))))
-                                      (:explored pn)))
-                  (filter #(fireable? pn mark %) (map :name (:transitions pn))))
-          (filter #(fireable? pn mark %) (map :name (:transitions pn)))))))
+        (let [all (filter #(fireable? pn mark %) (map :name (:transitions pn)))]
+          (if check-visited? (remove #(visited? pn %) all) all)))))
 
 (def +k-bounded+ (atom 10)) ; Maybe better than (or addition to) k-bounded would be size of :explored
 (def +max-rs+  "reachability set size" (atom 5000)) 
-(declare renumber-pids reach-checking tangible?)
+(declare renumber-pids check-reach tangible? in-loop-checks summarize-reach)
 
 (defn tanvan
   "Partition markings into {:tangible ... :vanishing ...}"
@@ -82,56 +86,53 @@
 
 (defn calc-vpath-rate 
   "Calculate (add to) :vpath-rates, the rate from the root to a tangible state reachable 
-   through a path ending on the next tangible state reachable."
+   through a path ending on the next tangible state reachable. Drop the path from :paths."
   ([pn end] (calc-vpath-rate pn end false))
   ([pn end loop?]
    (if loop?
      (update pn :paths #(-> % rest vec)) ; NYI
      (let [path  (-> pn :paths first)]
-       (-> pn 
-           (update :vpath-rates
+       (as-> pn ?pn
+           (update ?pn :vpath-rates
                    conj
-                   {:M (-> pn :root :M)
-                    :fire (vec (conj (map :fire path) (-> pn :root :fire)))
+                   {:M (-> ?pn :root :M)
+                    :fire (vec (conj (map :fire path) (-> ?pn :root :fire)))
                     :Mp (-> path last :Mp)
-                    :rate (reduce * (-> pn :root :rate) (map :rate path))})
-           (assoc :paths (-> pn :paths rest vec)))))))
+                    :rate (reduce * (-> ?pn :root :rate) (map :rate path))})
+           (assoc ?pn :paths (-> ?pn :paths rest vec))
+           (update ?pn :explored conj end))))))
 
-#_(vanish-loop m
-               {:M [1 0 0 0 0 0 0 0], :fire :T1, :Mp [0 1 0 0 0 0 0 0], :rate 5.0}
-               {:M [0 1 0 0 0 0 0 0], :fire :T2-5, :Mp [0 0 0 0 1 0 0 0], :rate 1.0})
-
-(defn vanish-loop
+(defn vanish-paths
  "Navigate from root to all ending tangible states. 
-  Return with :explored updated with 'vanishing path rates."
-  [pn root-link vanish-link]
+  Return with :M2Mp updated with 'vanishing path rates."
+  [pn root-link v-link]
   (as-> pn ?pn
-    (assoc ?pn :explored (vector root-link vanish-link))
-    (assoc ?pn :paths (vector (vector vanish-link)))
+    (update ?pn :explored conj root-link)
+    (assoc ?pn :paths (vector (vector v-link)))
     (assoc ?pn :root root-link)
-    (loop [pn ?pn]
-      (as-> pn ?pnn
-        (if (empty? (:paths ?pnn)) ; calc-vpath-rate removes one when it terminates. 
-          ?pnn
-          (let [current (-> ?pnn :paths first last :Mp)
-                nexts (next-links ?pnn current)
-                tan-van (tanvan ?pnn nexts)]
-            ;; No nexts means that it loops back to some place on the path. Must that be the start? Does it matter?
-            (recur (as-> ?pnn ?pn2
-                     (update ?pn2 :explored into nexts)
-                     (if (empty? nexts)
-                       (calc-vpath-rate pn nil true)
-                       (reduce (fn [pn end] (calc-vpath-rate pn end)) ?pn2 (:tangible tan-van)))
-                     (if (empty? (:vanishing tan-van))
-                       ?pn2
-                       (assoc ?pn2 :paths
-                              (into (vec (map #(conj (-> ?pn2 :paths first) %) (:vanishing tan-van)))
-                                    (vec (-> ?pn2 :paths rest)))))))))))))
+    (loop [pn ?pn
+           cnt 0]
+      (when (< cnt 100)
+        (as-> pn ?pn2
+          (if (empty? (:paths ?pn2)) ; calc-vpath-rate removes one for each :tangible. 
+            ?pn2
+            (let [current (-> ?pn2 :paths first last :Mp)
+                  nexts (next-links ?pn2 current)
+                  tan-van (tanvan ?pn2 nexts)]
+              (recur (as-> ?pn2 ?pn3
+                       (update ?pn3 :explored into nexts)
+                       (if (empty? nexts)
+                         (calc-vpath-rate pn nil true) ; loops back
+                         (reduce (fn [pn end] (calc-vpath-rate pn end)) ?pn3 (:tangible tan-van)))
+                       (if (empty? (:vanishing tan-van))
+                         ?pn3
+                         (assoc ?pn3 :paths ; Create for current path a new path for each new vanishing state
+                                (into (vec (map #(conj (-> ?pn3 :paths first) %) (:vanishing tan-van)))
+                                      (-> ?pn3 :paths rest)))))
+                     (inc cnt)))))))))
 
-
-;;; POD should strip it down to just markings, not :M2MP {:M ... :fire ... :mp ...}
 (defn reachability
-  "Compute the reachability graph (:explored) depth-first starting at the initial marking, 
+  "Compute the reachability graph (:M2Mp) depth-first starting at the initial marking, 
    removing vanishing states on-the-fly using the algorithm of Knottenbelt, 1996."
   [pn]
   (as-pn-ok-> pn ?pn
@@ -139,37 +140,54 @@
     (assoc ?pn :vpath-rates [])
     (renumber-pids ?pn)
     (assoc ?pn :explored (vec (initial-tangible-states ?pn)))
-    (assoc ?pn :St (:explored ?pn))
-    (assoc ?pn :Sv [])
+    (assoc ?pn :St (:explored ?pn), :Sv [])
     (loop [pn ?pn]
       (println "Sv = " (:Sv pn))
       (println "St = " (:St pn) "\n")
-      (as-> pn ?pns
-        (if (empty? (:Sv ?pns))
-          ?pns 
-          (reduce (fn [pn v-link] (vanish-loop pn (:root pn) v-link)) ?pns (:Sv ?pns)))
-        (assoc :Sv ?pns [])
-        (cond (empty? (:St ?pns)) ?pns,
-              (some #(> % @+k-bounded+) (:Mp (first (:St ?pns)))) ; POD first? sufficient?
-              (assoc ?pns :failure {:reason :not-k-bounded :marking (:Mp (first (:St ?pns)))}),
-              (> (count (:explored ?pns)) @+max-rs+)
-              (assoc ?pns :failure {:reason :exceeds-max-rs :set-size (count (:explored ?pns))}),
-              :else
-              (let [nexts (next-links ?pns (:Mp (first (:St ?pns))))
-                    tan-van (when (not-empty nexts) (tanvan ?pns nexts))]
-                (recur
-                 (-> ?pns 
-                     (update :explored into nexts)
-                     (assoc :root (first (:St ?pns)))
-                     (assoc :St (into (:tangible tan-van) (vec (rest (:St ?pns)))))
-                     (assoc :Sv (into (:vanishing tan-van) (:Sv ?pns)))))))))
-    (reach-checking ?pn)))
+      (as-> pn ?pn2
+        (if (empty? (:Sv ?pn2))
+          ?pn2
+          (reduce (fn [pn v-link] (vanish-paths pn (:root pn) v-link)) ?pn2 (:Sv ?pn2)))
+        (assoc ?pn2 :Sv [])
+        (in-loop-checks ?pn2)
+        (if (contains? ?pn2 :failure)
+          ?pn2
+          (if (empty? (:St ?pn2))
+            ?pn2                      
+            (let [nexts (next-links ?pn2 (:Mp (first (:St ?pn2))))
+                  tan-van (when (not-empty nexts) (tanvan ?pn2 nexts))]
+              (recur
+               (-> ?pn2 
+                   (update :explored into nexts)
+                   (assoc :root (first (:St ?pn2)))
+                   (assoc :St (into (:tangible tan-van) (vec (rest (:St ?pn2)))))
+                   (assoc :Sv (into (:vanishing tan-van) (:Sv ?pn2))))))))))
+    (summarize-reach ?pn)
+    (check-reach ?pn)))
 
-(defn reach-checking
+(defn summarize-reach
+  "Merge :vpath-rates and :explored (sans vanishing) resulting in :M2Mp"
+  [pn]
+  (as-> pn ?pn ; POD Investigate the need for distinct here; its a DFS thing. 
+    (update ?pn :explored (fn [e] (vec (filter #(and (tangible? ?pn (:Mp %))
+                                                     (tangible? ?pn (:M %)))
+                                               (distinct e)))))
+   (assoc ?pn :M2Mp (into (:explored ?pn) (:vpath-rates ?pn)))
+   (dissoc ?pn :vpath-rates :explored :St :Sv :paths :root)))
+
+(defn in-loop-checks [pn]
+  (cond 
+    (some #(> % @+k-bounded+) (:Mp (first (:St pn))))
+    (assoc pn :failure {:reason :not-k-bounded :marking (:Mp (first (:St pn)))}),
+    (> (count (:M2Mp pn)) @+max-rs+)
+    (assoc pn :failure {:reason :exceeds-max-rs :set-size (count (:M2Mp pn))}),
+    :else pn))
+
+(defn check-reach
   "Check for reachability-related errors."
   [pn]
-  (let [m  (set (distinct (map #(:M %) (:explored pn))))
-        mp (set (distinct (map #(:Mp %) (:explored pn))))
+  (let [m  (set (distinct (map #(:M %) (:M2Mp pn))))
+        mp (set (distinct (map #(:Mp %) (:M2Mp pn))))
         m-mp (clojure.set/difference m mp)
         mp-m (clojure.set/difference mp m)]
   (as-pn-ok-> pn ?pn
@@ -178,9 +196,9 @@
       (assoc ?pn :failure {:reason :absorbing-states
                            :data {:m-not-mp m-mp :mp-not-m mp-m}}))
     (if (> (count (:M2mp pn)) @+max-rs+)
-      (assoc pn :failure {:reason :exceeds-max-rs :set-size (count (:explored ?pn))})
+      (assoc pn :failure {:reason :exceeds-max-rs :set-size (count (:M2Mp ?pn))})
       ?pn)
-    (if (empty? (:explored ?pn))
+    (if (empty? (:M2Mp ?pn))
       (assoc ?pn :failure {:reason :null-reachability-graph})
       ?pn))))
 
@@ -190,9 +208,11 @@
   (not-any? #(immediate? pn %) (map :fire (next-links pn mark false))))
 
 (defn tryme []
-  (-> "data/qorchard.xml"
+  (-> "data/qo10.xml"
       read-pnml
       reachability))
+
+;(def m (-> "data/qo10.xml" pnml/read-pnml renumber-pids))
 
 (def tQt [0.0 0.0 0.0])
 (def tQtv [5.0 3.0 0.0 0.0])
@@ -205,7 +225,6 @@
            [0.6 0.0 0.0]   ; 3->6 3->7 3->8
            [0.0 0.6 0.0]   ; 4->6 4->7 4->8
            [0.0 0.0 0.5]]) ; 5->6 5->7 5->8
-
 
 ;;; Note: If m/inverse is Gauss-Jordan, it is O(n^3) 20 states 8000 ops. Could be better.
 ;;; Knottenbelt suggest LU decomposition. 
@@ -294,7 +313,7 @@
 (defn live? [pn]
   "A Petri net is live if all its transitions are live (enabled in some marking)
    Reachability has already been calculated."
-  (let [m2mp (:explored pn)]
+  (let [m2mp (:M2Mp pn)]
     (if (every?
          (fn [tr] (some #(= tr (:fire %)) m2mp))
          (map :name (:transitions pn)))

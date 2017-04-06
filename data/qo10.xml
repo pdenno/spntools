@@ -1,16 +1,8 @@
 <?xml version="1.0" encoding="ISO-8859-1"?><pnml>
 <net id="Net-One" type="P/T net">
 <token id="Default" enabled="true" red="0" green="0" blue="0"/>
-<labels x="692" y="170" width="100" height="78" border="true">
-<text>Calculate rates:
- P2 -&gt; P7
- P2 -&gt; P8
- P3 -&gt; P6
- P3 -&gt; P7
- P3 -&gt; P8</text>
-</labels>
-<labels x="679" y="29" width="100" height="26" border="true">
-<text>Corresponds to Fig 12, page 44.</text>
+<labels x="679" y="29" width="100" height="39" border="true">
+<text>Corresponds to Fig 10, around page 44.</text>
 </labels>
 <place id="P1">
 <graphics>
@@ -571,7 +563,7 @@
 <tagged>
 <value>false</value>
 </tagged>
-<arcpath id="000" x="465" y="287" curvePoint="false"/>
+<arcpath id="000" x="465" y="286" curvePoint="false"/>
 <arcpath id="001" x="539" y="286" curvePoint="false"/>
 <type value="normal"/>
 </arc>
