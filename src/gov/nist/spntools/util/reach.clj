@@ -65,7 +65,7 @@
 
 (def +k-bounded+ (atom 10)) ; Maybe better than (or addition to) k-bounded would be size of :explored
 (def +max-rs+  "reachability set size" (atom 5000)) 
-(declare renumber-pids check-reach tangible? in-loop-checks loop-reduce summarize-reach)
+(declare renumber-pids check-reach tangible? vanishing? in-loop-checks loop-reduce summarize-reach)
 
 (defn tanvan
   "Partition markings into {:tangible ... :vanishing ...}"
@@ -175,14 +175,62 @@
 (defn loop-reduce
   "Update the :vpath-rates for a looping subnet."
   [pn]
-  (reset! +diag+ pn)
-  (reduce (fn [pn subnet]
-            (let [Qt (Qt-calc subnet)
-                  Qtv (Qtv-calc subnet)
-                  Pv (Pv-calc subnet)
-                  Pvt (Pvt-calc subnet)]
-              #_(Stuff to apply Q-prime and clean up)))
+  (reduce (fn [pn [k subnet]]
+            (as-> pn ?pn
+                (assoc ?pn :subnet subnet)
+                (assoc ?pn :tanvan (tanvan ?pn subnet))
+                (Qt-calc ?pn)
+                (Qtv-calc ?pn)
+                #_(Pv-calc ?pn)
+                #_(Pvt-calc subnet)))
           pn (vanishing2subnets pn)))
+
+(defn Qt-calc
+  "Calculate the vector of rates from the root directly to tangible states."
+  [pn]
+  (let [root (-> pn :root :M)]
+    (as-> pn ?pn 
+      (assoc ?pn :Qt-states (vec (filter #(tangible? ?pn %)
+                                         (map :Mp (-> pn :tanvan :vanishing))))) ; look for 'exiting vanishing'
+      (assoc ?pn :Qt-rates (vec (map (fn [target]
+                                       (reduce (fn [r link] (+ r (:rate link)))
+                                               0.0
+                                               (filter #(and (= root (:M %)) (= target (:Mp %))) (:explored ?pn))))
+                                     (:Qt-states ?pn)))))))
+
+(defn Qtv-calc
+  "Calculate the vector of rates from the root directly to vanishing states."
+  [pn]
+  (let [root (-> pn :root :M)]
+    (as-> pn ?pn
+      (assoc ?pn :Qtv-states (distinct (vec (filter #(vanishing? ?pn %) (map :M (:subnet ?pn))))))
+      (assoc ?pn :Qtv-rates (vec (map (fn [target]
+                                       (reduce (fn [r link] (+ r (:rate link)))
+                                               0.0 
+                                               (filter #(and (= root (:M %)) (= target (:Mp %))) (:explored ?pn))))
+                                     (:Qtv-states ?pn)))))))
+
+
+
+(defn Pv-calc  [pn])
+(defn Pvt-calc [pn])
+
+;;; Build a map that has :Qt-marks, :Qtv-marks, use those to drive the matrices. Put it all on pn. 
+
+(def tQt [0.0 0.0 0.0])  ; 1->6 1->7 1->8 (need root, need other tangible states)
+(def tQtv [5.0 3.0 0.0 0.0]) ; 1->2 1->3 1->4 1->5
+;;; Pv has i->i. Does that make sense?
+(def tPv [[0.0,0.0,0.0,1.0],  ; 2->2 2->3 2->4 2->5
+          [0.0,0.0,0.0,0.4],  ; 3->2 3->3 3->4 3->5
+          [0.4,0.0,0.0,0.0],  ; 4->2 4->3 4->4 4->5
+          [0.0,0.0,0.5,0.0]]) ; 5->2 5->3 5->4 5->5
+(def tPvt [[0.0 0.0 0.0]   ; 2->6 2->7 2->8  (Use name ordering as Qt/Qtv, )
+           [0.6 0.0 0.0]   ; 3->6 3->7 3->8
+           [0.0 0.6 0.0]   ; 4->6 4->7 4->8
+           [0.0 0.0 0.5]]) ; 5->6 5->7 5->8
+                                     
+  
+
 
 (defn vanishing2subnets [pn]
   "Create a map of subnets that can be solved independently."
@@ -236,22 +284,6 @@
             link-set
             other-paths)))
 
-(defn Qt-calc  [pn])
-(defn Qtv-calc [pn])
-(defn Pv-calc  [pn])
-(defn Pvt-calc [pn])
-
-(def tQt [0.0 0.0 0.0])
-(def tQtv [5.0 3.0 0.0 0.0])
-;;; Pv has i->i. Does that make sense?
-(def tPv [[0.0,0.0,0.0,1.0],
-          [0.0,0.0,0.0,0.4],
-          [0.4,0.0,0.0,0.0],
-          [0.0,0.0,0.5,0.0]])
-(def tPvt [[0.0 0.0 0.0]   ; 2->6 2->7 2->8
-           [0.6 0.0 0.0]   ; 3->6 3->7 3->8
-           [0.0 0.6 0.0]   ; 4->6 4->7 4->8
-           [0.0 0.0 0.5]]) ; 5->6 5->7 5->8
 
 ;;; Note: If m/inverse is Gauss-Jordan, it is O(n^3) 20 states 8000 ops. Could be better.
 ;;; Knottenbelt suggest LU decomposition. 
@@ -301,6 +333,12 @@
   "Return true if marking MARK (not a link) is tangible. 
    A marking is vanishing if it enables an immediate transitions. "
   (not-any? #(immediate? pn %) (map :fire (next-links pn mark false))))
+
+(defn vanishing? [pn mark]
+  "Return true if marking MARK (not a link) is tangible. 
+   A marking is vanishing if it enables an immediate transitions. "
+  (not (tangible? pn mark)))
+
 
 ;;;(def m (-> "data/qorchard.xml" pnml/read-pnml pnr/renumber-pids))
 
