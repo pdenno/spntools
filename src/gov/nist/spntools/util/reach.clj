@@ -2,6 +2,7 @@
   (:require [clojure.data.xml :as xml :refer (parse-str)]
             [clojure.pprint :refer (cl-format pprint pp)]
             [clojure.core.matrix :as m :refer :all]
+            [clojure.math.combinatorics :as combo]
             [gov.nist.spntools.util.utils :refer :all]
             [gov.nist.spntools.util.pnml :refer (read-pnml)]))
 
@@ -29,7 +30,7 @@
              (:inhibitor arc-groups)))))
      
 ;;; POD It seems like this and fireable? are so closely related ought to do them together. Wasteful.
-(defn mark-at-link-head
+(defn next-mark
   "Return the mark that is at the head of the argument link."
   [pn mark tr-name]
   (as-> mark ?m
@@ -44,30 +45,27 @@
             ?m ; inhibitors don't exit transitions
             (arcs-outof pn tr-name))))
 
-(defn visited?
-  ([pn mark tr]
-   (some #(and (= mark (:M %)) (= tr (:fire %))) (:explored pn)))
-  ([pn link]
-   (visited? pn (:M link) (:fire link))))
-
 ;;; The target marking is completely specified by the source (marking at tail) and the transition.
 (defn next-links
   "Return a seq of maps ({:M <tail-marking> :trans <transition that fired> :Mp <head-marking>}...)
    which contain the argument state :M and unexplored states, :Mp reachable by firing :trans"
-  ([pn mark]
-   (next-links pn mark true))
-  ([pn mark check-visited?]
-   (map (fn [trn]
-          {:M mark
-           :fire trn
-           :Mp (mark-at-link-head pn mark trn)
-           :rate (:rate (name2obj pn trn))})
-        (let [all (filter #(fireable? pn mark %) (map :name (:transitions pn)))]
-          (if check-visited? (remove #(visited? pn %) all) all)))))
+  [pn mark check-list]
+  (let [trns (filter #(fireable? pn mark %) (map :name (:transitions pn)))
+        trns (if check-list
+               (remove (fn [trn] (some #(and (= mark (:M %)) (= trn (:fire %)))
+                                       (check-list pn)))
+                       trns)
+               trns)]
+    (map (fn [trn]
+           {:M mark
+            :fire trn
+            :Mp (next-mark pn mark trn)
+            :rate (:rate (name2obj pn trn))})
+         trns)))
 
 (def +k-bounded+ (atom 10)) ; Maybe better than (or addition to) k-bounded would be size of :explored
 (def +max-rs+  "reachability set size" (atom 5000)) 
-(declare renumber-pids check-reach tangible? in-loop-checks summarize-reach)
+(declare renumber-pids check-reach tangible? in-loop-checks loop-reduce summarize-reach)
 
 (defn tanvan
   "Partition markings into {:tangible ... :vanishing ...}"
@@ -81,7 +79,7 @@
   [pn]
   (let [im (:initial-marking pn)]
     (if (tangible? pn im)
-      (next-links pn im) 
+      (next-links pn im :explored) 
       (throw (ex-info {:in "initial-tangible-states" :reason "NYI"})))))
 
 (defn calc-vpath-rate 
@@ -89,47 +87,43 @@
    through a path ending on the next tangible state reachable. Drop the path from :paths."
   ([pn end] (calc-vpath-rate pn end false))
   ([pn end loop?]
-   (if loop?
-     (update pn :paths #(-> % rest vec)) ; NYI
-     (let [path  (-> pn :paths first)]
-       (as-> pn ?pn
-           (update ?pn :vpath-rates
-                   conj
-                   {:M (-> ?pn :root :M)
-                    :fire (vec (conj (map :fire path) (-> ?pn :root :fire)))
-                    :Mp (-> path last :Mp)
-                    :rate (reduce * (-> ?pn :root :rate) (map :rate path))})
-           (assoc ?pn :paths (-> ?pn :paths rest vec))
-           (update ?pn :explored conj end))))))
-
+   (let [path  (-> pn :paths first)]
+     (as-> pn ?pn
+       (update ?pn :vpath-rates
+               conj
+               {:M (-> ?pn :root :M)
+                :fire (vec (conj (map :fire path) (-> ?pn :root :fire)))
+                :Mp (-> path last :Mp)
+                :rate (reduce * (-> ?pn :root :rate) (map :rate path))
+                :loop? loop?})
+       (assoc ?pn :paths (-> ?pn :paths rest vec))
+       (if end (update ?pn :explored conj end) ?pn)))))
+         
 (defn vanish-paths
  "Navigate from root to all ending tangible states. 
-  Return with :M2Mp updated with 'vanishing path rates."
+  Return with :M2Mp updated with :vpath-rates."
   [pn root-link v-link]
   (as-> pn ?pn
-    (update ?pn :explored conj root-link)
+    (assoc ?pn :explored-v (vector root-link))
     (assoc ?pn :paths (vector (vector v-link)))
     (assoc ?pn :root root-link)
-    (loop [pn ?pn
-           cnt 0]
-      (when (< cnt 100)
-        (as-> pn ?pn2
-          (if (empty? (:paths ?pn2)) ; calc-vpath-rate removes one for each :tangible. 
-            ?pn2
-            (let [current (-> ?pn2 :paths first last :Mp)
-                  nexts (next-links ?pn2 current)
-                  tan-van (tanvan ?pn2 nexts)]
-              (recur (as-> ?pn2 ?pn3
-                       (update ?pn3 :explored into nexts)
-                       (if (empty? nexts)
-                         (calc-vpath-rate pn nil true) ; loops back
-                         (reduce (fn [pn end] (calc-vpath-rate pn end)) ?pn3 (:tangible tan-van)))
-                       (if (empty? (:vanishing tan-van))
-                         ?pn3
-                         (assoc ?pn3 :paths ; Create for current path a new path for each new vanishing state
-                                (into (vec (map #(conj (-> ?pn3 :paths first) %) (:vanishing tan-van)))
-                                      (-> ?pn3 :paths rest)))))
-                     (inc cnt)))))))))
+    (loop [pn ?pn]
+      (as-> pn ?pn2
+        (if (empty? (:paths ?pn2)) ; calc-vpath-rate removes one for each :tangible. 
+          ?pn2
+          (let [current (-> ?pn2 :paths first last :Mp)
+                nexts (next-links ?pn2 current :explored-v)
+                tan-van (tanvan ?pn2 nexts)]
+            (recur (as-> ?pn2 ?pn3
+                     (update ?pn3 :explored-v into nexts) 
+                     (if (empty? nexts)
+                       (calc-vpath-rate pn nil true) ; loops back
+                       (reduce (fn [pn end] (calc-vpath-rate pn end)) ?pn3 (:tangible tan-van)))
+                     (if (empty? (:vanishing tan-van))
+                       ?pn3
+                       (assoc ?pn3 :paths ; Create for current path a new path for each new vanishing state
+                              (into (vec (map #(conj (-> ?pn3 :paths first) %) (:vanishing tan-van)))
+                                    (-> ?pn3 :paths rest))))))))))))
 
 (defn reachability
   "Compute the reachability graph (:M2Mp) depth-first starting at the initial marking, 
@@ -154,7 +148,7 @@
           ?pn2
           (if (empty? (:St ?pn2))
             ?pn2                      
-            (let [nexts (next-links ?pn2 (:Mp (first (:St ?pn2))))
+            (let [nexts (next-links ?pn2 (:Mp (first (:St ?pn2))) :explored)
                   tan-van (when (not-empty nexts) (tanvan ?pn2 nexts))]
               (recur
                (-> ?pn2 
@@ -162,8 +156,9 @@
                    (assoc :root (first (:St ?pn2)))
                    (assoc :St (into (:tangible tan-van) (vec (rest (:St ?pn2)))))
                    (assoc :Sv (into (:vanishing tan-van) (:Sv ?pn2))))))))))
-    (summarize-reach ?pn)
-    (check-reach ?pn)))
+    (loop-reduce ?pn)
+    #_(summarize-reach ?pn)
+    #_(check-reach ?pn)))
 
 (defn summarize-reach
   "Merge :vpath-rates and :explored (sans vanishing) resulting in :M2Mp"
@@ -173,7 +168,107 @@
                                                      (tangible? ?pn (:M %)))
                                                (distinct e)))))
    (assoc ?pn :M2Mp (into (:explored ?pn) (:vpath-rates ?pn)))
-   (dissoc ?pn :vpath-rates :explored :St :Sv :paths :root)))
+   (dissoc ?pn :vpath-rates :explored :explored-v :St :Sv :paths :root)))
+
+(declare links-on links-off vanishing2subnets Qt-calc Qtv-calc Pv-calc Pvt-calc)
+
+(defn loop-reduce
+  "Update the :vpath-rates for a looping subnet."
+  [pn]
+  (reset! +diag+ pn)
+  (reduce (fn [pn subnet]
+            (let [Qt (Qt-calc subnet)
+                  Qtv (Qtv-calc subnet)
+                  Pv (Pv-calc subnet)
+                  Pvt (Pvt-calc subnet)]
+              #_(Stuff to apply Q-prime and clean up)))
+          pn (vanishing2subnets pn)))
+
+(defn vanishing2subnets [pn]
+  "Create a map of subnets that can be solved independently."
+  (as-> (filter :loop? (:vpath-rates pn)) ?subnets
+    (zipmap (map :fire ?subnets) (map #(links-on pn %) ?subnets))
+    (reduce (fn [s key] (update s key into (links-off pn (get s key))))
+            ?subnets (keys ?subnets))
+    (merge-subnets ?subnets)))
+
+(defn merge-subnets
+  "Combine entries in the argument map that have overlapping markings."
+  [subnets]
+  (let [progress (atom true)]
+    (loop [s subnets]
+      (reset! progress false)
+      (let [combos (combo/combinations (keys s) 2)
+            subs (reduce (fn [s1 [p1 p2]]
+                           (if (empty? (clojure.set/intersection (set (get s1 p1)) (set (get s1 p2))))
+                             s1
+                             (do (reset! progress true)
+                                 (as-> s1 ?s
+                                   (assoc ?s (vector p1 p2) (distinct (into (get ?s p1) (get ?s p2))))
+                                   (dissoc ?s p1 p2)))))
+                         s combos)]
+        (if @progress (recur subs) subs)))))
+      
+(defn links-on
+  "Find all the simple links that are part of the argument path link."
+  [pn plink]
+  (distinct 
+   (reduce (fn [accum trn]
+             (let [prev (if (empty? accum) (:M plink) (-> accum last :Mp))
+                   tr (name2obj pn trn)]
+               (conj accum
+                     {:M prev
+                      :fire trn
+                      :Mp (next-mark pn prev trn)
+                      :type (:type tr)
+                      :rate (:rate tr)})))
+           []
+           (:fire plink))))
+
+(defn links-off
+  "Find all the simple links that are not among those found by links-on 
+   but share a marking. Add these to set generated by links-on."
+  [pn link-set]
+  (let [marks (into (map :M link-set) (map :Mp link-set))
+        other-paths (filter (fn [vpath] (some (fn [m] (or (= (:M vpath) m) (= (:Mp vpath) m))) marks))
+                            (:vpath-rates pn))]
+    (reduce (fn [ls op] (distinct (into ls (links-on pn op))))
+            link-set
+            other-paths)))
+
+(defn Qt-calc  [pn])
+(defn Qtv-calc [pn])
+(defn Pv-calc  [pn])
+(defn Pvt-calc [pn])
+
+(def tQt [0.0 0.0 0.0])
+(def tQtv [5.0 3.0 0.0 0.0])
+;;; Pv has i->i. Does that make sense?
+(def tPv [[0.0,0.0,0.0,1.0],
+          [0.0,0.0,0.0,0.4],
+          [0.4,0.0,0.0,0.0],
+          [0.0,0.0,0.5,0.0]])
+(def tPvt [[0.0 0.0 0.0]   ; 2->6 2->7 2->8
+           [0.6 0.0 0.0]   ; 3->6 3->7 3->8
+           [0.0 0.6 0.0]   ; 4->6 4->7 4->8
+           [0.0 0.0 0.5]]) ; 5->6 5->7 5->8
+
+;;; Note: If m/inverse is Gauss-Jordan, it is O(n^3) 20 states 8000 ops. Could be better.
+;;; Knottenbelt suggest LU decomposition. 
+(defn Q-prime
+  "Calculate Q' = Qt + Qtv (I-Pv)^-1 Pvt This is the rates between
+   a tangible state and its tangible descendant states through a network
+   of vanishing states."
+  [Qt Qtv Pv Pvt]
+  (let [Qt (m/array Qt)
+        Qtv (m/transpose (m/array Qtv))
+        v (count Pv)
+        Pv (m/array Pv)
+        Pvt (m/array Pvt)
+        N  (m/inverse (m/sub (m/identity-matrix v v) Pv))] ; N = (I - Pv)^-1
+    (when N ; If couldn't calculate inverse, then 'timeless trap'
+      (m/add Qt (m/mmul Qtv N Pvt)))))
+
 
 (defn in-loop-checks [pn]
   (cond 
@@ -207,40 +302,8 @@
    A marking is vanishing if it enables an immediate transitions. "
   (not-any? #(immediate? pn %) (map :fire (next-links pn mark false))))
 
-(defn tryme []
-  (-> "data/qo10.xml"
-      read-pnml
-      reachability))
+;;;(def m (-> "data/qorchard.xml" pnml/read-pnml pnr/renumber-pids))
 
-;(def m (-> "data/qo10.xml" pnml/read-pnml renumber-pids))
-
-(def tQt [0.0 0.0 0.0])
-(def tQtv [5.0 3.0 0.0 0.0])
-;;; Pv has i->i. Does that make sense?
-(def tPv [[0.0,0.0,0.0,1.0],
-          [0.0,0.0,0.0,0.4],
-          [0.4,0.0,0.0,0.0],
-          [0.0,0.0,0.5,0.0]])
-(def tPvt [[0.0 0.0 0.0]   ; 2->6 2->7 2->8
-           [0.6 0.0 0.0]   ; 3->6 3->7 3->8
-           [0.0 0.6 0.0]   ; 4->6 4->7 4->8
-           [0.0 0.0 0.5]]) ; 5->6 5->7 5->8
-
-;;; Note: If m/inverse is Gauss-Jordan, it is O(n^3) 20 states 8000 ops. Could be better.
-;;; Knottenbelt suggest LU decomposition. 
-(defn Q-prime
-  "Calculate Q' = Qt + Qtv (I-Pv)^-1 Pvt This is the rates between
-   a tangible state and its tangible descendant states through a network
-   of vanishing states."
-  [Qt Qtv Pv Pvt]
-  (let [Qt (m/array Qt)
-        Qtv (m/transpose (m/array Qtv))
-        v (count Pv)
-        Pv (m/array Pv)
-        Pvt (m/array Pvt)
-        N  (m/inverse (m/sub (m/identity-matrix v v) Pv))] ; N = (I - Pv)^-1
-    (when N ; If couldn't calculate inverse, then 'timeless trap'
-      (m/add Qt (m/mmul Qtv N Pvt)))))
 
 ;;; Reachability-specific utilities ---------------------------------------------
 (defn markings2source
