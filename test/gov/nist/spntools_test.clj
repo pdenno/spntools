@@ -72,11 +72,11 @@
   (testing "Steady-state properties qo10.xml"
     (let [result (:avg-tokens-on-place (pn-steady-state (read-pnml "data/qo10.xml")))
           correct  {:P1 0.111111, :P2 0.0, :P3 0.0, :P4 0.0, :P5 0.41667, 
-                    :P6 0.3333, :P7 0.083,  :P8 0.05556}]
+                    :P6 0.333333, :P7 0.083333,  :P8 0.05556}]
       (is (every? (fn [[key val]]
                     (=* val (get correct key) 0.0001)) result)))))
 
-(deftest steady-state-qo10
+(deftest steady-state-qorchard
   (testing "Steady-state properties qorchard.xml (has a loop)"
     (let [result (:avg-tokens-on-place (pn-steady-state (read-pnml "data/qorchard.xml")))
           correct  {:P1 0.11111, :P2 0.0, :P3 0.0, :P4 0.0, :P5 0.0, :P6 0.2, 
