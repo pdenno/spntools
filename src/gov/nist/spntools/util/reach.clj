@@ -136,8 +136,8 @@
     (assoc ?pn :explored (vec (initial-tangible-states ?pn)))
     (assoc ?pn :St (:explored ?pn), :Sv [])
     (loop [pn ?pn]
-      (println "Sv = " (:Sv pn))
-      (println "St = " (:St pn) "\n")
+      ;(println "Sv = " (:Sv pn))
+      ;(println "St = " (:St pn) "\n")
       (as-> pn ?pn2
         (if (empty? (:Sv ?pn2))
           ?pn2
@@ -157,8 +157,106 @@
                    (assoc :St (into (:tangible tan-van) (vec (rest (:St ?pn2)))))
                    (assoc :Sv (into (:vanishing tan-van) (:Sv ?pn2))))))))))
     (loop-reduce ?pn)
-    #_(summarize-reach ?pn)
-    #_(check-reach ?pn)))
+    (summarize-reach ?pn)
+    (check-reach ?pn)))
+
+(declare links-on links-off vanishing2subnets Qt-calc Qtv-calc Pv-calc Pvt-calc)
+(declare loop-clean-paths loop-add-rates)
+
+(defn loop-reduce
+  "Update the :vpath-rates for a looping subnet."
+  [pn]
+  (as-> pn ?pn
+    (reduce (fn [pn [k subnet]]
+              (as-> pn ?pn
+                (assoc ?pn :subnet subnet)
+                (assoc ?pn :tanvan (tanvan ?pn subnet))
+                (Qt-calc ?pn)
+                (Qtv-calc ?pn)
+                (assoc ?pn :Pv (Pv-calc ?pn))
+                (assoc ?pn :Pvt (Pvt-calc ?pn))
+                (assoc ?pn :loop-rates (Q-prime (:Qt ?pn) (:Qtv ?pn) (:Pv ?pn) (:Pvt ?pn)))
+                (loop-clean-paths ?pn)
+                (loop-add-rates ?pn k)))
+            ?pn (vanishing2subnets ?pn))
+    (dissoc ?pn :subnet :tanvan :Qt :Qtv :Pv :Pvt :loop-rates 
+            :Qt-states :Qtv-states :loop-rates)))
+
+(defn Qt-calc
+  "Calculate the vector of rates from the root directly to tangible states."
+  [pn]
+  (let [root (-> pn :root :M)]
+    (as-> pn ?pn 
+      (assoc ?pn :Qt-states (vec (filter #(tangible? ?pn %)
+                                         (map :Mp (-> pn :tanvan :vanishing))))) ; look for 'exiting vanishing'
+      (assoc ?pn :Qt (vec (map (fn [target]
+                                 (reduce (fn [r link] (+ r (:rate link)))
+                                         0.0
+                                         (filter #(and (= root (:M %)) (= target (:Mp %))) (:explored ?pn))))
+                               (:Qt-states ?pn)))))))
+
+(defn Qtv-calc
+  "Calculate the vector of rates from the root directly to vanishing states."
+  [pn]
+  (let [root (-> pn :root :M)]
+    (as-> pn ?pn
+      (assoc ?pn :Qtv-states (distinct (vec (filter #(vanishing? ?pn %) (map :M (:subnet ?pn))))))
+      (assoc ?pn :Qtv (vec (map (fn [target]
+                                  (reduce (fn [r link] (+ r (:rate link)))
+                                          0.0 
+                                          (filter #(and (= root (:M %)) (= target (:Mp %))) (:explored ?pn))))
+                                (:Qtv-states ?pn)))))))
+
+(defn Pv-calc
+  "Calculate matrix of weights among the vanishing states"
+  [pn]
+  (vec (map (fn [r]
+              (vec (map (fn [c]
+                          (reduce (fn [sum link] (+ sum (:rate link)))
+                                  0.0
+                                  (filter #(and (= (:M %) r) (= (:Mp %) c))
+                                          (:subnet pn))))
+                        (:Qtv-states pn))))
+            (:Qtv-states pn))))
+
+
+(defn Pt-calc [pn]
+    (vec (map (fn [r]
+              (vec (map (fn [c]
+                          (reduce (fn [sum link] (+ sum (:rate link)))
+                                  0.0
+                                  (filter #(and (= (:M %) r) (= (:Mp %) c))
+                                          (:subnet pn))))
+                        (:Qt-states pn))))
+              (:Qtv-states pn))))
+
+(defn loop-clean-paths
+  "Remove from :vpath-rates any path that has in its :fire something which
+  matches a :fire from :subnet; it has been addressed by the loop."
+  [pn]
+  (let [fires (map :fire (:subnet pn))]
+    (-> pn 
+        (assoc :vpath-rates
+               (vec (reduce (fn [vp fire]
+                              (remove (fn [vr] (some #(= fire %) (:fire vr))) vp))
+                            (:vpath-rates pn)
+                            fires)))
+        (assoc :explored
+               (vec
+                (distinct ; POD not sure why this is necessary.
+                 (reduce (fn [exp fire] (remove #(= fire (:fire %)) exp))
+                         (:explored pn)
+                         fires)))))))
+
+(defn loop-add-rates
+  "Add rates between the root state and the tangible states exiting the loop."
+  [pn key] ; Use :fire key multi-loop debugging. Otherwise I like :fire :loop!
+  (let [root (-> pn :root :M)]
+    (update pn
+            :explored
+            into
+            (map (fn [[mp r]] {:M root :fire :loop! :Mp mp :rate r})
+                 (zipmap (:Qt-states pn) (:loop-rates pn))))))
 
 (defn summarize-reach
   "Merge :vpath-rates and :explored (sans vanishing) resulting in :M2Mp"
@@ -169,68 +267,6 @@
                                                (distinct e)))))
    (assoc ?pn :M2Mp (into (:explored ?pn) (:vpath-rates ?pn)))
    (dissoc ?pn :vpath-rates :explored :explored-v :St :Sv :paths :root)))
-
-(declare links-on links-off vanishing2subnets Qt-calc Qtv-calc Pv-calc Pvt-calc)
-
-(defn loop-reduce
-  "Update the :vpath-rates for a looping subnet."
-  [pn]
-  (reduce (fn [pn [k subnet]]
-            (as-> pn ?pn
-                (assoc ?pn :subnet subnet)
-                (assoc ?pn :tanvan (tanvan ?pn subnet))
-                (Qt-calc ?pn)
-                (Qtv-calc ?pn)
-                #_(Pv-calc ?pn)
-                #_(Pvt-calc subnet)))
-          pn (vanishing2subnets pn)))
-
-(defn Qt-calc
-  "Calculate the vector of rates from the root directly to tangible states."
-  [pn]
-  (let [root (-> pn :root :M)]
-    (as-> pn ?pn 
-      (assoc ?pn :Qt-states (vec (filter #(tangible? ?pn %)
-                                         (map :Mp (-> pn :tanvan :vanishing))))) ; look for 'exiting vanishing'
-      (assoc ?pn :Qt-rates (vec (map (fn [target]
-                                       (reduce (fn [r link] (+ r (:rate link)))
-                                               0.0
-                                               (filter #(and (= root (:M %)) (= target (:Mp %))) (:explored ?pn))))
-                                     (:Qt-states ?pn)))))))
-
-(defn Qtv-calc
-  "Calculate the vector of rates from the root directly to vanishing states."
-  [pn]
-  (let [root (-> pn :root :M)]
-    (as-> pn ?pn
-      (assoc ?pn :Qtv-states (distinct (vec (filter #(vanishing? ?pn %) (map :M (:subnet ?pn))))))
-      (assoc ?pn :Qtv-rates (vec (map (fn [target]
-                                       (reduce (fn [r link] (+ r (:rate link)))
-                                               0.0 
-                                               (filter #(and (= root (:M %)) (= target (:Mp %))) (:explored ?pn))))
-                                     (:Qtv-states ?pn)))))))
-
-
-
-(defn Pv-calc  [pn])
-(defn Pvt-calc [pn])
-
-;;; Build a map that has :Qt-marks, :Qtv-marks, use those to drive the matrices. Put it all on pn. 
-
-(def tQt [0.0 0.0 0.0])  ; 1->6 1->7 1->8 (need root, need other tangible states)
-(def tQtv [5.0 3.0 0.0 0.0]) ; 1->2 1->3 1->4 1->5
-;;; Pv has i->i. Does that make sense?
-(def tPv [[0.0,0.0,0.0,1.0],  ; 2->2 2->3 2->4 2->5
-          [0.0,0.0,0.0,0.4],  ; 3->2 3->3 3->4 3->5
-          [0.4,0.0,0.0,0.0],  ; 4->2 4->3 4->4 4->5
-          [0.0,0.0,0.5,0.0]]) ; 5->2 5->3 5->4 5->5
-(def tPvt [[0.0 0.0 0.0]   ; 2->6 2->7 2->8  (Use name ordering as Qt/Qtv, )
-           [0.6 0.0 0.0]   ; 3->6 3->7 3->8
-           [0.0 0.6 0.0]   ; 4->6 4->7 4->8
-           [0.0 0.0 0.5]]) ; 5->6 5->7 5->8
-                                     
-  
-
 
 (defn vanishing2subnets [pn]
   "Create a map of subnets that can be solved independently."
@@ -284,7 +320,6 @@
             link-set
             other-paths)))
 
-
 ;;; Note: If m/inverse is Gauss-Jordan, it is O(n^3) 20 states 8000 ops. Could be better.
 ;;; Knottenbelt suggest LU decomposition. 
 (defn Q-prime
@@ -300,7 +335,6 @@
         N  (m/inverse (m/sub (m/identity-matrix v v) Pv))] ; N = (I - Pv)^-1
     (when N ; If couldn't calculate inverse, then 'timeless trap'
       (m/add Qt (m/mmul Qtv N Pvt)))))
-
 
 (defn in-loop-checks [pn]
   (cond 
@@ -339,9 +373,7 @@
    A marking is vanishing if it enables an immediate transitions. "
   (not (tangible? pn mark)))
 
-
 ;;;(def m (-> "data/qorchard.xml" pnml/read-pnml pnr/renumber-pids))
-
 
 ;;; Reachability-specific utilities ---------------------------------------------
 (defn markings2source

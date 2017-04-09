@@ -10,7 +10,7 @@
 ;;;==========================================================================
 (deftest reachability-test
   (testing "Reachability graph size"
-    (is (= 8 (-> "data/qo10.xml" pnml/read-pnml pnr/reachability :M2Mp count)))))
+    (is (= 8 (-> "data/qo10.xml" read-pnml reachability :M2Mp count)))))
 
 (deftest distinct-markings
   (testing "markings created by reachability"
@@ -23,7 +23,7 @@
              [1 0 0 0 0 0 1]
              [0 1 0 0 0 0 1]])
        (set
-        (as-> (pnml/read-pnml "data/m6.xml") ?pn
+        (as-> (read-pnml "data/m6.xml") ?pn
           (reachability ?pn)
           (distinct (map :M (:M2Mp ?pn))))))))
         
@@ -32,7 +32,7 @@
 ;;;========================================================
 (deftest infinitesimal-generator-matrix
   (testing "Marsan section 6.1 example, infinitesimal generator"
-    (is (= (:Q (-> (two-step "data/m6.xml")
+    (is (= (:Q (-> (read-pnml "data/m6.xml")
                    (reorder-places [:Pact1 :Preq1 :Pacc1 :Pidle :Pact2 :Preq2 :Pacc2])
                    (reachability)
                    (Q-matrix :force-ordering
@@ -76,6 +76,13 @@
       (is (every? (fn [[key val]]
                     (=* val (get correct key) 0.0001)) result)))))
 
+(deftest steady-state-qo10
+  (testing "Steady-state properties qorchard.xml (has a loop)"
+    (let [result (:avg-tokens-on-place (pn-steady-state (read-pnml "data/qorchard.xml")))
+          correct  {:P1 0.11111, :P2 0.0, :P3 0.0, :P4 0.0, :P5 0.0, :P6 0.2, 
+                    :P7 0.258333,:P8 0.4305555}]
+      (is (every? (fn [[key val]]
+                    (=* val (get correct key) 0.0001)) result)))))
 
 (deftest steady-state-properties-simple
   (testing "Steady-state properties are consistent with findings from other tools"
@@ -131,7 +138,7 @@
 (deftest steady-state-properties-m612
   (testing "Steady-state properties m612.xml"
     (let [result (:avg-tokens-on-place (pn-steady-state (read-pnml "data/m612.xml")))
-          correct {:P1 0.16667 :P2 0.16667 :P3 0.16667 :Pa 0.5}]
+          correct {:P1 0.16667 :P2 0.16667 :P3 0.16667 :Pa 0.5 :Pb 0.0}]
       (is (every? (fn [[key val]]
                     (=* val (get correct key) 0.001)) result)))))
 
@@ -143,35 +150,35 @@
                     (=* val (get correct key) 0.001)) result)))))
 
 ;;; On-the-fly reduction -- Don't need all these tests, just documentation for pnr/Q-prime calculation
-(def tQt [0.0 0.0 0.0])
-(def tQtv [5.0 3.0 0.0 0.0])
-(def tPvt [[0.0 0.0 0.0]   ; 2->6 2->7 2->8
+#_(def tQt [0.0 0.0 0.0])  ; 1->6 1->7 1->8 (need root, need other tangible states)
+#_(def tQtv [5.0 3.0 0.0 0.0]) ; 1->2 1->3 1->4 1->5
+;;; Pv has i->i. Does that make sense?
+#_(def tPv [[0.0,0.0,0.0,1.0],  ; 2->2 2->3 2->4 2->5
+          [0.0,0.0,0.0,0.4],  ; 3->2 3->3 3->4 3->5
+          [0.4,0.0,0.0,0.0],  ; 4->2 4->3 4->4 4->5
+          [0.0,0.0,0.5,0.0]]) ; 5->2 5->3 5->4 5->5
+
+#_(def tPvt [[0.0 0.0 0.0]   ; 2->6 2->7 2->8  (Use name ordering as Qt/Qtv, )
            [0.6 0.0 0.0]   ; 3->6 3->7 3->8
            [0.0 0.6 0.0]   ; 4->6 4->7 4->8
            [0.0 0.0 0.5]]) ; 5->6 5->7 5->8
-;;; Pv has i->i. Does that make sense?
-(def tPv [[0.0,0.0,0.0,1.0],
-          [0.0,0.0,0.0,0.4],
-          [0.4,0.0,0.0,0.0],
-          [0.0,0.0,0.5,0.0]])
-
-(def tenQt [0.0 0.0 0.0 0.0])
-(def tenQtv [5.0 3.0 0.0])
-(def tenPvt [[0.75 0.0 0.0 0.0]   ; 2->5 2->6 2->7 2->8
+#_(def tenQt [0.0 0.0 0.0 0.0])
+#_(def tenQtv [5.0 3.0 0.0])
+#_(def tenPvt [[0.75 0.0 0.0 0.0]   ; 2->5 2->6 2->7 2->8
              [0.0  1.0 0.0 0.0]   ; 3->5 3->6 3->7 3->8
              [0.0 0.0 0.6 0.4]])  ; 4->5 4->6 4->7 4->8
-(def tenPv [[0.0 0.0 0.25]    ; 2->2 2->3 2->4
+#_(def tenPv [[0.0 0.0 0.25]    ; 2->2 2->3 2->4
             [0.0 0.0 0.0]     ; 3->2 2->3 3->4
             [0.0 0.0 0.0]])   ; 4->2 4->3 4->4
 
-(def t13Qt [0.0 0.0])
-(def t13Qtv [5.0 3.0 0.0 0.0])
+#_(def t13Qt [0.0 0.0])
+#_(def t13Qtv [5.0 3.0 0.0 0.0])
 ;;; Pvt has 'downsteam' transitions from every vanishing. Here just one downstream state.
-(def t13Pvt [[0.0]      ; 2->6
+#_(def t13Pvt [[0.0]      ; 2->6
              [0.6]      ; 3->6
              [0.0]      ; 4->6
              [0.0]])    ; 5->6
-(def t13Pv [[0.0 0.0 0.0 1.0]
+#_(def t13Pv [[0.0 0.0 0.0 1.0]
             [0.0 0.0 0.0 0.4]
             [1.0 0.0 0.0 0.0]
             [0.0 0.0 1.0 0.0]])
