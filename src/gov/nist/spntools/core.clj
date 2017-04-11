@@ -13,11 +13,21 @@
 (m/set-current-implementation :vectorz)
 
 (declare pn-steady-state)
-(defn run-step
+(defn run-all
   [filename]
-  (-> (read-pnml filename)
-      (pnr/reachability)
-      (pn-steady-state)))
+  "Diagnostic"
+  (-> filename
+      read-pnml
+      pn-steady-state))
+
+(defn run-ready
+  [filename]
+  "Diagnostic"
+  (-> filename
+      read-pnml
+      pnr/renumber-pids))
+
+;(def m (run-ready "data/weights.xml"))
 
 ;;; =========== Steady State Calculation ===============================================
 (declare Q-matrix steady-state-props avg-tokens-on-place)

@@ -7,11 +7,14 @@
             [gov.nist.spntools.util.pnml :refer (read-pnml)]))
 
 ;;; To Do: Implement place capacity restrictions. (maybe)
-;;;     * Instead of all these +max-rs+ etc. might want a system wide ^:dynamice
+;;;     * Instead of all these +max-rs+ etc. might want a system wide ^:dynamic
 ;;;       binding of variable values in a map. (Call the current things +default-...)
 ;;;     * Why am I keeping :Mp and :fire ? Replace links with markings. - NOT GONNA DO IT
 ;;;     * I think vanishing places that are inside a network (like P4 in qo10) can be
 ;;;       removed from the analysis. DOUBTFUL
+;;;     * Eliminate summarize-reach; It should be one line in reachability.
+;;;     * Rewrite the reduction of :explore to use next-link on every step of vpaths :fire
+;;      * Maybe write the find-link / filter-links thing. Needs thought on efficiency. 
 
 (def +zippy+ (atom nil))
 
@@ -47,67 +50,100 @@
 
 ;;; The target marking is completely specified by the source (marking at tail) and the transition.
 (defn next-links
-  "Return a seq of maps ({:M <tail-marking> :trans <transition that fired> :Mp <head-marking>}...)
-   which contain the argument state :M and unexplored states, :Mp reachable by firing :trans"
+  "Return nil or a vector of maps [{:M <tail-marking> :trans <transition that fired> :Mp <head-marking>}...]
+   which contain the argument state :M and unexplored states, :Mp reachable by firing :trans.
+   Returned links have adjusted weights when transitions are immediate."
   ([pn mark check-list]
-   (let [trns (filter #(fireable? pn mark %) (map :name (:transitions pn)))
-         trns (if check-list
-                (remove (fn [trn] (some #(and (= mark (:M %)) (= trn (:fire %))) (check-list pn)))
-                        trns)
-                trns)]
-     (map (fn [trn]
-            {:M mark
-             :fire trn
-             :Mp (next-mark pn mark trn)
-             :rate (:rate (name2obj pn trn))})
-          trns)))
+   (let [trns
+         (as-> (map :name (:transitions pn)) ?trns
+           (filter #(fireable? pn mark %) ?trns)
+           (if (some #(immediate? pn %) ?trns) (filter #(immediate? pn %) ?trns) ?trns)
+           (if check-list
+             (remove (fn [trn] (some #(and (= mark (:M %)) (= trn (:fire %))) (check-list pn))) ?trns)
+             ?trns))
+         imm? (immediate? pn (first trns))
+         trs (map #(name2obj pn %) trns)
+         sum (when imm? (apply + (map :rate trs)))]
+     (not-empty
+      (vec
+       (map (fn [tr]
+              {:M mark
+               :fire (:name tr)
+               :Mp (next-mark pn mark (:name tr))
+               :rate (if imm? (/ (:rate tr) sum) (:rate tr))})
+            trs)))))
   ([pn mark] (next-links pn mark false)))
-   
+
 (def +k-bounded+ (atom 10)) ; Maybe better than (or addition to) k-bounded would be size of :explored
 (def +max-rs+  "reachability set size" (atom 5000)) 
 (declare renumber-pids check-reach tangible? vanishing? in-loop-checks loop-reduce summarize-reach)
-(declare initial-tangible-state normalize-weights vanish-paths tanvan calc-vpath-rate)
+(declare initial-tangible-state vanish-paths terminate-vpath)
 
 (defn reachability
   "Compute the reachability graph (:M2Mp) depth-first starting at the initial marking, 
    removing vanishing states on-the-fly using the algorithm of Knottenbelt, 1996."
   [pn]
+  (reset! +diag+ [])
   (as-pn-ok-> pn ?pn
     (dissoc ?pn :explored)
     (assoc ?pn :vpath-rates [])
     (renumber-pids ?pn)
     (initial-tangible-state ?pn)
-    (normalize-weights ?pn)
-    (assoc ?pn :explored (vec (next-links ?pn (:initial-tangible ?pn))))
+    (assoc ?pn :explored (next-links ?pn (:initial-tangible ?pn)))
     (assoc ?pn :St (:explored ?pn), :Sv [])
     (loop [pn ?pn]
       ;(println "Sv = " (:Sv pn))
       ;(println "St = " (:St pn) "\n")
-      (as-> pn ?pn2
-        (if (empty? (:Sv ?pn2))
-          ?pn2
-          (reduce (fn [pn v-link] (vanish-paths pn (:root pn) v-link)) ?pn2 (:Sv ?pn2)))
+      (as-pn-ok-> pn ?pn2
+        (reduce (fn [pn v-link] (vanish-paths pn v-link)) ?pn2 (:Sv ?pn2))
         (assoc ?pn2 :Sv [])
         (in-loop-checks ?pn2)
-        (if (contains? ?pn2 :failure)
-          ?pn2
-          (if (empty? (:St ?pn2))
-            ?pn2                      
-            (let [nexts (next-links ?pn2 (:Mp (first (:St ?pn2))) :explored)
-                  tan-van (when (not-empty nexts) (tanvan ?pn2 nexts))]
-              (recur
-               (-> ?pn2 
-                   (update :explored into nexts)
-                   (assoc :root (first (:St ?pn2)))
-                   (assoc :St (into (:tangible tan-van) (vec (rest (:St ?pn2)))))
-                   (assoc :Sv (into (:vanishing tan-van) (:Sv ?pn2))))))))))
+        (if (empty? (:St ?pn2))
+          ?pn2                      
+          (let [nexts (next-links ?pn2 (:Mp (first (:St ?pn2))) :explored)
+                tang? (and nexts (tangible? ?pn2 (-> nexts first :M)))]
+            (recur (-> ?pn2 
+                       (update :explored into nexts)
+                       (assoc :St (into (or nexts []) (vec (rest (:St ?pn2)))))
+                       (assoc :Sv (into (if tang? [] nexts) (:Sv ?pn2)))))))))
     (loop-reduce ?pn)
     (summarize-reach ?pn)
     (check-reach ?pn)))
 
+(defn match-root
+  "Find the tangible root that lead to the v-link. It should be near the top of :explored."
+  [pn v-link]
+  (let [state (:M v-link)]
+    (some #(when (= (:Mp %) state) %) (:explored pn))))
+
+(defn vanish-paths
+ "Navigate from root to all ending tangible states. 
+  Return with vpath-rates updated."
+  [pn v-link]
+  (as-> pn ?pn
+      (assoc ?pn :explored-v (vector (:root pn)))
+      (assoc ?pn :paths (vector (vector v-link)))
+      (assoc ?pn :root (match-root ?pn v-link))
+      (loop [pn ?pn]
+        (as-> pn ?pn2
+          (if (empty? (:paths ?pn2)) ; calc-vpath-rate removes one for each :tangible. 
+            ?pn2
+            (let [current (-> ?pn2 :paths first last :Mp)
+                  nexts (next-links ?pn2 current :explored-v)
+                  tang? (and nexts (tangible? ?pn2 (-> nexts first :M)))]
+              (recur (as-> ?pn2 ?pn3
+                       (if nexts
+                         (update ?pn3 :explored-v into nexts)
+                         (terminate-vpath ?pn3 current)) ; loops back -- POD NOT SURE
+                       (if tang?
+                         (reduce (fn [pn _] (terminate-vpath pn)) ?pn3 nexts)
+                         (assoc ?pn3 :paths ; Create for current path a new path for each new vanishing state
+                                (into (vec (map #(conj (-> ?pn3 :paths first) %) nexts))
+                                      (-> ?pn3 :paths rest))))))))))))
+
 ;;; POD I think it is sufficient to find a single marking. 
 (defn initial-tangible-state 
-  "Return an initial tangible state, given a PN wehre the initial marking might not be tangible."
+  "Return an initial tangible state, given a PN where the initial marking might not be tangible."
   [pn]
   (let [im (:initial-marking pn)]
     (as-> pn ?pn
@@ -128,51 +164,15 @@
                            (vec (rest (into stack (next-links ?pn3 (:Mp (first stack)) :explored-i))))))))
           (dissoc ?pn2 :explored-i))))))
 
-;;; POD I don't think there is a situation where 
-(defn normalize-weights ; POD NYI
-  "Weights of immediate transitions from a [state]"
-  [pn]
-  pn)
-         
-(defn vanish-paths
- "Navigate from root to all ending tangible states. 
-  Return with :M2Mp updated with :vpath-rates."
-  [pn root-link v-link]
-  (as-> pn ?pn
-    (assoc ?pn :explored-v (vector root-link))
-    (assoc ?pn :paths (vector (vector v-link)))
-    (assoc ?pn :root root-link)
-    (loop [pn ?pn]
-      (as-> pn ?pn2
-        (if (empty? (:paths ?pn2)) ; calc-vpath-rate removes one for each :tangible. 
-          ?pn2
-          (let [current (-> ?pn2 :paths first last :Mp)
-                nexts (next-links ?pn2 current :explored-v)
-                tan-van (tanvan ?pn2 nexts)]
-            (recur (as-> ?pn2 ?pn3
-                     (update ?pn3 :explored-v into nexts) 
-                     (if (empty? nexts)
-                       (calc-vpath-rate pn nil true) ; loops back
-                       (reduce (fn [pn end] (calc-vpath-rate pn end)) ?pn3 (:tangible tan-van)))
-                     (if (empty? (:vanishing tan-van))
-                       ?pn3
-                       (assoc ?pn3 :paths ; Create for current path a new path for each new vanishing state
-                              (into (vec (map #(conj (-> ?pn3 :paths first) %) (:vanishing tan-van)))
-                                    (-> ?pn3 :paths rest))))))))))))
-
-(defn tanvan
-  "Partition markings into {:tangible ... :vanishing ...}"
-  [pn links]
-  (let [parts (group-by #(tangible? pn (:M %)) links)]
-      {:tangible (vec (get parts true))
-       :vanishing (vec (get parts false))}))
-
-(defn calc-vpath-rate 
+;;; The maps look like this:
+;;;   Typical:  {:M <root> :fire [<root-to-v> <v> ...<v> <v-to-tang>] :Mp <tangible>}"
+;;;   Loop   :  {:M <root> :fire [<root-to-v> <v> ...<v>] :Mp <not relevant> :loop? true}"
+(defn terminate-vpath 
   "Calculate (add to) :vpath-rates, the rate from the root to a tangible state reachable 
    through a path ending on the next tangible state reachable. Drop the path from :paths."
-  ([pn end] (calc-vpath-rate pn end false))
-  ([pn end loop?]
-   (let [path  (-> pn :paths first)]
+  ([pn] (terminate-vpath pn false))
+  ([pn loop?]
+   (if-let [path (-> pn :paths first)]
      (as-> pn ?pn
        (update ?pn :vpath-rates
                conj
@@ -181,8 +181,10 @@
                 :Mp (-> path last :Mp)
                 :rate (reduce * (-> ?pn :root :rate) (map :rate path))
                 :loop? loop?})
-       (assoc ?pn :paths (-> ?pn :paths rest vec))
-       (if end (update ?pn :explored conj end) ?pn)))))
+       (if loop?
+         (assoc ?pn :paths [])
+         (assoc ?pn :paths (-> ?pn :paths rest vec))))
+     pn)))
 
 (declare links-on links-off vanishing2subnets Qt-calc Qtv-calc Pv-calc Pvt-calc)
 (declare Q-prime merge-subnets loop-clean-paths loop-add-rates)
@@ -194,7 +196,6 @@
     (reduce (fn [pn [k subnet]]
               (as-> pn ?pn
                 (assoc ?pn :subnet subnet)
-                (assoc ?pn :tanvan (tanvan ?pn subnet))
                 (Qt-calc ?pn)
                 (Qtv-calc ?pn)
                 (assoc ?pn :Pv (Pv-calc ?pn))
@@ -203,7 +204,7 @@
                 (loop-clean-paths ?pn)
                 (loop-add-rates ?pn k)))
             ?pn (vanishing2subnets ?pn))
-    (dissoc ?pn :subnet :tanvan :Qt :Qtv :Pv :Pvt :loop-rates 
+    #_(dissoc ?pn :subnet :Qt :Qtv :Pv :Pvt :loop-rates 
             :Qt-states :Qtv-states :loop-rates)))
 
 (defn Qt-calc
@@ -211,8 +212,8 @@
   [pn]
   (let [root (-> pn :root :M)]
     (as-> pn ?pn 
-      (assoc ?pn :Qt-states (vec (filter #(tangible? ?pn %)
-                                         (map :Mp (-> pn :tanvan :vanishing))))) ; look for 'exiting vanishing'
+      (assoc ?pn :Qt-states (vec (filter #(tangible? ?pn %) ; look for 'exiting vanishing'
+                                         (map :Mp (filter #(vanishing? ?pn (:M %)) (:subnet ?pn))))))
       (assoc ?pn :Qt (vec (map (fn [target]
                                  (reduce (fn [r link] (+ r (:rate link)))
                                          0.0
@@ -290,7 +291,12 @@
                                                      (tangible? ?pn (:M %)))
                                                (distinct e)))))
    (assoc ?pn :M2Mp (into (:explored ?pn) (:vpath-rates ?pn)))
-   (dissoc ?pn :vpath-rates :explored :explored-v :St :Sv :paths :root)))
+   #_(dissoc ?pn :vpath-rates :explored :explored-v :St :Sv :paths :root)))
+
+(defn clean-explored
+  "Remove from :explored everything state transition achieved on a vpath."
+  [pn])
+
 
 (defn vanishing2subnets [pn]
   "Create a map of subnets that can be solved independently."
@@ -474,4 +480,3 @@
          (map :name (:transitions pn)))
       pn
       (assoc pn :failure {:reason :live?}))))
-  
