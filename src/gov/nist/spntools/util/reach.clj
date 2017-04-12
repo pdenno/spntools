@@ -48,6 +48,10 @@
             ?m ; inhibitors don't exit transitions
             (arcs-outof pn tr-name))))
 
+(defn find-link
+  [pn M trn list]
+  (some #(when (and (= M (:M %)) (= trn (:fire %))) %) list))
+
 ;;; The target marking is completely specified by the source (marking at tail) and the transition.
 (defn next-links
   "Return nil or a vector of maps [{:M <tail-marking> :trans <transition that fired> :Mp <head-marking>}...]
@@ -59,7 +63,7 @@
            (filter #(fireable? pn mark %) ?trns)
            (if (some #(immediate? pn %) ?trns) (filter #(immediate? pn %) ?trns) ?trns)
            (if check-list
-             (remove (fn [trn] (some #(and (= mark (:M %)) (= trn (:fire %))) (check-list pn))) ?trns)
+             (remove #(find-link pn mark % (check-list pn)) ?trns)
              ?trns))
          imm? (immediate? pn (first trns))
          trs (map #(name2obj pn %) trns)
@@ -110,12 +114,6 @@
     (summarize-reach ?pn)
     (check-reach ?pn)))
 
-(defn match-root
-  "Find the tangible root that lead to the v-link. It should be near the top of :explored."
-  [pn v-link]
-  (let [state (:M v-link)]
-    (some #(when (= (:Mp %) state) %) (:explored pn))))
-
 (defn vanish-paths
  "Navigate from root to all ending tangible states. 
   Return with vpath-rates updated."
@@ -136,10 +134,45 @@
                          (update ?pn3 :explored-v into nexts)
                          (terminate-vpath ?pn3 current)) ; loops back -- POD NOT SURE
                        (if tang?
-                         (reduce (fn [pn _] (terminate-vpath pn)) ?pn3 nexts)
+                         (reduce (fn [pn end]
+                                   (as-> pn ?pn4
+                                     ;(do (println "end =" end "found=" (find-link ?pn4 [0 0 1 0 0 1] :T7 (:explored ?pn4))) ?pn4)
+                                     (update ?pn4 :explored conj end)
+                                     (assoc ?pn4 :St (into (vector end) (:St ?pn4)))
+                                     (terminate-vpath ?pn4)))
+                                 ?pn3 nexts)
                          (assoc ?pn3 :paths ; Create for current path a new path for each new vanishing state
                                 (into (vec (map #(conj (-> ?pn3 :paths first) %) nexts))
                                       (-> ?pn3 :paths rest))))))))))))
+
+;;; The maps look like this:
+;;;   Typical:  {:M <root> :fire [<root-to-v> <v> ...<v> <v-to-tang>] :Mp <tangible>}"
+;;;   Loop   :  {:M <root> :fire [<root-to-v> <v> ...<v>] :Mp <not relevant> :loop? true}"
+(defn terminate-vpath 
+  "Calculate (add to) :vpath-rates, the rate from the root to a tangible state reachable 
+   through a path ending on the next tangible state reachable. Drop the path from :paths."
+  ([pn] (terminate-vpath pn false))
+  ([pn loop?]
+   (if-let [path (-> pn :paths first)]
+     (as-> pn ?pn
+       (update ?pn :vpath-rates
+               conj
+               {:M (-> ?pn :root :M)
+                :fire (vec (conj (map :fire path) (-> ?pn :root :fire)))
+                :Mp (-> path last :Mp)
+                :rate (reduce * (-> ?pn :root :rate) (map :rate path))
+                :loop? loop?})
+       (if loop?
+         (assoc ?pn :paths [])
+         (assoc ?pn :paths (-> ?pn :paths rest vec))))
+     pn)))
+
+;;; POD There might be a more straightforward way! 
+(defn match-root
+  "Find the tangible root that lead to the v-link. It should be near the top of :explored."
+  [pn v-link]
+  (let [state (:M v-link)]
+    (some #(when (= (:Mp %) state) %) (:explored pn))))
 
 ;;; POD I think it is sufficient to find a single marking. 
 (defn initial-tangible-state 
@@ -164,27 +197,6 @@
                            (vec (rest (into stack (next-links ?pn3 (:Mp (first stack)) :explored-i))))))))
           (dissoc ?pn2 :explored-i))))))
 
-;;; The maps look like this:
-;;;   Typical:  {:M <root> :fire [<root-to-v> <v> ...<v> <v-to-tang>] :Mp <tangible>}"
-;;;   Loop   :  {:M <root> :fire [<root-to-v> <v> ...<v>] :Mp <not relevant> :loop? true}"
-(defn terminate-vpath 
-  "Calculate (add to) :vpath-rates, the rate from the root to a tangible state reachable 
-   through a path ending on the next tangible state reachable. Drop the path from :paths."
-  ([pn] (terminate-vpath pn false))
-  ([pn loop?]
-   (if-let [path (-> pn :paths first)]
-     (as-> pn ?pn
-       (update ?pn :vpath-rates
-               conj
-               {:M (-> ?pn :root :M)
-                :fire (vec (conj (map :fire path) (-> ?pn :root :fire)))
-                :Mp (-> path last :Mp)
-                :rate (reduce * (-> ?pn :root :rate) (map :rate path))
-                :loop? loop?})
-       (if loop?
-         (assoc ?pn :paths [])
-         (assoc ?pn :paths (-> ?pn :paths rest vec))))
-     pn)))
 
 (declare links-on links-off vanishing2subnets Qt-calc Qtv-calc Pv-calc Pvt-calc)
 (declare Q-prime merge-subnets loop-clean-paths loop-add-rates)
@@ -255,6 +267,7 @@
                         (:Qt-states pn))))
               (:Qtv-states pn))))
 
+;;; POD this shouldn't be called if there are no loops!
 (defn loop-clean-paths
   "Remove from :vpath-rates any path that has in its :fire something which
   matches a :fire from :subnet; it has been addressed by the loop."
@@ -266,7 +279,7 @@
                               (remove (fn [vr] (some #(= fire %) (:fire vr))) vp))
                             (:vpath-rates pn)
                             fires)))
-        (assoc :explored
+        #_(assoc :explored
                (vec
                 (distinct ; POD not sure why this is necessary.
                  (reduce (fn [exp fire] (remove #(= fire (:fire %)) exp))
@@ -283,19 +296,34 @@
             (map (fn [[mp r]] {:M root :fire :loop! :Mp mp :rate r})
                  (zipmap (:Qt-states pn) (:loop-rates pn))))))
 
+(defn follow-transitions
+  "Return a vector [<mark> <mark>...] that are the list of states followed by
+   taking the argument first state and applying each trns."
+  [pn mark trns]
+  (reduce (fn [path trn]
+            (conj path (next-mark pn (last path) trn)))
+          [mark]
+          trns))
+
+;;; POD good place for a mutable. 
 (defn summarize-reach
   "Merge :vpath-rates and :explored (sans vanishing) resulting in :M2Mp"
   [pn]
-  (as-> pn ?pn ; POD Investigate the need for distinct here; its a DFS thing. 
-    (update ?pn :explored (fn [e] (vec (filter #(and (tangible? ?pn (:Mp %))
-                                                     (tangible? ?pn (:M %)))
-                                               (distinct e)))))
-   (assoc ?pn :M2Mp (into (:explored ?pn) (:vpath-rates ?pn)))
+  (as-> pn ?pn
+    (assoc ?pn :explored (distinct (:explored ?pn)))
+    (assoc ?pn :explored (remove #(immediate? ?pn (:fire %)) (:explored ?pn)))
+    (assoc ?pn :explored (filter #(and (tangible? ?pn (:Mp %)) (tangible? ?pn (:M %))) (:explored ?pn)))
+    (reduce (fn [pn [mark trn]]
+              (assoc pn :explored
+                     (remove #(find-link pn mark trn %) (:explored pn))))
+            ?pn
+            (map (fn [vpath]
+                   (map #(vector %1 %2)
+                        (butlast (follow-transitions ?pn (:M vpath) (:fire vpath)))
+                        (:fire vpath)))
+                 (:vpath-rates ?pn)))
+  (assoc ?pn :M2Mp (into (:explored ?pn) (:vpath-rates ?pn)))
    #_(dissoc ?pn :vpath-rates :explored :explored-v :St :Sv :paths :root)))
-
-(defn clean-explored
-  "Remove from :explored everything state transition achieved on a vpath."
-  [pn])
 
 
 (defn vanishing2subnets [pn]
