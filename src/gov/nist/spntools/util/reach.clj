@@ -81,7 +81,7 @@
 (def +k-bounded+ (atom 10)) ; Maybe better than (or addition to) k-bounded would be size of :explored
 (def +max-rs+  "reachability set size" (atom 5000)) 
 (declare renumber-pids check-reach tangible? vanishing? in-loop-checks loop-reduce summarize-reach)
-(declare initial-tangible-state vanish-paths terminate-vpath)
+(declare initial-tangible-state reachability-loop vanish-paths terminate-vpath)
 
 (defn reachability
   "Compute the reachability graph (:M2Mp) depth-first starting at the initial marking, 
@@ -97,30 +97,33 @@
     (assoc ?pn :explored (next-links ?pn (:initial-tangible ?pn)))
     #_(assoc ?pn :root (first (:explored ?pn)))
     (assoc ?pn :St (:explored ?pn), :Sv [])
-    (loop [pn ?pn]
-      (println "St = " (:St pn) "\n")
-      (println "Sv = " (:Sv pn))
-      (as-pn-ok-> pn ?pn2
-        (if-let [e (or (-> ?pn2 :Sv first) (-> ?pn2 :St first))]
-          (update ?pn2 :explored conj e) 
-          ?pn2)
-        (reduce (fn [pn v-link] (vanish-paths pn v-link)) ?pn2 (:Sv ?pn2))
-        (do (println "vpath-rates = " (:vpath-rates pn) "\n") ?pn2)
-        #_(assoc ?pn2 :Sv []) ; < -------------DO THIS LATER???? And don't do nexts if things on :St
-        (in-loop-checks ?pn2)
-        (if (empty? (:St ?pn2))
-          ?pn2                      
-          (let [nexts (next-links ?pn2 (:Mp (first (:St ?pn2))) :explored)
-                tang? (and nexts (tangible? ?pn2 (-> nexts first :M)))]
-            (recur (-> ?pn2 
-                       #_(update :explored into nexts)
-                       (assoc :root (if tang? (first nexts) (first (:St ?pn2))))
-                       (assoc :St (into (if tang? nexts [])
-                                        (vec (if (empty? (:Sv ?pn2)) (rest (:St ?pn2)) (:St ?pn2)))))
-                       (assoc :Sv (if tang? [] nexts))))))))
+    (reachability-loop ?pn)
     (loop-reduce ?pn)
     (summarize-reach ?pn)
     (check-reach ?pn)))
+
+(defn reachability-loop [pn]
+  (loop [pn pn]
+    ;;(println "St = " (:St pn) "\n")
+    ;;(println "Sv = " (:Sv pn))
+    (as-pn-ok-> pn ?pn
+       (if-let [e (or (-> ?pn :Sv first) (-> ?pn :St first))]
+         (update ?pn :explored conj e) 
+         ?pn)
+       (reduce (fn [pn v-link] (vanish-paths pn v-link)) ?pn (:Sv ?pn))
+       (assoc ?pn :explored (remove #(immediate? ?pn (:fire %)) (:explored ?pn)))
+       ;;(do (println "vpath-rates = " (:vpath-rates pn) "\n") ?pn)
+       (in-loop-checks ?pn)
+       (if (empty? (:St ?pn))
+         ?pn                      
+         (let [nexts (next-links ?pn (:Mp (first (:St ?pn))) :explored)
+               tang? (and nexts (tangible? ?pn (-> nexts first :M)))]
+           ;;(println "nexts = " nexts)
+           (recur (-> ?pn 
+                      (assoc :root (if tang? (first nexts) (first (:St ?pn))))
+                      (assoc :St (into (if tang? nexts [])
+                                       (vec (if (empty? (:Sv ?pn)) (rest (:St ?pn)) (:St ?pn)))))
+                      (assoc :Sv (if tang? [] nexts)))))))))
 
 (defn vanish-paths
  "Navigate from root to all ending tangible states. 
@@ -130,7 +133,7 @@
       (assoc ?pn :explored-v (vector (:root pn)))
       (assoc ?pn :paths (vector (vector v-link)))
       (assoc ?pn :root (match-root ?pn v-link))
-      (do (println "root = " (:root ?pn)) ?pn)
+      ;;(do (println "root = " (:root ?pn)) ?pn)
       (loop [pn ?pn]
         (as-> pn ?pn2
           (if (empty? (:paths ?pn2)) ; terminate-vpath removes one for each end.
@@ -145,7 +148,7 @@
                        (if tang?
                          (reduce (fn [pn end]
                                    (as-> pn ?pn4
-                                     (do (println "end =" end) ?pn4)
+                                     ;;(do (println "end =" end) ?pn4)
                                      (assoc ?pn4 :St (into (vector end) (:St ?pn4)))
                                      (terminate-vpath ?pn4)))
                                  ?pn3 nexts)
@@ -162,7 +165,7 @@
   ([pn] (terminate-vpath pn false))
   ([pn loop?]
    (reset! +diag+ pn)
-   (println "terminate-vpath....")
+   ;;(println "terminate-vpath....")
    (if-let [path (-> pn :paths first)] ; POD this makes no sense, but so far, I need it.
      (let [path (-> pn :paths first)]
        (as-> pn ?pn
@@ -173,26 +176,18 @@
                   :Mp (-> path last :Mp)
                   :rate (reduce * (-> ?pn :root :rate) (map :rate path))
                   :loop? loop?})
-         (do (println "---Added " (last (:vpath-rates ?pn))) ?pn)
+         ;;(do (println "---Added " (last (:vpath-rates ?pn))) ?pn)
          (if loop?
            (assoc ?pn :paths [])
            (assoc ?pn :paths (-> ?pn :paths rest vec)))))
      pn)))
 
-;;;  {:M [0 0 1 0 0 1], :fire :T7, :Mp [1 0 1 0 0 0], :rate 1.0}
-;;;  {:M [1 0 1 0 0 0], :fire :t4, :Mp [1 0 0 0 0 1], :rate 1.0}],
-
-; :St
-; [{:M [1 0 0 0 0 1], :fire :T7, :Mp [2 0 0 0 0 0], :rate 1.0}
-;  {:M [0 0 0 1 0 1], :fire :T7, :Mp [1 0 0 1 0 0], :rate 1.0}
-;  {:M [0 0 0 1 0 1], :fire :T5, :Mp [1 0 0 0 0 1], :rate 1.0}
-
 ;;; POD There might be a more straightforward way! 
 (defn match-root
   "Find the tangible root that lead to the v-link. It should be near the top of :explored."
   [pn v-link]
-  (println "In match-root explored = " (:explored pn))
-  (println "In match-root v-link = " v-link)
+;  (println "In match-root explored = " (:explored pn))
+;  (println "In match-root v-link = " v-link)
 ;  (when (= v-link {:M [1 0 1 0 0 0], :fire :t4, :Mp [1 0 0 0 0 1], :rate 1.0})
 ;    (reset! +diag+ pn)
 ;    (throw (ex-info "debug" {})))
