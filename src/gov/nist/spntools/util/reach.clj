@@ -93,23 +93,31 @@
     (assoc ?pn :vpath-rates [])
     (renumber-pids ?pn)
     (initial-tangible-state ?pn)
+    ;; Maybe the following can set :explored to [] and :St to initial-tan and be done with it? No next-links
     (assoc ?pn :explored (next-links ?pn (:initial-tangible ?pn)))
+    #_(assoc ?pn :root (first (:explored ?pn)))
     (assoc ?pn :St (:explored ?pn), :Sv [])
     (loop [pn ?pn]
-      ;(println "Sv = " (:Sv pn))
-      ;(println "St = " (:St pn) "\n")
+      (println "St = " (:St pn) "\n")
+      (println "Sv = " (:Sv pn))
       (as-pn-ok-> pn ?pn2
+        (if-let [e (or (-> ?pn2 :Sv first) (-> ?pn2 :St first))]
+          (update ?pn2 :explored conj e) 
+          ?pn2)
         (reduce (fn [pn v-link] (vanish-paths pn v-link)) ?pn2 (:Sv ?pn2))
-        (assoc ?pn2 :Sv [])
+        (do (println "vpath-rates = " (:vpath-rates pn) "\n") ?pn2)
+        #_(assoc ?pn2 :Sv []) ; < -------------DO THIS LATER???? And don't do nexts if things on :St
         (in-loop-checks ?pn2)
         (if (empty? (:St ?pn2))
           ?pn2                      
           (let [nexts (next-links ?pn2 (:Mp (first (:St ?pn2))) :explored)
                 tang? (and nexts (tangible? ?pn2 (-> nexts first :M)))]
             (recur (-> ?pn2 
-                       (update :explored into nexts)
-                       (assoc :St (into (or nexts []) (vec (rest (:St ?pn2)))))
-                       (assoc :Sv (into (if tang? [] nexts) (:Sv ?pn2)))))))))
+                       #_(update :explored into nexts)
+                       (assoc :root (if tang? (first nexts) (first (:St ?pn2))))
+                       (assoc :St (into (if tang? nexts [])
+                                        (vec (if (empty? (:Sv ?pn2)) (rest (:St ?pn2)) (:St ?pn2)))))
+                       (assoc :Sv (if tang? [] nexts))))))))
     (loop-reduce ?pn)
     (summarize-reach ?pn)
     (check-reach ?pn)))
@@ -122,10 +130,11 @@
       (assoc ?pn :explored-v (vector (:root pn)))
       (assoc ?pn :paths (vector (vector v-link)))
       (assoc ?pn :root (match-root ?pn v-link))
+      (do (println "root = " (:root ?pn)) ?pn)
       (loop [pn ?pn]
         (as-> pn ?pn2
-          (if (empty? (:paths ?pn2)) ; calc-vpath-rate removes one for each :tangible. 
-            ?pn2
+          (if (empty? (:paths ?pn2)) ; terminate-vpath removes one for each end.
+           ?pn2
             (let [current (-> ?pn2 :paths first last :Mp)
                   nexts (next-links ?pn2 current :explored-v)
                   tang? (and nexts (tangible? ?pn2 (-> nexts first :M)))]
@@ -136,8 +145,7 @@
                        (if tang?
                          (reduce (fn [pn end]
                                    (as-> pn ?pn4
-                                     ;(do (println "end =" end "found=" (find-link ?pn4 [0 0 1 0 0 1] :T7 (:explored ?pn4))) ?pn4)
-                                     (update ?pn4 :explored conj end)
+                                     (do (println "end =" end) ?pn4)
                                      (assoc ?pn4 :St (into (vector end) (:St ?pn4)))
                                      (terminate-vpath ?pn4)))
                                  ?pn3 nexts)
@@ -153,30 +161,52 @@
    through a path ending on the next tangible state reachable. Drop the path from :paths."
   ([pn] (terminate-vpath pn false))
   ([pn loop?]
-   (if-let [path (-> pn :paths first)]
-     (as-> pn ?pn
-       (update ?pn :vpath-rates
-               conj
-               {:M (-> ?pn :root :M)
-                :fire (vec (conj (map :fire path) (-> ?pn :root :fire)))
-                :Mp (-> path last :Mp)
-                :rate (reduce * (-> ?pn :root :rate) (map :rate path))
-                :loop? loop?})
-       (if loop?
-         (assoc ?pn :paths [])
-         (assoc ?pn :paths (-> ?pn :paths rest vec))))
+   (reset! +diag+ pn)
+   (println "terminate-vpath....")
+   (if-let [path (-> pn :paths first)] ; POD this makes no sense, but so far, I need it.
+     (let [path (-> pn :paths first)]
+       (as-> pn ?pn
+         (update ?pn :vpath-rates
+                 conj
+                 {:M (-> ?pn :root :M)
+                  :fire (vec (conj (map :fire path) (-> ?pn :root :fire)))
+                  :Mp (-> path last :Mp)
+                  :rate (reduce * (-> ?pn :root :rate) (map :rate path))
+                  :loop? loop?})
+         (do (println "---Added " (last (:vpath-rates ?pn))) ?pn)
+         (if loop?
+           (assoc ?pn :paths [])
+           (assoc ?pn :paths (-> ?pn :paths rest vec)))))
      pn)))
+
+;;;  {:M [0 0 1 0 0 1], :fire :T7, :Mp [1 0 1 0 0 0], :rate 1.0}
+;;;  {:M [1 0 1 0 0 0], :fire :t4, :Mp [1 0 0 0 0 1], :rate 1.0}],
+
+; :St
+; [{:M [1 0 0 0 0 1], :fire :T7, :Mp [2 0 0 0 0 0], :rate 1.0}
+;  {:M [0 0 0 1 0 1], :fire :T7, :Mp [1 0 0 1 0 0], :rate 1.0}
+;  {:M [0 0 0 1 0 1], :fire :T5, :Mp [1 0 0 0 0 1], :rate 1.0}
 
 ;;; POD There might be a more straightforward way! 
 (defn match-root
   "Find the tangible root that lead to the v-link. It should be near the top of :explored."
   [pn v-link]
-  (let [state (:M v-link)]
-    (some #(when (= (:Mp %) state) %) (:explored pn))))
+  (println "In match-root explored = " (:explored pn))
+  (println "In match-root v-link = " v-link)
+;  (when (= v-link {:M [1 0 1 0 0 0], :fire :t4, :Mp [1 0 0 0 0 1], :rate 1.0})
+;    (reset! +diag+ pn)
+;    (throw (ex-info "debug" {})))
+  (let [result (:root pn) #_(some #(when (= (:Mp %) (:M v-link)) %)
+                     #_(reverse (:explored pn))
+                     (:St pn)
+                     #_(into (:St pn) (reverse (:explored pn))))]
+    (or result
+        (do (reset! +diag+ pn)
+            (throw (ex-info "Could not match root" {:v-link v-link}))))))
 
 ;;; POD I think it is sufficient to find a single marking. 
 (defn initial-tangible-state 
-  "Return an initial tangible state, given a PN where the initial marking might not be tangible."
+  "Set :initial-tangible state, given a PN where the initial marking might not be tangible."
   [pn]
   (let [im (:initial-marking pn)]
     (as-> pn ?pn
@@ -312,7 +342,9 @@
   (as-> pn ?pn
     (assoc ?pn :explored (distinct (:explored ?pn)))
     (assoc ?pn :explored (remove #(immediate? ?pn (:fire %)) (:explored ?pn)))
-    (assoc ?pn :explored (filter #(and (tangible? ?pn (:Mp %)) (tangible? ?pn (:M %))) (:explored ?pn)))
+    (assoc ?pn :explored (filter #(and
+                                   (do (reset! +diag+ (list ?pn %)) true)
+                                   (tangible? ?pn (:Mp %)) (tangible? ?pn (:M %))) (:explored ?pn)))
     (reduce (fn [pn [mark trn]]
               (assoc pn :explored
                      (remove #(find-link pn mark trn %) (:explored pn))))

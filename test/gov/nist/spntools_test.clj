@@ -10,7 +10,7 @@
 ;;;==========================================================================
 (deftest reachability-test
   (testing "Reachability graph size"
-    (is (= 10 (-> "data/qo10.xml" read-pnml reachability :M2Mp count)))))
+    (is (= 8 (-> "data/qo10.xml" read-pnml reachability :M2Mp count)))))
 
 (deftest distinct-markings
   (testing "markings created by reachability"
