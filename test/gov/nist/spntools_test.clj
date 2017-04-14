@@ -149,6 +149,13 @@
       (is (every? (fn [[key val]]
                     (=* val (get correct key) 0.001)) result)))))
 
+(deftest steady-state-properties-weights-P0-2
+  (testing "Steady-state properties on weights-P0-2 2-token, interesting characteristics"
+    (let [result (:avg-tokens-on-place (pn-steady-state (read-pnml "data/weights-P0-2.xml")))
+          correct {:P0 0.27118, :P1 0.0, :P2 0.305085, :P3 0.288906, :P4 0.4229584, :P5 0.7118644}]
+      (is (every? (fn [[key val]]
+                    (=* val (get correct key) 0.001)) result)))))
+
 ;;; On-the-fly reduction -- Don't need all these tests, just documentation for pnr/Q-prime calculation
 #_(def tQt [0.0 0.0 0.0])  ; 1->6 1->7 1->8 (need root, need other tangible states)
 #_(def tQtv [5.0 3.0 0.0 0.0]) ; 1->2 1->3 1->4 1->5

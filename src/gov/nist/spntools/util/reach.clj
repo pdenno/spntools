@@ -186,15 +186,7 @@
 (defn match-root
   "Find the tangible root that lead to the v-link. It should be near the top of :explored."
   [pn v-link]
-;  (println "In match-root explored = " (:explored pn))
-;  (println "In match-root v-link = " v-link)
-;  (when (= v-link {:M [1 0 1 0 0 0], :fire :t4, :Mp [1 0 0 0 0 1], :rate 1.0})
-;    (reset! +diag+ pn)
-;    (throw (ex-info "debug" {})))
-  (let [result (:root pn) #_(some #(when (= (:Mp %) (:M v-link)) %)
-                     #_(reverse (:explored pn))
-                     (:St pn)
-                     #_(into (:St pn) (reverse (:explored pn))))]
+  (let [result (:root pn)]
     (or result
         (do (reset! +diag+ pn)
             (throw (ex-info "Could not match root" {:v-link v-link}))))))
@@ -335,7 +327,8 @@
   "Merge :vpath-rates and :explored (sans vanishing) resulting in :M2Mp"
   [pn]
   (as-> pn ?pn
-    (assoc ?pn :explored (distinct (:explored ?pn)))
+    (assoc ?pn :explored (distinct (:explored ?pn)))  ; pod neither this...
+    (assoc ?pn :vpath-rates (distinct (:vpath-rates ?pn))) ; nor this is justified
     (assoc ?pn :explored (remove #(immediate? ?pn (:fire %)) (:explored ?pn)))
     (assoc ?pn :explored (filter #(and
                                    (do (reset! +diag+ (list ?pn %)) true)
@@ -535,3 +528,20 @@
          (map :name (:transitions pn)))
       pn
       (assoc pn :failure {:reason :live?}))))
+
+
+(defn replace-states
+  [links]
+  (let [tr {[0 0 0 1 1 0] :S14
+            [1 0 0 1 0 0] :S5
+            [1 0 0 0 1 0] :S4
+            [2 0 0 0 0 0] :S0
+            [0 0 0 0 1 1] :S12
+            [0 0 0 1 0 1] :S13
+            [1 0 0 0 0 1] :S3
+            [0 0 1 0 0 1] :S6}]
+    (map #(-> %
+              (assoc :M (get tr (:M %)))
+              (assoc :Mp (get tr (:Mp %))))
+         links)))
+    
