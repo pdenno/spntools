@@ -9,12 +9,10 @@
 ;;; To Do: Implement place capacity restrictions. (maybe)
 ;;;     * Instead of all these +max-rs+ etc. might want a system wide ^:dynamic
 ;;;       binding of variable values in a map. (Call the current things +default-...)
-;;;     * Why am I keeping :Mp and :fire ? Replace links with markings. - NOT GONNA DO IT
-;;;     * I think vanishing places that are inside a network (like P4 in qo10) can be
-;;;       removed from the analysis. DOUBTFUL
 ;;;     * Eliminate summarize-reach; It should be one line in reachability.
-;;;     * Rewrite the reduction of :explore to use next-link on every step of vpaths :fire
-;;      * Maybe write the find-link / filter-links thing. Needs thought on efficiency. 
+;;;     * Rewrite the reduction of :explored to use next-link on every step of vpaths :fire
+;;;     * Now that I've written terminating-tangibles, it could probably be adapted
+;;;       to collect all the links needed to do the Q-prime calculation. 
 
 (def +zippy+ (atom nil))
 
@@ -32,7 +30,6 @@
                          (:multiplicity ar)))
              (:inhibitor arc-groups)))))
      
-;;; POD It seems like this and fireable? are so closely related ought to do them together. Wasteful.
 (defn next-mark
   "Return the mark that is at the head of the argument link."
   [pn mark tr-name]
@@ -57,13 +54,14 @@
   "Return nil or a vector of maps [{:M <tail-marking> :trans <transition that fired> :Mp <head-marking>}...]
    which contain the argument state :M and unexplored states, :Mp reachable by firing :trans.
    Returned links have adjusted weights when transitions are immediate."
-  ([pn mark check-list]
+  ([pn mark] (next-links pn mark false))
+  ([pn mark clist]
    (let [trns
          (as-> (map :name (:transitions pn)) ?trns
            (filter #(fireable? pn mark %) ?trns)
            (if (some #(immediate? pn %) ?trns) (filter #(immediate? pn %) ?trns) ?trns)
-           (if check-list
-             (remove #(find-link pn mark % (check-list pn)) ?trns)
+           (if clist
+             (remove #(find-link pn mark % (if (keyword? clist) (clist pn) clist)) ?trns)
              ?trns))
          imm? (immediate? pn (first trns))
          trs (map #(name2obj pn %) trns)
@@ -75,13 +73,12 @@
                :fire (:name tr)
                :Mp (next-mark pn mark (:name tr))
                :rate (if imm? (/ (:rate tr) sum) (:rate tr))})
-            trs)))))
-  ([pn mark] (next-links pn mark false)))
+            trs))))))
 
 (def +k-bounded+ (atom 10)) ; Maybe better than (or addition to) k-bounded would be size of :explored
 (def +max-rs+  "reachability set size" (atom 5000)) 
 (declare renumber-pids check-reach tangible? vanishing? in-loop-checks loop-reduce summarize-reach)
-(declare initial-tangible-state reachability-loop vanish-paths terminate-vpath)
+(declare initial-tangible-state reachability-loop vanish-paths terminate-vpath terminating-tangibles)
 
 (defn reachability
   "Compute the reachability graph (:M2Mp) depth-first starting at the initial marking, 
@@ -89,14 +86,12 @@
   [pn]
   (reset! +diag+ [])
   (as-pn-ok-> pn ?pn
-    (dissoc ?pn :explored)
     (assoc ?pn :vpath-rates [])
     (renumber-pids ?pn)
     (initial-tangible-state ?pn)
-    ;; Maybe the following can set :explored to [] and :St to initial-tan and be done with it? No next-links
     (assoc ?pn :explored (next-links ?pn (:initial-tangible ?pn)))
-    #_(assoc ?pn :root (first (:explored ?pn)))
     (assoc ?pn :St (:explored ?pn), :Sv [])
+    (assoc ?pn :Sv-explored [])
     (reachability-loop ?pn)
     (loop-reduce ?pn)
     (summarize-reach ?pn)
@@ -104,21 +99,25 @@
 
 (defn reachability-loop [pn]
   (loop [pn pn]
-    ;;(println "St = " (:St pn) "\n")
+    ;;(println "St = " (:St pn))
     ;;(println "Sv = " (:Sv pn))
     (as-pn-ok-> pn ?pn
        (if-let [e (or (-> ?pn :Sv first) (-> ?pn :St first))]
          (update ?pn :explored conj e) 
          ?pn)
+       (assoc ?pn :Sv (remove #(some (fn [[sve rt]] (and (= sve %) (= rt (:root ?pn))))
+                                     (:Sv-explored ?pn))
+                              (:Sv ?pn)))
+       (assoc ?pn :Sv-explored (into (:Sv-explored ?pn) (map #(vector % (:root ?pn)) (:Sv ?pn))))
        (reduce (fn [pn v-link] (vanish-paths pn v-link)) ?pn (:Sv ?pn))
        (assoc ?pn :explored (remove #(immediate? ?pn (:fire %)) (:explored ?pn)))
-       ;;(do (println "vpath-rates = " (:vpath-rates pn) "\n") ?pn)
+       ;;(do (println "vpath-rates = " (:vpath-rates pn)) ?pn)
        (in-loop-checks ?pn)
        (if (empty? (:St ?pn))
          ?pn                      
          (let [nexts (next-links ?pn (:Mp (first (:St ?pn))) :explored)
                tang? (and nexts (tangible? ?pn (-> nexts first :M)))]
-           ;;(println "nexts = " nexts)
+           ;;(println "nexts = " nexts "\n")
            (recur (-> ?pn 
                       (assoc :root (if tang? (first nexts) (first (:St ?pn))))
                       (assoc :St (into (if tang? nexts [])
@@ -130,9 +129,8 @@
   Return with vpath-rates updated."
   [pn v-link]
   (as-> pn ?pn
-      (assoc ?pn :explored-v (vector (:root pn)))
+      (assoc ?pn :explored-v (vector (:root pn) v-link))
       (assoc ?pn :paths (vector (vector v-link)))
-      (assoc ?pn :root (match-root ?pn v-link))
       ;;(do (println "root = " (:root ?pn)) ?pn)
       (loop [pn ?pn]
         (as-> pn ?pn2
@@ -144,52 +142,67 @@
               (recur (as-> ?pn2 ?pn3
                        (if nexts
                          (update ?pn3 :explored-v into nexts)
-                         (terminate-vpath ?pn3 current)) ; loops back -- POD NOT SURE
+                         (as-> ?pn3 ?pn4 ; else loops. Terminate it.
+                           (terminate-vpath ?pn4 current)
+                           (let [tt (terminating-tangibles ?pn4 current)]
+                             (assoc ?pn4 :St (into (:terms tt) (:St ?pn4))))))
                        (if tang?
                          (reduce (fn [pn end]
                                    (as-> pn ?pn4
                                      ;;(do (println "end =" end) ?pn4)
                                      (assoc ?pn4 :St (into (vector end) (:St ?pn4)))
-                                     (terminate-vpath ?pn4)))
+                                     (terminate-vpath ?pn4))) ; not loop back. ends.
                                  ?pn3 nexts)
                          (assoc ?pn3 :paths ; Create for current path a new path for each new vanishing state
                                 (into (vec (map #(conj (-> ?pn3 :paths first) %) nexts))
                                       (-> ?pn3 :paths rest))))))))))))
-
 ;;; The maps look like this:
 ;;;   Typical:  {:M <root> :fire [<root-to-v> <v> ...<v> <v-to-tang>] :Mp <tangible>}"
 ;;;   Loop   :  {:M <root> :fire [<root-to-v> <v> ...<v>] :Mp <not relevant> :loop? true}"
 (defn terminate-vpath 
   "Calculate (add to) :vpath-rates, the rate from the root to a tangible state reachable 
-   through a path ending on the next tangible state reachable. Drop the path from :paths."
+   through a path ending on the next tangible state reachable. Drop the path from :paths.
+   If called with loop?=true do all the paths on :paths -- they share a root, that's all."
   ([pn] (terminate-vpath pn false))
   ([pn loop?]
-   (reset! +diag+ pn)
    ;;(println "terminate-vpath....")
-   (if-let [path (-> pn :paths first)] ; POD this makes no sense, but so far, I need it.
-     (let [path (-> pn :paths first)]
-       (as-> pn ?pn
-         (update ?pn :vpath-rates
-                 conj
-                 {:M (-> ?pn :root :M)
-                  :fire (vec (conj (map :fire path) (-> ?pn :root :fire)))
-                  :Mp (-> path last :Mp)
-                  :rate (reduce * (-> ?pn :root :rate) (map :rate path))
-                  :loop? loop?})
-         ;;(do (println "---Added " (last (:vpath-rates ?pn))) ?pn)
-         (if loop?
-           (assoc ?pn :paths [])
-           (assoc ?pn :paths (-> ?pn :paths rest vec)))))
-     pn)))
+   ;; If loop, do them all. don't worry about :Mp termination nor :rate
+   (let [paths (if loop?
+                 (:paths pn) ; POD next line is due to it being called w/o a path! FIX THIS!
+                 (if-let [p (-> pn :paths first)]
+                   (list p)
+                   []))]
+     (reduce (fn [pn path] ; loop do them all.
+               (as-> pn ?pn
+                 (update ?pn :vpath-rates
+                         conj
+                         {:M (-> ?pn :root :M)
+                          :fire (vec (conj (map :fire path) (-> ?pn :root :fire)))
+                          :Mp (if loop? :NA (-> path last :Mp))
+                          :rate (if loop? :NA (reduce * (-> ?pn :root :rate) (map :rate path)))
+                          :loop? loop?})
+                 ;;(do (println "---Added " (last (:vpath-rates ?pn))) ?pn)
+                 (assoc ?pn :paths (-> ?pn :paths rest vec))))
+             pn
+             paths))))
 
-;;; POD There might be a more straightforward way! 
-(defn match-root
-  "Find the tangible root that lead to the v-link. It should be near the top of :explored."
-  [pn v-link]
-  (let [result (:root pn)]
-    (or result
-        (do (reset! +diag+ pn)
-            (throw (ex-info "Could not match root" {:v-link v-link}))))))
+(defn terminating-tangibles
+  "Return a list of tangible states that can be reached from the root mark."
+  [pn root-mark]
+  (loop [accum []
+         explored []
+         paths (vec (map vector (next-links pn root-mark)))]
+    (let [nexts (when (not-empty paths) (next-links pn (-> paths first last :Mp) explored))
+          tang? (and (not-empty nexts) (tangible? pn (-> nexts first :M)))]
+      (if (empty? paths)
+        (do ;(println "IN TT: explored =" explored)
+            {:terms accum :explored explored})
+          (recur
+           (if tang? (into accum nexts) accum)
+           (into explored nexts)
+           (if (or tang? (empty? nexts))
+             (rest paths)
+             (into (vec (map #(conj (first paths) %) nexts)) (rest paths))))))))
 
 ;;; POD I think it is sufficient to find a single marking. 
 (defn initial-tangible-state 
@@ -214,32 +227,116 @@
                            (vec (rest (into stack (next-links ?pn3 (:Mp (first stack)) :explored-i))))))))
           (dissoc ?pn2 :explored-i))))))
 
+(declare links-on add-links-off vanishing2subnets Qt-calc Qtv-calc Pv-calc Pvt-calc)
+(declare Q-prime merge-loops loop-clean-vpaths loop-add-rates)
 
-(declare links-on links-off vanishing2subnets Qt-calc Qtv-calc Pv-calc Pvt-calc)
-(declare Q-prime merge-subnets loop-clean-paths loop-add-rates)
 
+;;;================================================================================
+;;; This is toplevel for reduction of loops; called from reachability. 
 (defn loop-reduce
   "Update the :vpath-rates for a looping subnet."
   [pn]
   (as-> pn ?pn
+    (assoc ?pn :explored (distinct (:explored ?pn))) ; POD I really doubt this will work for two loops!
     (reduce (fn [pn [k subnet]]
               (as-> pn ?pn
                 (assoc ?pn :subnet subnet)
+                (assoc ?pn :root-mark (-> ?pn :subnet first :root)) ; POD UGH!
                 (Qt-calc ?pn)
                 (Qtv-calc ?pn)
                 (assoc ?pn :Pv (Pv-calc ?pn))
                 (assoc ?pn :Pvt (Pvt-calc ?pn))
                 (assoc ?pn :loop-rates (Q-prime (:Qt ?pn) (:Qtv ?pn) (:Pv ?pn) (:Pvt ?pn)))
-                (loop-clean-paths ?pn)
+                (loop-clean-vpaths ?pn)
                 (loop-add-rates ?pn k)))
-            ?pn (vanishing2subnets ?pn))
-    #_(dissoc ?pn :subnet :Qt :Qtv :Pv :Pvt :loop-rates 
-            :Qt-states :Qtv-states :loop-rates)))
+            ?pn
+            (vanishing2subnets ?pn))
+        #_(dissoc ?pn :subnet :Qt :Qtv :Pv :Pvt :loop-rates 
+                  :Qt-states :Qtv-states :loop-rates)))
+
+(defn vanishing2subnets [pn]
+  "Create a map of subnets that can be solved independently."
+    (as-> (filter :loop? (:vpath-rates pn)) ?loops
+      (zipmap (map :fire ?loops) (map #(add-links-off pn (links-on pn %) %) ?loops))
+      (merge-loops ?loops)))
+
+(defn merge-loops
+  "Combine entries in the argument map that have overlapping markings."
+  [subnets]
+  (let [progress (atom true)]
+    (loop [s subnets]
+      (reset! progress false)
+      (let [combos (combo/combinations (keys s) 2)
+            subs (reduce (fn [s1 [p1 p2]]
+                           (if (empty? (clojure.set/intersection (set (get s1 p1)) (set (get s1 p2))))
+                             s1
+                             (do (reset! progress true)
+                                 (as-> s1 ?s
+                                   (assoc ?s (vector p1 p2) (distinct (into (get ?s p1) (get ?s p2))))
+                                   (dissoc ?s p1 p2)))))
+                         s combos)]
+        (if @progress (recur subs) subs)))))
+      
+(defn links-on
+  "Find all the simple links that are part of the argument path link."
+  [pn vpath]
+  (let [root (:M vpath)]
+    (distinct 
+     (reduce (fn [accum trn]
+             (let [prev (if (empty? accum) (:M vpath) (-> accum last :Mp))
+                   tr (name2obj pn trn)]
+               (conj accum
+                     {:M prev
+                      :fire trn
+                      :Mp (next-mark pn prev trn)
+                      :type (:type tr)
+                      :root root
+                      :rate (:rate tr)}))) ; POD Is this getting the normalized weight?
+             []
+             (:fire vpath)))))
+
+(defn add-links-off
+  "Find all the simple links that are not among those found by links-on 
+   but share a marking. Add these to the set generated by links-on."
+  [pn link-set vpath] 
+  (let [marks-on (set (into (map :M link-set) (map :Mp link-set)))
+        other-paths
+        (filter (fn [vpath]
+                  (let [link-set-off (links-on pn vpath)
+                        marks-off (set (into (map :M link-set-off)
+                                             (map :Mp link-set-off)))]
+                    (not-empty (clojure.set/intersection marks-on marks-off))))
+                  (remove #(= % vpath) (:vpath-rates pn)))]
+    (reduce (fn [ls op] (distinct (into ls (links-on pn op))))
+            link-set
+            other-paths)))
+
+(defn loop-clean-vpaths
+  "Remove from :vpath-rates any path that has in its :fire something which
+  matches a :fire from :subnet; it has been addressed by the loop."
+  [pn]
+  (let [fires (map :fire (:subnet pn))]
+    (-> pn 
+        (assoc :vpath-rates
+               (vec (reduce (fn [vp fire]
+                              (remove (fn [vr] (some #(= fire %) (:fire vr))) vp))
+                            (:vpath-rates pn)
+                            fires))))))
+
+(defn loop-add-rates
+  "Add rates between the root state and the tangible states exiting the loop."
+  [pn key] ; Use :fire key multi-loop debugging. Otherwise I like :fire :loop!
+  (let [root (:root-mark pn)]
+    (update pn
+            :explored
+            into
+            (map (fn [[mp r]] {:M root :fire :loop! :Mp mp :rate r})
+                 (zipmap (:Qt-states pn) (:loop-rates pn))))))
 
 (defn Qt-calc
   "Calculate the vector of rates from the root directly to tangible states."
   [pn]
-  (let [root (-> pn :root :M)]
+  (let [root (:root-mark pn)]
     (as-> pn ?pn 
       (assoc ?pn :Qt-states (vec (filter #(tangible? ?pn %) ; look for 'exiting vanishing'
                                          (map :Mp (filter #(vanishing? ?pn (:M %)) (:subnet ?pn))))))
@@ -252,7 +349,7 @@
 (defn Qtv-calc
   "Calculate the vector of rates from the root directly to vanishing states."
   [pn]
-  (let [root (-> pn :root :M)]
+  (let [root (:root-mark pn)]
     (as-> pn ?pn
       (assoc ?pn :Qtv-states (distinct (vec (filter #(vanishing? ?pn %) (map :M (:subnet ?pn))))))
       (assoc ?pn :Qtv (vec (map (fn [target]
@@ -284,35 +381,6 @@
                         (:Qt-states pn))))
               (:Qtv-states pn))))
 
-;;; POD this shouldn't be called if there are no loops!
-(defn loop-clean-paths
-  "Remove from :vpath-rates any path that has in its :fire something which
-  matches a :fire from :subnet; it has been addressed by the loop."
-  [pn]
-  (let [fires (map :fire (:subnet pn))]
-    (-> pn 
-        (assoc :vpath-rates
-               (vec (reduce (fn [vp fire]
-                              (remove (fn [vr] (some #(= fire %) (:fire vr))) vp))
-                            (:vpath-rates pn)
-                            fires)))
-        #_(assoc :explored
-               (vec
-                (distinct ; POD not sure why this is necessary.
-                 (reduce (fn [exp fire] (remove #(= fire (:fire %)) exp))
-                         (:explored pn)
-                         fires)))))))
-
-(defn loop-add-rates
-  "Add rates between the root state and the tangible states exiting the loop."
-  [pn key] ; Use :fire key multi-loop debugging. Otherwise I like :fire :loop!
-  (let [root (-> pn :root :M)]
-    (update pn
-            :explored
-            into
-            (map (fn [[mp r]] {:M root :fire :loop! :Mp mp :rate r})
-                 (zipmap (:Qt-states pn) (:loop-rates pn))))))
-
 (defn follow-transitions
   "Return a vector [<mark> <mark>...] that are the list of states followed by
    taking the argument first state and applying each trns."
@@ -322,7 +390,7 @@
           [mark]
           trns))
 
-;;; POD good place for a mutable. 
+;;; POD good place for a transient?
 (defn summarize-reach
   "Merge :vpath-rates and :explored (sans vanishing) resulting in :M2Mp"
   [pn]
@@ -330,9 +398,9 @@
     (assoc ?pn :explored (distinct (:explored ?pn)))  ; pod neither this...
     (assoc ?pn :vpath-rates (distinct (:vpath-rates ?pn))) ; nor this is justified
     (assoc ?pn :explored (remove #(immediate? ?pn (:fire %)) (:explored ?pn)))
-    (assoc ?pn :explored (filter #(and
-                                   (do (reset! +diag+ (list ?pn %)) true)
-                                   (tangible? ?pn (:Mp %)) (tangible? ?pn (:M %))) (:explored ?pn)))
+    (assoc ?pn :explored (filter #(and (tangible? ?pn (:Mp %))
+                                       (tangible? ?pn (:M %)))
+                                 (:explored ?pn)))
     (reduce (fn [pn [mark trn]]
               (assoc pn :explored
                      (remove #(find-link pn mark trn %) (:explored pn))))
@@ -343,60 +411,8 @@
                         (:fire vpath)))
                  (:vpath-rates ?pn)))
   (assoc ?pn :M2Mp (into (:explored ?pn) (:vpath-rates ?pn)))
-   #_(dissoc ?pn :vpath-rates :explored :explored-v :St :Sv :paths :root)))
+   #_(dissoc ?pn :vpath-rates :explored :explored-v :St :Sv :Sv-explored :paths :root :root-mark)))
 
-
-(defn vanishing2subnets [pn]
-  "Create a map of subnets that can be solved independently."
-  (as-> (filter :loop? (:vpath-rates pn)) ?subnets
-    (zipmap (map :fire ?subnets) (map #(links-on pn %) ?subnets))
-    (reduce (fn [s key] (update s key into (links-off pn (get s key))))
-            ?subnets (keys ?subnets))
-    (merge-subnets ?subnets)))
-
-(defn merge-subnets
-  "Combine entries in the argument map that have overlapping markings."
-  [subnets]
-  (let [progress (atom true)]
-    (loop [s subnets]
-      (reset! progress false)
-      (let [combos (combo/combinations (keys s) 2)
-            subs (reduce (fn [s1 [p1 p2]]
-                           (if (empty? (clojure.set/intersection (set (get s1 p1)) (set (get s1 p2))))
-                             s1
-                             (do (reset! progress true)
-                                 (as-> s1 ?s
-                                   (assoc ?s (vector p1 p2) (distinct (into (get ?s p1) (get ?s p2))))
-                                   (dissoc ?s p1 p2)))))
-                         s combos)]
-        (if @progress (recur subs) subs)))))
-      
-(defn links-on
-  "Find all the simple links that are part of the argument path link."
-  [pn plink]
-  (distinct 
-   (reduce (fn [accum trn]
-             (let [prev (if (empty? accum) (:M plink) (-> accum last :Mp))
-                   tr (name2obj pn trn)]
-               (conj accum
-                     {:M prev
-                      :fire trn
-                      :Mp (next-mark pn prev trn)
-                      :type (:type tr)
-                      :rate (:rate tr)})))
-           []
-           (:fire plink))))
-
-(defn links-off
-  "Find all the simple links that are not among those found by links-on 
-   but share a marking. Add these to set generated by links-on."
-  [pn link-set]
-  (let [marks (into (map :M link-set) (map :Mp link-set))
-        other-paths (filter (fn [vpath] (some (fn [m] (or (= (:M vpath) m) (= (:Mp vpath) m))) marks))
-                            (:vpath-rates pn))]
-    (reduce (fn [ls op] (distinct (into ls (links-on pn op))))
-            link-set
-            other-paths)))
 
 ;;; Note: If m/inverse is Gauss-Jordan, it is O(n^3) 20 states 8000 ops. Could be better.
 ;;; Knottenbelt suggest LU decomposition. 
@@ -420,6 +436,8 @@
     (assoc pn :failure {:reason :not-k-bounded :marking (:Mp (first (:St pn)))}),
     (> (count (:M2Mp pn)) @+max-rs+)
     (assoc pn :failure {:reason :exceeds-max-rs :set-size (count (:M2Mp pn))}),
+    (> (count (:explored pn)) 500) ; POD 500
+    (assoc pn :failure {:reason :exceeds-reach :set-size (count (:explored pn))}),
     :else pn))
 
 (defn check-reach
@@ -529,19 +547,4 @@
       pn
       (assoc pn :failure {:reason :live?}))))
 
-
-(defn replace-states
-  [links]
-  (let [tr {[0 0 0 1 1 0] :S14
-            [1 0 0 1 0 0] :S5
-            [1 0 0 0 1 0] :S4
-            [2 0 0 0 0 0] :S0
-            [0 0 0 0 1 1] :S12
-            [0 0 0 1 0 1] :S13
-            [1 0 0 0 0 1] :S3
-            [0 0 1 0 0 1] :S6}]
-    (map #(-> %
-              (assoc :M (get tr (:M %)))
-              (assoc :Mp (get tr (:Mp %))))
-         links)))
     

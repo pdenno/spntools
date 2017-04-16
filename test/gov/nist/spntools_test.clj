@@ -68,94 +68,82 @@
 ;;;========================================================
 ;;; Steady-state properties
 ;;;========================================================
-(deftest steady-state-qo10
-  (testing "Steady-state properties qo10.xml"
-    (let [result (:avg-tokens-on-place (pn-steady-state (read-pnml "data/qo10.xml")))
-          correct  {:P1 0.111111, :P2 0.0, :P3 0.0, :P4 0.0, :P5 0.41667, 
-                    :P6 0.333333, :P7 0.083333,  :P8 0.05556}]
-      (is (every? (fn [[key val]]
-                    (=* val (get correct key) 0.0001)) result)))))
+(defn steady-state-ok?
+  [fname correct]
+  (let [result (:avg-tokens-on-place (pn-steady-state (read-pnml fname)))]
+    (when (contains? result :failure)
+      (println ":failure " (:failure result)))
+    (if (and (not-empty result)
+             (every? (fn [[key val]] (=* val (get correct key) 0.0001))
+                     result))
+      {:fname fname :ok? true}
+      {:fname fname :ok? false})))
 
-(deftest steady-state-qorchard
-  (testing "Steady-state properties qorchard.xml (has a loop)"
-    (let [result (:avg-tokens-on-place (pn-steady-state (read-pnml "data/qorchard.xml")))
-          correct  {:P1 0.11111, :P2 0.0, :P3 0.0, :P4 0.0, :P5 0.0, :P6 0.2, 
-                    :P7 0.258333,:P8 0.4305555}]
-      (is (every? (fn [[key val]]
-                    (=* val (get correct key) 0.0001)) result)))))
-
-(deftest steady-state-properties-simple
-  (testing "Steady-state properties are consistent with findings from other tools"
-    (let [result (:avg-tokens-on-place (pn-steady-state (read-pnml "data/simple.xml")))
-          correct {:A 0.33333333333333326, :B 0.6666666666666669}]
-      (is (every? (fn [[key val]]
-                    (=* val (get correct key) 0.0001)) result)))))
-
-(deftest steady-state-properties-m6
-  (testing "Steady-state properties are consistent/m6"
-    (let [result (:avg-tokens-on-place (pn-steady-state (read-pnml "data/m6.xml")))
-          correct {:Pacc1 0.08569697319444844, :Pacc2 0.27730828048945594, :Pact1 0.8569697319444844,
-                   :Pact2 0.6932707012236401,  :Pidle 0.6369947463160957,  :Preq1 0.0573332948610671,
-                   :Preq2 0.029421018286903994}]
-      (is (every? (fn [[key val]]
-                    (=* val (get correct key) 0.0001)) result)))))
-
-(deftest steady-state-properties-join2
-  (testing "Steady-state properties are consistent/join2"
-    (let [result (:avg-tokens-on-place (pn-steady-state (read-pnml "data/join2.xml")))
-          correct {:P1 0.2, :P2 0.2, :Pjoin 0.4, :Pstart 0.8}]
-      (is (every? (fn [[key val]]
-                    (=* val (get correct key) 0.0001)) result)))))
-
-(deftest steady-state-properties-join2-reduced
-  (testing "Steady-state properties are consistent/join2-reduce"
-    (let [result (:avg-tokens-on-place (pn-steady-state (read-pnml "data/join2-reduce.xml")))
-          correct {:P1 0.2, :P2 0.2, :Pjoin 0.4, :Pstart 0.8}]
-      (is (every? (fn [[key val]]
-                    (=* val (get correct key) 0.0001)) result)))))
-
-(deftest steady-state-properties-join3
-  (testing "Steady-state properties are consistent/join3"
-    (let [result (:avg-tokens-on-place (pn-steady-state (read-pnml "data/join3.xml")))
-          correct {:P1 0.29412 :P2 0.29412 :P3 0.29412 :Pjoin 0.35294 :Pstart 1.05882}]
-      (is (every? (fn [[key val]]
-                    (=* val (get correct key) 0.0001)) result)))))
-
-(deftest steady-state-properties-join3-reduced
-  (testing "Steady-state properties are consistent/join3-reduce"
-    (let [result (:avg-tokens-on-place (pn-steady-state (read-pnml "data/join3-reduce-v2.xml")))
-          correct {:P1 0.29412 :P2 0.29412 :P3 0.29412 :Pjoin 0.35294 :Pstart 1.05882}]
-      (is (every? (fn [[key val]]
-                    (=* val (get correct key) 0.0001)) result)))))
-
-(deftest steady-state-properties-marsan
-  (testing "Steady-state properties are consistent/marsan69"
-    (let [result (:avg-tokens-on-place (pn-steady-state (read-pnml "data/marsan69.xml")))
-          correct {:P1 0.31305 :P3 0.72487 :P4 0.72487 :P5 0.33774 :P6 0.33774 :P8 0.31217 :P9 0.31217}]
-      (is (every? (fn [[key val]]
-                    (=* val (get correct key) 0.0001)) result)))))
-
-(deftest steady-state-properties-m612
-  (testing "Steady-state properties m612.xml"
-    (let [result (:avg-tokens-on-place (pn-steady-state (read-pnml "data/m612.xml")))
-          correct {:P1 0.16667 :P2 0.16667 :P3 0.16667 :Pa 0.5 :Pb 0.0}]
-      (is (every? (fn [[key val]]
-                    (=* val (get correct key) 0.001)) result)))))
-
-(deftest steady-state-properties-simple-vanish
-  (testing "Steady-state properties on a PN that reduces to a self-loop"
-    (let [result (:avg-tokens-on-place (pn-steady-state (read-pnml "data/simple-vanish.xml")))
-          correct {:P1 1.0}]
-      (is (every? (fn [[key val]]
-                    (=* val (get correct key) 0.001)) result)))))
-
-(deftest steady-state-properties-weights-P0-2
-  (testing "Steady-state properties on weights-P0-2 2-token, interesting characteristics"
-    (let [result (:avg-tokens-on-place (pn-steady-state (read-pnml "data/weights-P0-2.xml")))
-          correct {:P0 0.27118, :P1 0.0, :P2 0.305085, :P3 0.288906, :P4 0.4229584, :P5 0.7118644}]
-      (is (every? (fn [[key val]]
-                    (=* val (get correct key) 0.001)) result)))))
-
+(deftest steady-state
+  (is (= (steady-state-ok?
+          "data/qo10.xml" ; no loop
+          {:P1 0.111111, :P2 0.0, :P3 0.0, :P4 0.0, :P5 0.41667, 
+           :P6 0.333333, :P7 0.083333,  :P8 0.05556})
+         {:fname "data/qo10.xml" :ok? true}))
+  (is (= (steady-state-ok?
+          "data/qorchard.xml" ; has a loop
+          {:P0 0.11111 :P1 0 :P2 0 :P3 0 :P4 0.2 :P5 0
+           :P6 0.43056 :P7 0.25833})
+         {:fname "data/qorchard.xml" :ok? true}))
+  (is (= (steady-state-ok?
+          "data/simple.xml"
+          {:A 0.33333333333333326, :B 0.6666666666666669})
+         {:fname "data/simple.xml" :ok? true}))
+  (is (= (steady-state-ok?
+          "data/m6.xml"
+          {:Pacc1 0.08569697319444844, :Pacc2 0.27730828048945594, :Pact1 0.8569697319444844,
+           :Pact2 0.6932707012236401,  :Pidle 0.6369947463160957,  :Preq1 0.0573332948610671,
+           :Preq2 0.029421018286903994})
+         {:fname "data/m6.xml" :ok? true}))
+  (is (= (steady-state-ok?
+          "data/join2.xml"
+          {:P1 0.2, :P2 0.2, :Pjoin 0.4, :Pstart 0.8})
+         {:fname "data/join2.xml" :ok? true}))
+  (is (= (steady-state-ok?
+          "data/join2-reduce.xml"
+          {:P1 0.2, :P2 0.2, :Pjoin 0.4, :Pstart 0.8})
+         {:fname "data/join2-reduce.xml" :ok? true}))
+  (is (= (steady-state-ok?
+          "data/join3.xml"
+          {:P1 0.29412 :P2 0.29412 :P3 0.29412 :Pjoin 0.35294 :Pstart 1.05882})
+         {:fname "data/join3.xml" :ok? true}))
+  (is (= (steady-state-ok?
+          "data/join3-reduce-v2.xml"
+          {:P1 0.29412 :P2 0.29412 :P3 0.29412 :Pjoin 0.35294 :Pstart 1.05882})
+         {:fname "data/join3-reduce-v2.xml" :ok? true}))
+    (is (= (steady-state-ok?
+          "data/marsan69.xml"
+          {:P1 0.16667 :P2 0 :P3 0.33333 :P4 0.33333 :P5 0.16667
+           :P6 0.16667 :P7 0 :P8 0.16667 :P9 0.16667})
+         {:fname "data/marsan69.xml" :ok? true}))
+  (is (= (steady-state-ok?
+          "data/marsan69-2.xml"
+          {:P1 0.31305 :P3 0.72487 :P4 0.72487 :P5 0.33774 :P6 0.33774 
+           :P8 0.31217 :P9 0.31217})
+         {:fname "data/marsan69-2.xml" :ok? true}))
+  (is (= (steady-state-ok?
+          "data/m612.xml"
+          {:P1 0.16667 :P2 0.16667 :P3 0.16667 :Pa 0.5 :Pb 0.0})
+         {:fname "data/m612.xml" :ok? true}))
+  #_(is (= (steady-state-ok? ; one tangible, one immediate in series. 
+          "data/simple-vanish.xml"
+          {:P1 1.0})
+         {:fname "data/simple-vanish.xml" :ok? true}))
+  (is (= (steady-state-ok? ; test normalizing weights and sojourn in front of immediate.
+          "data/weights-P0-2.xml"
+          {:P0 0.27118, :P1 0.0, :P2 0.305085, :P3 0.288906, :P4 0.4229584, :P5 0.7118644})
+         {:fname "data/weights-P0-2.xml" :ok? true}))
+  (is (= (steady-state-ok?
+          "data/m2-inhib-bas.xml"
+          {:buffer 0.44752 :m1-blocked 0.21198 :m1-busy 0.78802
+           :m2-busy 0.70922 :m2-starved 0.29078})
+         {:fname "data/m2-inhib-bas.xml" :ok? true})))
+  
 ;;; On-the-fly reduction -- Don't need all these tests, just documentation for pnr/Q-prime calculation
 #_(def tQt [0.0 0.0 0.0])  ; 1->6 1->7 1->8 (need root, need other tangible states)
 #_(def tQtv [5.0 3.0 0.0 0.0]) ; 1->2 1->3 1->4 1->5
