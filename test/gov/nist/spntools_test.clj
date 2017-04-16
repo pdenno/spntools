@@ -26,6 +26,39 @@
         (as-> (read-pnml "data/m6.xml") ?pn
           (reachability ?pn)
           (distinct (map :M (:M2Mp ?pn))))))))
+
+(deftest vpaths
+  (testing "vpath naviation"
+    (let [m (run-ready "data/marsan69-2.xml")]
+      (is (= (pnr/vanish-paths m [2 0 0 0 0 0 0 0 0] [1 1 0 0 0 0 0 0 0])
+             {:new-vpath-rates [{:M [2 0 0 0 0 0 0 0 0],
+                                 :fire [:Tndata :t_start],
+                                 :Mp [1 0 1 1 0 0 0 0 0],
+                                 :rate 1.0, :loop? false}],
+              :explored [[2 0 0 0 0 0 0 0 0] [1 1 0 0 0 0 0 0 0] [1 0 1 1 0 0 0 0 0]],
+              :paths nil,
+              :new-St [[1 0 1 1 0 0 0 0 0]]})))
+    (let [q (run-ready "data/qorchard.xml")
+          paths [[[1 0 0 0 0 0 0 0] [0 1 0 0 0 0 0 0] [0 0 0 1 0 0 0 0] [0 0 0 0 0 1 0 0]]
+                 [[1 0 0 0 0 0 0 0] [0 1 0 0 0 0 0 0] [0 0 0 1 0 0 0 0] [0 0 0 0 0 0 1 0]]]]
+      (is (= (pnr/terminate-vpaths q paths true)
+             (list {:M [1 0 0 0 0 0 0 0], :fire [:T1 :t1-3 :t3-5], :Mp :NA, :rate :NA, :loop? true}
+                   {:M [1 0 0 0 0 0 0 0], :fire [:T1 :t1-3 :t3-6], :Mp :NA, :rate :NA, :loop? true})))
+      (is (= (pnr/terminating-tangibles q [1 0 0 0 0 0 0 0])
+             {:root [1 0 0 0 0 0 0 0],
+              :terms ([0 0 0 0 0 0 0 1] [0 0 0 0 0 0 1 0] [0 0 0 0 1 0 0 0]),
+              :explored
+              [{:M [1 0 0 0 0 0 0 0]}
+               {:M [1 0 0 0 0 0 0 0], :fire :T1, :Mp [0 1 0 0 0 0 0 0], :rate 5.0}
+               {:M [1 0 0 0 0 0 0 0], :fire :T2, :Mp [0 0 1 0 0 0 0 0], :rate 3.0}
+               {:M [0 1 0 0 0 0 0 0], :fire :t1-3, :Mp [0 0 0 1 0 0 0 0], :rate 1.0}
+               {:M [0 0 0 1 0 0 0 0], :fire :t3-5, :Mp [0 0 0 0 0 1 0 0], :rate 0.5}
+               {:M [0 0 0 1 0 0 0 0], :fire :t3-6, :Mp [0 0 0 0 0 0 1 0], :rate 0.5}
+               {:M [0 0 0 0 0 1 0 0], :fire :t5-2, :Mp [0 1 0 0 0 0 0 0], :rate 0.4}
+               {:M [0 0 0 0 0 1 0 0], :fire :t5-7, :Mp [0 0 0 0 0 0 0 1], :rate 0.6}
+               {:M [0 0 1 0 0 0 0 0], :fire :t2-3, :Mp [0 0 0 1 0 0 0 0], :rate 0.4}
+               {:M [0 0 1 0 0 0 0 0], :fire :t2-4, :Mp [0 0 0 0 1 0 0 0], :rate 0.6}]})))))
+
         
 ;;;========================================================
 ;;; Infinitesimal Generator

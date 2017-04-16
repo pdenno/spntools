@@ -25,7 +25,8 @@
   "Diagnostic"
   (-> filename
       read-pnml
-      pnr/renumber-pids))
+      pnr/renumber-pids
+      pnr/initial-tangible-state))
 
 ;(def m (run-ready "data/weights.xml"))
 
