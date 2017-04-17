@@ -94,58 +94,60 @@
 (def +max-rs+  "reachability set size" (atom 5000)) 
 (declare renumber-pids check-reach tangible? vanishing? in-loop-checks looping-vanish loop-reduce summarize-reach)
 (declare initial-tangible-state reachability-loop vanish-paths terminate-vpaths terminating-tangibles)
+(def ^:dynamic *loop-count* (atom 0))
 
 (defn reachability
   "Compute the reachability graph (:M2Mp) depth-first starting at the initial marking, 
    removing vanishing states on-the-fly using the algorithm of Knottenbelt, 1996."
   [pn]
-  (reset! +diag+ [])
   (as-pn-ok-> pn ?pn
-    (assoc ?pn :vpath-rates [])
     (renumber-pids ?pn)
     (initial-tangible-state ?pn)
-    (assoc ?pn :explored (map :M (next-links ?pn (:initial-tangible ?pn))))
-    (assoc ?pn :St (:explored ?pn), :Sv [])
-    (assoc ?pn :Sv-explored [])
-    (reachability-loop ?pn)
-    (loop-reduce ?pn)
-    (summarize-reach ?pn)
-    (check-reach ?pn)))
+    (binding [*loop-count* (atom 0)]
+      (reachability-loop ?pn))
+    #_(summarize-reach ?pn)
+    #_(check-reach ?pn)))
 
+;;; The reason I rewrote it was to accommodate links in explored (:t-rates)
+;;; Currently :tang is false when it pretty much done.
 (defn reachability-loop [pn]
-  (loop [pn pn]
-    ;;(println "St = " (:St pn))
-    ;;(println "Sv = " (:Sv pn))
-    (reset! +diag+ pn)
-    (as-pn-ok-> pn ?pn
-       (assoc ?pn :root (:initial-tangible ?pn))
-       (if-let [e (or (-> ?pn :Sv first) (-> ?pn :St first))]
-         (update ?pn :explored conj e) 
-         ?pn)
-       (assoc ?pn :Sv (remove #(some (fn [[sve rt]] (and (= sve %) (= rt (:root ?pn))))
-                                     (:Sv-explored ?pn))
-                              (:Sv ?pn)))
-       (assoc ?pn :Sv-explored (into (:Sv-explored ?pn) (map #(vector % (:root ?pn)) (:Sv ?pn))))
-       (reduce (fn [pn v-mark]
-                 (let [vp (vanish-paths pn (:root ?pn) v-mark)]
-                   (as-> pn ?pnv
-                     (update ?pnv :vpath-rates conj (:new-vpath-rates vp))
-                     (update ?pnv :St conj (:new-St vp)))))
-                   ?pn
-                   (:Sv ?pn))
-       (assoc ?pn :explored (filter #(tangible? ?pn %) (:explored ?pn)))
-       ;;(do (println "vpath-rates = " (:vpath-rates pn)) ?pn)
-       (in-loop-checks ?pn)
-       (if (empty? (:St ?pn))
-         ?pn                      
-         (let [nexts (next-marks ?pn (first (:St ?pn)) :explored)
-               tang? (and nexts (tangible? ?pn (first nexts)))]
-           ;;(println "nexts = " nexts "\n")
-           (recur (-> ?pn 
-                      (assoc :root (if tang? (first nexts) (first (:St ?pn))))
-                      (assoc :St (into (if tang? nexts [])
-                                       (vec (if (empty? (:Sv ?pn)) (next (:St ?pn)) (:St ?pn)))))
-                      (assoc :Sv (if tang? [] nexts)))))))))
+  "Calculate reachability graph. pn is not touched."
+  (let [root (:initial-tangible pn)
+        marks (next-links pn root)]
+    (loop [res {:t-rates [],
+                :nexts (next-links pn root),
+                :St [root], :root root, :tang? true, :loop? false
+                :Sv [], :Sv-explored [], :v-rates []}]
+        (as-pn-ok-> (in-loop-checks res (-> res :St first)) ?r
+           (do (println "res =" ?r "\n") ?r)
+           (if (and (empty? (:St ?r)) (empty? (:Sv ?r)))
+             ?r
+             (recur     
+              (if (:tang? ?r)
+                (as-> ?r ?r1
+                  (update ?r1 :t-rates into (:nexts ?r1))
+                  (assoc ?r1 :tang? (tangible? pn (-> ?r1 :nexts first :Mp)))
+                  (assoc ?r1 :St (into (if (:tang? ?r1) (vec (map :M (:nexts ?r1))) []) (next (:St ?r1))))
+                  (assoc ?r1 :Sv (if (:tang? ?r1) [] (map :Mp (:nexts ?r1))))
+                  (assoc ?r1 :root (if (:tang? ?r1) (-> ?r1 :nexts first :M) (:root ?r1)))
+                  (assoc ?r1 :nexts (if (:tang? ?r1) (next-links pn (-> ?r1 :St first :M)) (:nexts ?r1))))
+                (as-> ?r ?r1
+                  (assoc ?r1 :Sv (remove #(some (fn [[sve rt]] (and (= sve %) (= rt (:root ?r1))))
+                                                (:Sv-explored ?r1))
+                                         (:Sv ?r1)))
+                  (assoc ?r1 :Sv-explored (into (:Sv-explored ?r1) (map #(vector % (:root ?r1)) (:Sv ?r1))))
+                  (reduce (fn [res v-mark]
+                            (if (:loop? res) ; Stop the reduce if reduced a loop
+                              res
+                              (let [vp (vanish-paths pn (:root ?r1) v-mark)]
+                                (as-> res ?r
+                                  (update ?r :v-rates into (:new-vpath-rates vp))
+                                  (assoc ?r :loop? (:loop vp))
+                                  (assoc ?r :tang? true)
+                                  (if (:loop? ?r) (assoc ?r :Sv []) (update :Sv next))
+                                  (if (:loop? ?r) (assoc ?r :St (:new-St vp)) (into (:new-St vp) (:St ?r)))))))
+                          ?r1
+                          (:Sv ?r1))))))))))
 
 (defn vanish-paths
  "Navigate from root to all ending tangible states. 
@@ -164,14 +166,15 @@
               nexts (next-marks pn current)
               tang? (and nexts (tangible? pn (first nexts)))
               loop? (some (fn [n] (some #(= n %) (:explored ?r))) nexts)]
-          (recur (as-> ?r ?r2
+          (println "current = " current)
+          (recur (as-> ?r ?r2 ; POD fix this!
                    (cond loop?
                          (as-> ?r2 ?r3 ; Terminate it.
                            (assoc ?r3 :paths [])
-                           (assoc ?r3 :loop (looping-reduce pn root))
+                           (assoc ?r3 :loop (loop-reduce pn root))
                            (update ?r3 :new-vpath-rates into (-> ?r3 :loop :lv-rates))
                            (update ?r3 :new-St into (-> ?r3 :loop :lv-St))
-                           (update ?r3 :explored into (-> ?r3 :loop :explored)))
+                           #_(update ?r3 :explored into (-> ?r3 :loop :terms)))
                          tang?
                            (reduce (fn [r end]
                                      (as-> r ?r3 ; not loop back. ends.
@@ -228,7 +231,7 @@
   (apply * (map (fn [m f] (:rate (some #(when (= (:fire %) f) %) (next-links pn m))))
                 path fired)))
 
-(declare vanish-matrices)
+(declare vanish-matrices Q-prime)
 ;;;================================================================================
 ;;; This is toplevel for reduction of loops; called from vanish-paths.
 (defn loop-reduce
@@ -240,55 +243,40 @@
              (map (fn [mp r] {:M root :fire :loop! :Mp mp :rate r})
                   (:Qt-states ?calc) (:loop-rates ?calc)))
       (assoc ?calc :lv-St (:terms tt))
-      (assoc ?calc :explored (:explored tt)))))
+      #_(assoc ?calc :explored (:explored tt)))))
 
 ;;; POD fix this to include paths t-->...t-->t (qorchard.xml is all 0.0)
 (defn vanish-matrices
   "Compute rates between a root a every tangible terminated in paths with cycles."
   [pn root tt]
     (as-> {} ?calc
-      (assoc ?calc :Qt-states (vec (:terms tt)))
-      (assoc ?calc :Qt (vec (map (fn [target]
-                                 (reduce (fn [r link] (+ r (:rate link)))
-                                         0.0
-                                         (filter #(and (= root (:M %)) (= target (:Mp %))) (:explored tt))))
-                               (:Qt-states ?calc))))
-      (assoc ?calc :Qtv-states (distinct (vec (filter #(vanishing? pn %) (map :M (:explored tt))))))
-      (assoc ?calc :Qtv (vec (map (fn [target]
-                                  (reduce (fn [r link] (+ r (:rate link)))
-                                          0.0 
-                                          (filter #(and (= root (:M %)) (= target (:Mp %))) (:explored tt))))
-                                  (:Qtv-states ?calc))))
-      (assoc ?calc :Pv (vec (map (fn [r]
-                                   (vec (map (fn [c]
-                                               (reduce (fn [sum link] (+ sum (:rate link)))
-                                                       0.0
-                                                       (filter #(and (= (:M %) r) (= (:Mp %) c))
-                                                               (:explored tt))))
-                                             (:Qtv-states ?calc))))
-                                 (:Qtv-states ?calc))))
-      (assoc ?calc :Pvt (vec (map (fn [r]
-                                    (vec (map (fn [c]
-                                                (reduce (fn [sum link] (+ sum (:rate link)))
-                                                        0.0
-                                                        (filter #(and (= (:M %) r) (= (:Mp %) c))
-                                                                (:explored tt))))
-                                              (:Qt-states ?calc))))
-                                  (:Qtv-states ?calc))))
-      (assoc ?calc :loop-rates (Q-prime (:Qt ?calc) (:Qtv ?calc) (:Pv ?calc) (:Pvt ?calc))))))
+      (assoc ?calc :Qt-states (:terms tt))
+      (assoc ?calc :Qt (map (fn [target]
+                              (reduce (fn [r link] (+ r (:rate link)))
+                                      0.0
+                                      (filter #(and (= root (:M %)) (= target (:Mp %))) (:explored tt))))
+                            (:Qt-states ?calc)))
+      (assoc ?calc :Qtv-states (distinct (filter #(vanishing? pn %) (map :M (:explored tt)))))
+      (assoc ?calc :Qtv (map (fn [target] (reduce (fn [r link] (+ r (:rate link)))
+                                                  0.0 
+                                                  (filter #(and (= root (:M %)) (= target (:Mp %))) (:explored tt))))
+                                  (:Qtv-states ?calc)))
+      (assoc ?calc :Pv (map (fn [r]
+                              (map (fn [c] (reduce (fn [sum link] (+ sum (:rate link)))
+                                                   0.0
+                                                   (filter #(and (= (:M %) r) (= (:Mp %) c))
+                                                           (:explored tt))))
+                                   (:Qtv-states ?calc)))
+                            (:Qtv-states ?calc)))
+      (assoc ?calc :Pvt (map (fn [r]
+                               (map (fn [c] (reduce (fn [sum link] (+ sum (:rate link)))
+                                                    0.0
+                                                    (filter #(and (= (:M %) r) (= (:Mp %) c))
+                                                            (:explored tt))))
+                                    (:Qt-states ?calc)))
+                             (:Qtv-states ?calc)))
+      (assoc ?calc :loop-rates (Q-prime (:Qt ?calc) (:Qtv ?calc) (:Pv ?calc) (:Pvt ?calc)))))
 
-(defn loop-add-rates
-  "Add rates between the root state and the tangible states exiting the loop."
-  [pn key] ; Use :fire key multi-loop debugging. Otherwise I like :fire :loop!
-  (let [root (:root-mark pn)]
-    (update pn
-            :explored
-            into
-            (map (fn [[mp r]] {:M root :fire :loop! :Mp mp :rate r})
-                 (zipmap (:Qt-states pn) (:loop-rates pn))))))
-
-
-            
 (defn terminating-tangibles
   "Return a list of tangible states that can be reached from the root mark.
    Once a tangible state has been reached, that path is terminated. Takes at least one step."
@@ -385,15 +373,17 @@
     (when N ; If couldn't calculate inverse, then 'timeless trap'
       (m/add Qt (m/mmul Qtv N Pvt)))))
 
-(defn in-loop-checks [pn]
-  (cond 
-    (some #(> % @+k-bounded+) (:Mp (first (:St pn))))
-    (assoc pn :failure {:reason :not-k-bounded :marking (:Mp (first (:St pn)))}),
-    (> (count (:M2Mp pn)) @+max-rs+)
-    (assoc pn :failure {:reason :exceeds-max-rs :set-size (count (:M2Mp pn))}),
-    (> (count (:explored pn)) 500) ; POD 500
-    (assoc pn :failure {:reason :exceeds-reach :set-size (count (:explored pn))}),
-    :else pn))
+(defn in-loop-checks [result state]
+  (swap! *loop-count* inc)
+  (reset! +diag+ (list result state))
+  (cond
+    (> @*loop-count* 200) ; POD
+    (assoc result :failure {:reason :loop-count-exceeded}),
+    (and state (some #(> % @+k-bounded+) state))
+    (assoc result :failure {:reason :not-k-bounded :marking state}),
+    (> (count (:explored result)) @+max-rs+)
+    (assoc result :failure {:reason :exceeds-max-rs :set-size (count (:explored result))}),
+    :else result))
 
 (defn check-reach
   "Check for reachability-related errors."

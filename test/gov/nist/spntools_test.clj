@@ -30,7 +30,7 @@
 (deftest vpaths
   (testing "vpath naviation"
     (let [m (run-ready "data/marsan69-2.xml")]
-      (is (= (pnr/vanish-paths m [2 0 0 0 0 0 0 0 0] [1 1 0 0 0 0 0 0 0])
+      (is (= (vanish-paths m [2 0 0 0 0 0 0 0 0] [1 1 0 0 0 0 0 0 0])
              {:new-vpath-rates [{:M [2 0 0 0 0 0 0 0 0],
                                  :fire [:Tndata :t_start],
                                  :Mp [1 0 1 1 0 0 0 0 0],
@@ -41,10 +41,10 @@
     (let [q (run-ready "data/qorchard.xml")
           paths [[[1 0 0 0 0 0 0 0] [0 1 0 0 0 0 0 0] [0 0 0 1 0 0 0 0] [0 0 0 0 0 1 0 0]]
                  [[1 0 0 0 0 0 0 0] [0 1 0 0 0 0 0 0] [0 0 0 1 0 0 0 0] [0 0 0 0 0 0 1 0]]]]
-      (is (= (pnr/terminate-vpaths q paths true)
+      (is (= (terminate-vpaths q paths true)
              (list {:M [1 0 0 0 0 0 0 0], :fire [:T1 :t1-3 :t3-5], :Mp :NA, :rate :NA, :loop? true}
                    {:M [1 0 0 0 0 0 0 0], :fire [:T1 :t1-3 :t3-6], :Mp :NA, :rate :NA, :loop? true})))
-      (is (= (pnr/terminating-tangibles q [1 0 0 0 0 0 0 0])
+      (is (= (terminating-tangibles q [1 0 0 0 0 0 0 0])
              {:root [1 0 0 0 0 0 0 0],
               :terms ([0 0 0 0 0 0 0 1] [0 0 0 0 0 0 1 0] [0 0 0 0 1 0 0 0]),
               :explored
@@ -57,8 +57,11 @@
                {:M [0 0 0 0 0 1 0 0], :fire :t5-2, :Mp [0 1 0 0 0 0 0 0], :rate 0.4}
                {:M [0 0 0 0 0 1 0 0], :fire :t5-7, :Mp [0 0 0 0 0 0 0 1], :rate 0.6}
                {:M [0 0 1 0 0 0 0 0], :fire :t2-3, :Mp [0 0 0 1 0 0 0 0], :rate 0.4}
-               {:M [0 0 1 0 0 0 0 0], :fire :t2-4, :Mp [0 0 0 0 1 0 0 0], :rate 0.6}]})))))
-
+               {:M [0 0 1 0 0 0 0 0], :fire :t2-4, :Mp [0 0 0 0 1 0 0 0], :rate 0.6}]}))
+      (is (every? (fn [[correct mine]] (=* correct mine) 0.0001)
+                  (map #(list %1 %2)
+                       [2.325,3.875,1.8]
+                       (:loop-rates (vanish-paths q [1 0 0 0 0 0 0 0] [0 1 0 0 0 0 0 0]))))))))
         
 ;;;========================================================
 ;;; Infinitesimal Generator
