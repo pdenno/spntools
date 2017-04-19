@@ -27,7 +27,7 @@
           (reachability ?pn)
           (distinct (map :M (:M2Mp ?pn))))))))
 
-(deftest vpaths
+#_(deftest vpaths
   (testing "vpath naviation"
     (let [m (run-ready "data/marsan69-2.xml")]
       (is (= (vanish-paths m [2 0 0 0 0 0 0 0 0] [1 1 0 0 0 0 0 0 0])
@@ -41,7 +41,7 @@
     (let [q (run-ready "data/qorchard.xml")
           paths [[[1 0 0 0 0 0 0 0] [0 1 0 0 0 0 0 0] [0 0 0 1 0 0 0 0] [0 0 0 0 0 1 0 0]]
                  [[1 0 0 0 0 0 0 0] [0 1 0 0 0 0 0 0] [0 0 0 1 0 0 0 0] [0 0 0 0 0 0 1 0]]]]
-      (is (= (terminate-vpaths q paths true)
+      (is (= (terminate-vpaths q paths)
              (list {:M [1 0 0 0 0 0 0 0], :fire [:T1 :t1-3 :t3-5], :Mp :NA, :rate :NA, :loop? true}
                    {:M [1 0 0 0 0 0 0 0], :fire [:T1 :t1-3 :t3-6], :Mp :NA, :rate :NA, :loop? true})))
       (is (= (terminating-tangibles q [1 0 0 0 0 0 0 0])
