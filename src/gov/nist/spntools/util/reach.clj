@@ -9,10 +9,7 @@
 ;;; To Do: Implement place capacity restrictions. (maybe)
 ;;;     * Instead of all these +max-rs+ etc. might want a system wide ^:dynamic
 ;;;       binding of variable values in a map. (Call the current things +default-...)
-;;;     * Now that I've written terminating-tangibles, it could probably be adapted
-;;;       to collect all the links needed to do the Q-prime calculation.
 ;;;    BUGS: 1) Handle 'by-pass' t-->t...-->t from root.
-;;;          2) Probably what I'm doing to specify root before calling to reduce vpaths is insufficient.
 
 (def +zippy+ (atom nil))
 
@@ -97,13 +94,14 @@
 (def +k-bounded+ (atom 10)) ; Maybe better than (or addition to) k-bounded would be size of :explored
 (def +max-rs+  "reachability set size" (atom 5000)) 
 (declare renumber-pids check-reach tangible? vanishing? in-loop-checks initial-tangible-state reachability-loop
-          summarize-reach reach-reduce-vpaths)
+          summarize-reach reach-reduce-vpaths #_conj-t-rate into-v-rates)
 
 (def ^:dynamic *loop-count* (atom 0))
 
 (defn reachability
   "Compute the reachability graph (:M2Mp) depth-first starting at the initial marking, 
-   removing vanishing states on-the-fly using the algorithm of Knottenbelt, 1996."
+   removing vanishing states on-the-fly using the algorithm of Knottenbelt, 1996.
+   The links that end up in :t-states and :v-state should have tangible :M and :Mp."
   [pn]
   (as-pn-ok-> pn ?pn
     (renumber-pids ?pn)
@@ -122,28 +120,49 @@
     (loop [res {:paths (vec (map vector (next-links pn root)))
                 :v-rates [], :t-rates [], :explored [] 
                 :nexts [], :tang? true, :loop? false}]
-      ;(reset! +diag+ res)
+      (reset! +diag+ res)
       (as-> res ?r
         (if (empty? (:paths ?r))
              ?r
              (recur
               (if (:tang? ?r)
-                (as-> ?r ?r1
-                  (update ?r1 :t-rates conj (-> ?r1 :paths first last))
-                  (update ?r1 :t-rates distinct) ; POD need investigation
-                  (update ?r1 :explored conj (-> ?r1 :paths first last)) 
-                  (assoc ?r1 :nexts (next-links pn (-> ?r1 :paths first last :Mp) (:explored ?r1)))
-                  (if (empty? (:nexts ?r1)) ; This part is navigation whereas :search-paths (reach-reduce-vpaths)...
-                    (assoc ?r1 :paths (vec (next (:paths ?r1)))) ; ... is manipulation for terminating paths and loops.
-                    (assoc ?r1 :paths (into (vec (map #(conj (-> ?r1 :paths first) %) (:nexts ?r1))) (-> ?r1 :paths next))))
-                  (assoc ?r1 :tang? (and (not-empty (:paths ?r1)) (tangible? pn (-> ?r1 :paths first last :M)))))
+                (reach-step-tangible ?r pn)
                 (reach-reduce-vpaths ?r pn))))))))
 
-(declare follow-vpath clip-head-to-root update-paths-for-navigation update-paths-for-loop
+(defn reach-step-tangible
+  [res pn]
+  (as-> res ?r
+    (update ?r :t-rates conj (-> ?r :paths first last))
+    (update ?r :t-rates distinct) ; POD need investigation. Might be fixed 2017-04-22
+    (update ?r :explored conj (-> ?r :paths first last)) 
+    (assoc ?r :nexts (next-links pn (-> ?r :paths first last :Mp) (:explored ?r)))
+    (if (empty? (:nexts ?r)) ; This part is navigation whereas :search-paths (reach-reduce-vpaths)...
+      (assoc ?r :paths (vec (next (:paths ?r)))) ; ... is manipulation for terminating paths and loops.
+      (assoc ?r :paths (into (vec (map #(conj (-> ?r :paths first) %) (:nexts ?r))) (-> ?r :paths next))))
+    (assoc ?r :tang? (and (not-empty (:paths ?r))
+                          (tangible? pn (-> ?r :paths first last :M))
+                          (tangible? pn (-> ?r :paths first last :Mp))))))
+
+(defn tryme [res pn]
+  (as-> res ?r
+    (reach-step-tangible ?r pn)
+    (reach-reduce-vpaths ?r pn)))
+    
+(defn into-v-rates
+  [obj links pn]
+  (if-let [bad (some #(when (or (vanishing? pn (:M %)) (vanishing? pn (:Mp %))) %) links)]
+    (throw (ex-info "Adding a vanishing link to :v-rates." {:result obj :link bad}))
+    (update obj :v-rates into links)))
+
+(declare follow-vpath clip-head-to-root update-paths-for-nav update-paths-for-loop
          calc-vpath-rate loop-reduce-vpath terminating-tangibles fire-vpath)
 
 ;;;========================================================================
-;;; Toplevel function for vpaths. 
+;;; Toplevel function for vpaths.
+;;; POD What I'm doing with clip-head-to-root might not be sufficient. There might
+;;;     be a loop above all this stuff. It might be better to call terminating-tangibles
+;;;     on every tangible backwards on path towards the :initial-tangible. Take as root
+;;;     the last one where :explored expanded. Need a test case for this.
 (defn reach-reduce-vpaths
   "Toplevel reduction of :vpaths, returning updates to the results map :paths :v-rates etc.
    Just calls out for the real work (follow-vpaths) and copies data. Does not touch the pn."
@@ -152,12 +171,13 @@
     (as-> res ?r
       (assoc ?r :loop? false)
       (reduce (fn [res clipped-vpath]
+                (reset! +diag+ {:one clipped-vpath :two (:paths res)})
                 (if (:loop? res) ; Stop the reduce if reduced a loop
                   res
                   (let [fp (follow-vpath pn clipped-vpath (:paths res))]
                     (swap! term-paths into (:new-St fp))
                     (as-> res ?r1
-                      (update ?r1 :v-rates into (:new-vpath-rates fp))
+                      (into-v-rates ?r1 (:new-vpath-rates fp) pn)
                       (update ?r1 :explored into (:explored fp))
                       (update ?r1 :explored distinct)
                       (assoc  ?r1 :paths (if (= (:search-paths fp) :drop-first)
@@ -166,7 +186,9 @@
                       (assoc  ?r1 :loop? (:loop? fp))))))
               ?r
               (map #(clip-head-to-root % pn)
-                   (filter #(vanishing? pn (-> % last :M)) (:paths ?r))))
+                   (filter #(or (vanishing? pn (-> % last :M))
+                                (vanishing? pn (-> % last :Mp))) ; 2017-04-22
+                           (:paths ?r))))
       (assoc ?r :paths (into (vec (map vector @term-paths)) (:paths ?r)))
       (assoc ?r :tang? true))))
 
@@ -180,26 +202,46 @@
   (loop [fp {:new-vpath-rates [] :explored vpath
              :paths (vector vpath) :loop false :loop? false
              :new-St []}]
-      (as-> fp ?fp
-        (update-paths-for-navigation ?fp pn)
-        (if (empty? (:paths ?fp)) ; updates :nexts, :paths
-          ?fp ; POD is this enough? 
-          (recur (cond (:loop? ?fp)
-                       (let [lp (loop-reduce-vpath pn vpath)]
-                         (as-> ?fp ?fp2 ; Loop. Terminate all.
-                           (assoc ?fp2 :search-paths (update-paths-for-loop pn lp search-paths)) ; <--------
-                           (assoc ?fp2 :paths [])
-                           (update ?fp2 :explored into (:explored lp))
-                           (update ?fp2 :new-vpath-rates into (:lv-rates lp))
-                           (update ?fp2 :new-St into (:lv-St lp))
-                           (assoc ?fp2 :loop? true)))
-                       (:tang? ?fp) ; Not loop, but hit a tangible. End this path.
-                       (as-> ?fp ?fp2
-                         (update ?fp2 :new-St conj (-> ?fp2 :paths first last))
-                         (update ?fp2 :new-vpath-rates conj (calc-vpath-rate pn (-> ?fp2 :paths first)))
-                         (assoc ?fp2 :paths (vec (next (:paths ?fp2)))) ; POD focus!
-                         (assoc ?fp2 :search-paths :drop-first)), ; <---------
-                       :else ?fp))))))
+    (as-> fp ?fp
+      (update-paths-for-nav ?fp pn)
+      (if (empty? (:paths ?fp)) ; updates :nexts, :paths
+        ?fp ; POD is this enough? 
+        (recur (cond (:loop? ?fp)
+                     (let [lp (loop-reduce-vpath pn vpath)]
+                       (as-> ?fp ?fp2 ; Loop. Terminate all.
+                         (assoc ?fp2 :search-paths (update-paths-for-loop pn lp search-paths)) ; <--------
+                         (assoc ?fp2 :paths [])
+                         (update ?fp2 :explored into (:explored lp))
+                         (update ?fp2 :new-vpath-rates into (:lv-rates lp))
+                         (update ?fp2 :new-St into (:lv-St lp))
+                         (assoc ?fp2 :loop? true)))
+                     (:tang? ?fp) ; Not loop, but hit a tangible. End this path.
+                     (as-> ?fp ?fp2                                           ; 2017-04-22  Regarding distinct...
+                       (update ?fp2 :new-St conj (-> ?fp2 :paths first last)) ; ...see below up-p-4-nav, marsan69 comment...
+                       (update ?fp2 :new-vpath-rates conj (calc-vpath-rate pn (-> ?fp2 :paths first)))
+                       (update ?fp2 :new-vpath-rates distinct) ; ...Probably ok because :nvr initialized here.
+                       (assoc ?fp2 :paths (vec (next (:paths ?fp2)))) ; POD focus!
+                       (assoc ?fp2 :search-paths :drop-first)), ; <---------
+                     :else ?fp))))))
+
+(defn update-paths-for-nav [res pn]
+  "Update :paths and :loop? detection adding whatever (t/v) and noting whether 
+   it was a tangible that was added."
+  ;(reset! +diag+ res)
+  (cond (empty? (:paths res)) res
+        (and (tangible? pn (-> res :paths first last :M)) ; I think this is a split on a vanishing...
+             (tangible? pn (-> res :paths first last :Mp)))
+        (assoc res :tang? true), ; ... See marsan69 :Tndata, :t_start.
+        :else 
+        (let [nexts (next-links pn (-> res :paths first last :Mp))]
+          (as-> res ?r
+            (assoc ?r :loop? (some (fn [n] (some #(= n %) (:explored ?r))) nexts))
+            (assoc ?r :paths
+                   (if (empty? nexts)
+                     (next (:paths ?r))
+                     (into (vec (map #(conj (-> ?r :paths first) %) nexts))
+                           (rest (:paths ?r)))))
+            (assoc ?r :tang? (tangible? pn (-> ?r :paths first last :M))))))) ; 2017-04-22 :Mp not :M
 
 (defn update-paths-for-loop
   "Use the root, explored, and terminals of the sub-network loop to update
@@ -209,23 +251,6 @@
     (vec (remove
           (fn [spath] (some (fn [step] (some #(= step %) explored)) spath))
           search-paths))))
-
-(defn update-paths-for-navigation [res pn]
-  "Update :paths and :loop? detection adding whatever (t/v) and noting whether 
-   it was a tangible that was added."
-  ;(reset! +diag+ res)
-  (if (empty? (:paths res))
-    res
-    (let [nexts (next-links pn (-> res :paths first last :Mp))]
-      (as-> res ?r
-        (assoc ?r :loop? (some (fn [n] (some #(= n %) (:explored ?r))) nexts))
-        (assoc ?r :paths
-               (if (empty? nexts)
-                 (next (:paths ?r))
-                 (into (vec (map #(conj (-> ?r :paths first) %) nexts))
-                       (rest (:paths ?r)))))
-        (assoc ?r :tang? (tangible? pn (-> ?r :paths first last :M)))))))
-
 
 ;;; The maps look like this:
 ;;;   Typical:  {:M <root> :fire [<root-to-v> <v> ...<v> <v-to-tang>] :Mp <tangible>}"
@@ -428,7 +453,8 @@
       (assoc ?pn :failure {:reason :absorbing-states
                            :data {:m-not-mp m-mp :mp-not-m mp-m}
                            :explanation [":m-not-mp means got into this state, but we don't see how."
-                                         ":mp-not-m means don't know how to get out of this state."]}))
+                                         ":mp-not-m means don't know how to get out of this state."
+                                         "If these these states are vanishing, it's a bug." ]}))
     (if (> (count (:M2mp pn)) @+max-rs+)
       (assoc pn :failure {:reason :exceeds-max-rs :set-size (count (:M2Mp ?pn))})
       ?pn)
