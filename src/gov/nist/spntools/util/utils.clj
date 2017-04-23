@@ -33,6 +33,11 @@
   (binding [clojure.pprint/*print-right-margin* 140]
     (pprint arg)))
 
+(defn break
+  ([] (throw (ex-info "Break!" {})))
+  ([text] (throw (ex-info text {})))
+  ([text args] (throw (ex-info text args))))
+
 ;;;=== Petri Nets =========================
 (def +obj-cnt+ (atom 0))
 
