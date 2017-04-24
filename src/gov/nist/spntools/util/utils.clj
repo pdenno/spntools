@@ -38,6 +38,10 @@
   ([text] (throw (ex-info text {})))
   ([text args] (throw (ex-info text args))))
 
+(defn testme []
+  (binding [*ns* (find-ns 'gov.nist.spntools-test)]
+    (clojure.test/run-tests)))
+
 ;;;=== Petri Nets =========================
 (def +obj-cnt+ (atom 0))
 

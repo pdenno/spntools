@@ -121,7 +121,7 @@
           {:P1 0.111111, :P2 0.0, :P3 0.0, :P4 0.0, :P5 0.41667, 
            :P6 0.333333, :P7 0.083333,  :P8 0.05556})
          {:fname "data/qo10.xml" :ok? true}))
-  (is (= (steady-state-ok?
+  #_(is (= (steady-state-ok?
           "data/qorchard.xml" ; has a loop
           {:P0 0.11111 :P1 0 :P2 0 :P3 0 :P4 0.2 :P5 0
            :P6 0.43056 :P7 0.25833})
@@ -159,8 +159,8 @@
          {:fname "data/marsan69.xml" :ok? true}))
   (is (= (steady-state-ok?
           "data/marsan69-2.xml"
-          {:P1 0.31305 :P3 0.72487 :P4 0.72487 :P5 0.33774 :P6 0.33774 
-           :P8 0.31217 :P9 0.31217})
+          {:P1 0.31305114, :P2 0.0, :P3 0.724867, :P4 0.724867, :P5 0.3377425, :P6 0.3377425,
+           :P7 0.0, :P8 0.312169, :P9 0.3121693})
          {:fname "data/marsan69-2.xml" :ok? true}))
   (is (= (steady-state-ok?
           "data/m612.xml"
