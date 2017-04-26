@@ -121,7 +121,7 @@
           {:P1 0.111111, :P2 0.0, :P3 0.0, :P4 0.0, :P5 0.41667, 
            :P6 0.333333, :P7 0.083333,  :P8 0.05556})
          {:fname "data/qo10.xml" :ok? true}))
-  #_(is (= (steady-state-ok?
+  (is (= (steady-state-ok?
           "data/qorchard.xml" ; has a loop
           {:P0 0.11111 :P1 0 :P2 0 :P3 0 :P4 0.2 :P5 0
            :P6 0.43056 :P7 0.25833})

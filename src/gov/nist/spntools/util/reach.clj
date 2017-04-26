@@ -190,7 +190,7 @@
                     (update ?r1 :collected-terms into (:new-St fp))
                     (into-v-rates ?r1 (:new-vpath-rates fp) pn)
                     ;;(do (println "v-rates = ") (ppprint (:v-rates ?r1))  ; keep
-                    ;;(println "new-St = " ) (ppprint (:new-St fp)) ?r1)
+                    ;;    (println "new-St = " ) (ppprint (:new-St fp)) ?r1)
                     (update ?r1 :explored into clipped-vpath) ; 2017-04-24 weights-P0-2
                     (update ?r1 :explored into (:vexplored fp))
                     (update ?r1 :explored distinct)
@@ -211,16 +211,11 @@
     (dissoc ?r :collected-terms)))
 
 (def loop-count (atom 0))
-(declare follow-vpath-loop follow-vpath-to-tang update-vexplored)
-
-(defn check-for-cycles [fp]
-  "Return true if a cycle is detected in :vexplored nodes starting with the active state."
-  (let [active (-> fp :paths first last :M)]
-    false))
+(declare follow-vpath-loop follow-vpath-to-tang update-vexplored cycle?)
 
 (defn follow-vpath
  "Continue navigation of vpath (links) to all ending tangible states. 
-  vpath is a path of links, all elements of which except the last are tangible. 
+  vpath is a path of links, all elements of which are tangible. 
   Calls out for loops and calculation when a terminal is reached. 
   Return a map with :new-vpath-rates and :new-St. DOES NOT CHANGE pn.
   Argument search-paths is the 'global' search path used by the reachability-loop."
@@ -230,25 +225,23 @@
              :vpath vpath :search-paths search-paths}] ; These two for debugging. 
     (swap! loop-count inc)
     (reset! +diag+ fp)
-    ;(when (or (> @loop-count 150) (> (count (:paths fp)) 10) (> (count (-> fp :paths first)) 10)) (break "path length")) ; keep
-    ;; 2017-04-24 By not looking at :explored for next-links here, we'll pick up duplicate v-rates.
+    ;;(when (or (> @loop-count 50) (> (count (:paths fp)) 10) (> (count (-> fp :paths first)) 10)) (break "path length")) ; keep
+    ;; 2017-04-24 By not looking at :vexplored for next-links here, we'll pick up duplicate v-rates.
     ;; OTOH it seems not doing so will result in missing rates.
     (let [nexts (and (not-empty (:paths fp))
-                     (next-links pn (-> fp :paths first last :Mp)))] ; 2017-04-24
+                     (next-links pn (-> fp :paths first last :Mp)))
+          tang? (and (not-empty nexts) (tangible? pn (-> nexts first :M)))]
       (as-> fp ?fp
         (assoc ?fp :paths
                (cond (empty? nexts) (next (:paths ?fp)),
-                     (and (not (= 1 (count (-> ?fp :paths first))))
-                          (tangible? pn (-> ?fp :paths first last :Mp))) (:paths ?fp),
+                     ;; We don't call follow-vpath-to-tang with a tangible on the path
+                     (and (not (= 1 (count (-> ?fp :paths first)))) tang?) (:paths ?fp), 
                      :else (into (vec (map #(conj (-> ?fp :paths first) %) nexts))
                                  (rest (:paths ?fp)))))
-        (assoc ?fp :cycle? (check-for-cycles ?fp))
-        ;;(assoc ?fp :tang? (if (:init? ?fp) false (tangible? ?fp (-> ?fp :paths first last :M)))) ; POD It was happy like this!
-        (assoc ?fp :tang? (not (:init? ?fp)))
+        (assoc ?fp :cycle? (cycle? pn ?fp))
+        (assoc ?fp :tang? (if (:init? ?fp) false tang?))
         ;; Don't put terminating tangibles on explored. Need to search from those. 
         (update ?fp :vexplored into (if (:tang? ?fp) [] nexts)) 
-        ;;(do (println ":vexplored (in fv) = ")  (ppprint (:vexplored ?fp))
-        ;;    (println "tang? = " (:tang? ?fp)) ?fp) ; keep
         (assoc ?fp :init? false)
         (if (empty? (:paths ?fp))
           ?fp
@@ -263,12 +256,11 @@
   ;;(println "fvt")
   (when (vanishing? pn (-> fp :paths first last :Mp))
     (reset! +diag+ fp)
-    (throw (ex-info "follow-vpath-to-tang, but its not!" {:path (-> fp :paths first)})))
+    (throw (ex-info "follow-vpath-to-tang, but it's not!" {:path (-> fp :paths first)})))
   ;;(println "Candidate :new-ST = ") (ppprint (next-links pn (-> fp :paths first last :Mp))) ; keep
   ;;(println "Actual :new-ST = ") (ppprint (next-links pn (-> fp :paths first last :Mp) (:vexplored fp)))
   ;;(println ":vexplored (in fvptt) = ") (ppprint (:vexplored fp))
   (as-> fp ?fp 
-    ;; POD investigate lack of (:vexplored ?fp) here. Might want to remove what comes back from :vexplored.
     (update ?fp :new-St into (next-links pn (-> ?fp :paths first last :Mp) (:vexplored ?fp)))
     (update ?fp :new-vpath-rates conj (calc-vpath-rate pn (-> ?fp :paths first)))
     (assoc ?fp :paths (-> ?fp :paths next vec)) ; <------------------ POD place 1
@@ -300,6 +292,33 @@
     (vec (remove
           (fn [spath] (some (fn [step] (some #(= step %) explored)) spath))
           search-paths))))
+
+;;; POD It might not be sufficient to simply drop paths that contain all tangible states.
+;;; I chose to look at paths rather than having visited the state because I thought it would
+;;; be more robust (fewer false positives). The jury is still out.
+;(defn cycle? [pn fp] false)
+
+(defn cycle? [pn fp]
+  "Return true if a cycle of vanishing states is detected starting with the active state. 
+   Searches backward through explored states looking for the active state.
+   Drops paths that contain tangible states."
+  (let [space (:vexplored fp)
+        finding (-> fp :paths first last :M)]
+    (loop [found false
+           paths (vector (vector (-> fp :paths first last)))]
+      (cond found (first paths)
+            (empty? paths) (when found (first paths))
+            :else
+            (let [active (-> paths first last :M)
+                  match? (and (= finding active) (not= 1 (count (first paths))))
+                  vanishing? (every? #(vanishing? pn (:M %)) (first paths))
+                  nexts (distinct (filter #(= active (:Mp %)) space))]
+              (recur
+               (and match? vanishing?)
+               (cond (empty? nexts) (-> paths next vec) ; move to next search path
+                     (and match? vanishing?) paths ; found, don't care what is returned.
+                     (not vanishing?) (-> paths next vec) ; drop it if it contains tangible states.
+                     :else (into (vec (map #(conj (first paths) %) nexts)) (next paths)))))))))
 
 (defn calc-vpath-rate
   "Create a vpath link object, calculating the rate from the root to the tangible state 
