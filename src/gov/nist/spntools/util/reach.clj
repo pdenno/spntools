@@ -18,7 +18,7 @@
   [pn mark tr-name]
   (let [arcs (arcs-into pn tr-name)
         arc-groups (group-by :type arcs)
-        marking-key (:marking-key pn)]
+        ^clojure.lang.PersistentVector marking-key (:marking-key pn)]
     (and 
      (every? (fn [ar] (>= (nth mark (.indexOf marking-key (:source ar)))
                           (:multiplicity ar)))
@@ -139,19 +139,24 @@
                    :else
                    (reach-reduce-vpaths ?r pn)))))))))
 
+;;; If there is a point to saving the whole path, rather than just starting a new one for each next,
+;;; it is that you might want to travel up it to find the root for cycles of vanishing states.
+;;; However, I think I'll have to rebuild this from t-rates/:explored since otherwise I'm creating long
+;;; paths of tangibles here. Thus I'm sort of reverting to the St idea here.
+
+;;; "This one doesn't have it's own map; it works off the search-level map."
 (defn reach-step-tangible
-  "This one doesn't have it's own map; it works off the search-level map."
+  "Take a step from tangible to tangible, removing this path and adding 
+   to :paths single steps of next states."
   [res pn]
   (as-> res ?r
     (conj-t-rate ?r (-> ?r :spaths first last) pn)
-    (update ?r :t-rates distinct) ; POD need investigation. 
+    ;(update ?r :t-rates distinct) ; POD need investigation. 
     (update ?r :explored conj (-> ?r :spaths first last))
-    (assoc ?r :nexts (next-links pn (-> ?r :spaths first last :Mp) (:explored ?r)))
-    ;; If there is a point to saving the whole path, rather than just starting a new one for each next,
-    ;; it is that you might want to travel up it to find the root for cycles of vanishing states. 
-    (if (empty? (:nexts ?r)) ; This part is navigation, whereas :search-paths (reach-reduce-vpaths)...
+    (let [nexts (next-links pn (-> ?r :spaths first last :Mp) (:explored ?r))]
+    (if (empty? nexts) ; This part is navigation, whereas :search-paths (reach-reduce-vpaths)...
       (assoc ?r :spaths (vec (next (:spaths ?r)))) ; ... is a process for terminating paths and loops.
-      (assoc ?r :spaths (into (vec (map #(conj (-> ?r :spaths first) %) (:nexts ?r))) (-> ?r :spaths next))))))
+      (assoc ?r :spaths (into (vec (map #(vector %) nexts)) (-> ?r :spaths next)))))))
 
 (defn into-v-rates
   [obj links pn]
@@ -449,8 +454,9 @@
   "Merge :vpath-rates and :explored (sans vanishing) resulting in :M2Mp"
   [pn]
   (as-> pn ?pn
-   (assoc ?pn :M2Mp (into (:t-rates ?pn) (distinct (:v-rates ?pn)))) 
-   (dissoc ?pn :explored :vexplored :spaths :t-rates :v-rates))) ; keep
+    (assoc ?pn :M2Mp (into (distinct (:t-rates ?pn))
+                           (distinct (:v-rates ?pn)))) 
+    (dissoc ?pn :explored :vexplored :spaths :t-rates :v-rates))) ; keep
 
 ;;; Note: If m/inverse is Gauss-Jordan, it is O(n^3) 20 states 8000 ops. Could be better.
 ;;; Knottenbelt suggest LU decomposition. 
@@ -477,7 +483,8 @@
       (and state (some #(> % @+k-bounded+) state))
       (assoc res :failure {:reason :not-k-bounded :marking state}),
       (> (count (:explored res)) @+max-rs+)
-      (assoc res :failure {:reason :exceeds-max-rs :set-size (count (:explored res))}),
+      (assoc res :failure {:reason :exceeds-max-rs
+                           :set-size (count (:explored res))}),
       :else res)))
 
 (defn check-reach
@@ -487,20 +494,21 @@
         mp (set (distinct (map #(:Mp %) (:M2Mp pn))))
         m-mp (clojure.set/difference m mp)
         mp-m (clojure.set/difference mp m)]
-  (as-pn-ok-> pn ?pn
-    (if (and (empty? m-mp) (empty? mp-m))
-      ?pn
-      (assoc ?pn :failure {:reason :absorbing-states
-                           :data {:m-not-mp m-mp :mp-not-m mp-m}
-                           :explanation [":m-not-mp means got into this state, but we don't see how."
-                                         ":mp-not-m means don't know how to get out of this state."
-                                         "If these these states are vanishing, it's a bug." ]}))
-    (if (> (count (:M2mp pn)) @+max-rs+)
-      (assoc pn :failure {:reason :exceeds-max-rs :set-size (count (:M2Mp ?pn))})
-      ?pn)
-    (if (empty? (:M2Mp ?pn))
-      (assoc ?pn :failure {:reason :null-reachability-graph})
-      ?pn))))
+    (as-pn-ok-> pn ?pn
+       (assoc ?pn :states m)
+       (if (and (empty? m-mp) (empty? mp-m))
+         ?pn
+         (assoc ?pn :failure {:reason :absorbing-states
+                              :data {:m-not-mp m-mp :mp-not-m mp-m}
+                              :explanation [":m-not-mp means got into this state, but we don't see how."
+                                            ":mp-not-m means don't know how to get out of this state."
+                                            "If these these states are vanishing, it's a bug." ]}))
+       (if (> (count (:M2mp pn)) @+max-rs+)
+         (assoc pn :failure {:reason :exceeds-max-rs :set-size (count (:M2Mp ?pn))})
+         ?pn)
+       (if (empty? (:M2Mp ?pn))
+         (assoc ?pn :failure {:reason :null-reachability-graph})
+         ?pn))))
 
 (defn tangible? [pn mark]
   "Return true if marking MARK (not a link) is tangible. 
@@ -576,7 +584,7 @@
 (defn possible-live? [pn]
   "A Petri net certainly isn't live if it doesn't have a token in some place.
    This can be checked before doing a reachability graph."
-  (if (some #(> (:initial-marking %) 0) (:places pn))
+  (if (some #(> (:initial-tokens %) 0) (:places pn))
     pn
     (assoc pn :failure {:reason :possible-live})))
   

@@ -40,34 +40,27 @@
            Q-matrix
            steady-state-props))
 
-;;; The transition rate M --> Mp  (i not= j) is the sum of the firing rates of
-;;; the transitions enabled by the markings Mi that generate Mj. 
-;;; Where M=Mp, it is negative of the the sum of the firing rates enabled.
-(defn calc-rate 
-  "Return the transition rate between marking M and Mp."
-  [pn m mp]
-  (let [graph (:M2Mp pn)]
-    (if (= m mp)
-      (- (reduce #(+ %1 (:rate %2)) 0.0 (filter #(and (= (:M %) m) (not (= (:Mp %) m))) graph)))
-      (reduce #(+ %1 (:rate %2)) 0.0 (filter #(and (= (:M %) m) (= (:Mp %) mp)) graph)))))
-
-(def +max-states+ (atom 200))
+(def +max-states+ (atom 500)) ; 2017-04-29, initial-3.xml is 205 states. 
 
 (defn Q-matrix 
   "Calculate the infinitesimal generator matrix from the reachability graph"
   [pn & {:keys [force-ordering]}] ; force-ordering is for debugging.
-  (let [states (or force-ordering (distinct (map :M (:M2Mp pn))))
-        size (count states)]
+  (let [states (or force-ordering (:states pn))
+        size (count states)
+        state2ix (zipmap states (range size))
+        row-col-rate (map #(vector (get state2ix (:M %)) (get state2ix (:Mp %)) (:rate %)) (:M2Mp pn))]
     (as-pn-ok-> pn ?pn
       (if (> size @+max-states+) (assoc ?pn :failure {:reason :Q-exceeds-max-states :states size}) ?pn)
       (if (< size 2) (assoc ?pn :failure {:error :Q-matrix :reason "Just one state."}) ?pn)
-      (assoc ?pn :Q ; POD someday, this will be parametric. 
-             (vec (map
-                   (fn [irow]
-                     (vec (map (fn [icol] (calc-rate ?pn (nth states (dec irow)) (nth states (dec icol))))
-                               (range 1 (inc size)))))
-                   (range 1 (inc size)))))
-      (assoc ?pn :states states))))
+      ;; POD someday, this will be parametric.
+      (assoc ?pn :Q (as-> (m/mutable (m/zero-matrix size size)) ?Q
+                      (reduce (fn [q [row col rate]] (do (mset! q row col rate) q)) ?Q row-col-rate)
+                      (reduce (fn [q i] (do
+                                          (mset! q i i 0.0)
+                                          (mset! q i i (- (apply + (m/get-row q i))))
+                                          q))
+                              ?Q (range size))
+                      (m/sparse-matrix ?Q))))))
 
 (defn zero-pos
   "Return the position of the value closest to zero."
@@ -87,7 +80,7 @@
   [pn]
   (if (:failure pn)
     pn
-    (let [sol (ml/svd (m/array (:Q pn))) ; U makes sense xA=0 --> left null space.
+    (let [sol (ml/svd (:Q pn)) ; U makes sense xA=0 --> left null space. ; m/sparse-matrix was m/array. 
           svec (vec (m/get-column (:U sol) (zero-pos (vec (:S sol)))))
           scale (apply + svec)]
       (as-> pn ?pn
@@ -99,7 +92,7 @@
   "Calculate the average number of tokens on a place."
   [pn]
   (let [steady (:steady-state pn)
-        mk (:marking-key pn)]
+        ^clojure.lang.PersistentVector mk (:marking-key pn)]
     (zipmap mk
             (map (fn [place]
                    (let [place-pos (.indexOf mk place)]

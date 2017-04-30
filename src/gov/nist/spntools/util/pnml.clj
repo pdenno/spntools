@@ -106,14 +106,15 @@
 (defn reorder-places
   "Reorder and renumber the places for easier comparison with textbook models."
   [pn order]
-  (as-> pn ?pn
-    (update ?pn :places
-            (fn [places]
-              (vec
-               (sort #(< (:pid %1) (:pid %2))
-                     (map #(assoc % :pid (inc (.indexOf order (:name %)))) places)))))
-    (assoc ?pn :marking-key order)
-    (assoc ?pn :initial-marking (vec (map :initial-tokens (:places ?pn))))))
+  (let [order ^clojure.lang.PersistentVector order]
+    (as-> pn ?pn
+      (update ?pn :places
+              (fn [places]
+                (vec
+                 (sort #(< (:pid %1) (:pid %2))
+                       (map #(assoc % :pid (inc (.indexOf order (:name %)))) places)))))
+      (assoc ?pn :marking-key order)
+      (assoc ?pn :initial-marking (vec (map :initial-tokens (:places ?pn)))))))
     
 ;;;=================================================
 ;;;  PN ==> PNML

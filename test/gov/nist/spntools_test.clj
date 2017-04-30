@@ -3,7 +3,8 @@
             [gov.nist.spntools.core :refer :all]
             [gov.nist.spntools.util.pnml :refer :all]
             [gov.nist.spntools.util.utils :refer :all]
-            [gov.nist.spntools.util.reach :refer :all]))
+            [gov.nist.spntools.util.reach :refer :all]
+            [clojure.core.matrix :as m :refer :all]))
 
 ;;;==========================================================================
 ;;; Reachability
@@ -68,18 +69,20 @@
 ;;;========================================================
 (deftest infinitesimal-generator-matrix
   (testing "Marsan section 6.1 example, infinitesimal generator"
-    (is (= (:Q (-> (read-pnml "data/m6.xml")
-                   (reorder-places [:Pact1 :Preq1 :Pacc1 :Pidle :Pact2 :Preq2 :Pacc2])
-                   (reachability)
-                   (Q-matrix :force-ordering
-                             [[1 0 0 1 1 0 0]
-                              [0 1 0 1 1 0 0]
-                              [0 0 1 0 1 0 0]
-                              [0 0 1 0 0 1 0]
-                              [0 1 0 1 0 1 0]
-                              [1 0 0 1 0 1 0]
-                              [1 0 0 0 0 0 1]
-                              [0 1 0 0 0 0 1]])))
+    (is (= (-> (read-pnml "data/m6.xml")
+               (reorder-places [:Pact1 :Preq1 :Pacc1 :Pidle :Pact2 :Preq2 :Pacc2])
+               (reachability)
+               (Q-matrix :force-ordering
+                         [[1 0 0 1 1 0 0]
+                          [0 1 0 1 1 0 0]
+                          [0 0 1 0 1 0 0]
+                          [0 0 1 0 0 1 0]
+                          [0 1 0 1 0 1 0]
+                          [1 0 0 1 0 1 0]
+                          [1 0 0 0 0 0 1]
+                          [0 1 0 0 0 0 1]])
+               :Q
+               m/to-nested-vectors)
            [[-3.0 1.0 0.0 0.0 0.0 2.0 0.0 0.0]
             [0.0 -102.0 100.0 0.0 2.0 0.0 0.0 0.0]
             [10.0 0.0 -12.0 2.0 0.0 0.0 0.0 0.0]
