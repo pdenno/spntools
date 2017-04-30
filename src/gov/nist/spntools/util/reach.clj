@@ -11,7 +11,8 @@
 ;;;       binding of variable values in a map. (Call the current things +default-...)
 ;;;    BUGS: 1) Handle 'by-pass' t-->t...-->t from loop root state. 
 ;;;          2) clip-head-to-root probably isn't sufficient; check for roots more
-;;;             encompassing of vanishing transitions. 
+;;;             encompassing of vanishing transitions.
+;;;          3) Execution speed improvements. This is now the slowest part of analysis.
 
 (defn fireable? 
   "Return true if transition is fireable under the argument marking."
