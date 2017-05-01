@@ -40,24 +40,29 @@
            Q-matrix
            steady-state-props))
 
-(def +max-states+ (atom 500)) ; 2017-04-29, initial-3.xml is 205 states. 
+(def +max-states+ (atom 500)) ; 2017-04-29, initial-3.xml is 205 states. ; 2017-05-01 9-token.xml is 715. 
 
 (defn Q-matrix 
   "Calculate the infinitesimal generator matrix from the reachability graph"
   [pn & {:keys [force-ordering]}] ; force-ordering is for debugging.
   (let [states (or force-ordering (:states pn))
         size (count states)
-        state2ix (zipmap states (range size))
-        row-col-rate (map #(vector (get state2ix (:M %)) (get state2ix (:Mp %)) (:rate %)) (:M2Mp pn))]
+        state2ix (zipmap states (range size))]
     (as-pn-ok-> pn ?pn
       (if (> size @+max-states+) (assoc ?pn :failure {:reason :Q-exceeds-max-states :states size}) ?pn)
-      (if (< size 2) (assoc ?pn :failure {:error :Q-matrix :reason "Just one state."}) ?pn)
+      (if (< size 2) (assoc ?pn :failure {:reason :Q-matrix-just-one-state}) ?pn)
       ;; POD someday, this will be parametric.
       (assoc ?pn :Q (as-> (m/mutable (m/zero-matrix size size)) ?Q
-                      (reduce (fn [q [row col rate]] (do (mset! q row col rate) q)) ?Q row-col-rate)
+                      (reduce (fn [q link]
+                                (do (mset! q
+                                           (state2ix (:M link))
+                                           (state2ix (:Mp link))
+                                           (:rate link))
+                                    q))
+                              ?Q (:M2Mp pn))
                       (reduce (fn [q i] (do
                                           (mset! q i i 0.0)
-                                          (mset! q i i (- (apply + (m/get-row q i))))
+                                          (mset! q i i (double (- (apply + (m/get-row q i)))))
                                           q))
                               ?Q (range size))
                       (m/sparse-matrix ?Q))))))
