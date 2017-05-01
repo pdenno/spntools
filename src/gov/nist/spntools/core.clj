@@ -91,7 +91,7 @@
       (as-> pn ?pn
         (assoc ?pn :steady-state (zipmap (:states ?pn) (map #(/ % scale) svec)))
         (assoc ?pn :avg-tokens-on-place (avg-tokens-on-place ?pn))
-        (dissoc ?pn :states)))))
+        (dissoc ?pn :states :M2Mp :Q)))))
 
 (defn avg-tokens-on-place
   "Calculate the average number of tokens on a place."
