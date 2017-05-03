@@ -242,7 +242,7 @@
           (:arcs pn)))
 
 (defn enter-and-exit-places? [pn]
-  "A state is absorbing in pjj = 1. This doesn't test that directly (steady-state calc does).
+  "A state is absorbing if pjj = 1. This doesn't test that directly (steady-state calc does).
    This only checks that every place has arcs in and arcs out."
   (if (every? (fn [pl] (and (some #(= (:source %) pl) (:arcs pn))
                             (some #(= (:target %) pl) (:arcs pn))))
@@ -251,10 +251,10 @@
     (assoc pn :failure {:reason :enter-and-exit-places})))
 
 (defn enter-and-exit-trans? [pn]
-  "A state is absorbing in pjj = 1. This doesn't test that directly (steady-state calc does).
-   This only checks that every place has arcs in and arcs out."
-  (if (every? (fn [pl] (and (some #(= (:source %) pl) (:arcs pn))
-                            (some #(= (:target %) pl) (:arcs pn))))
+  "A state is absorbing if pjj = 1. This doesn't test that directly (steady-state calc does).
+   This only checks that every transition has arcs in and arcs out."
+  (if (every? (fn [tr] (and (some #(= (:source %) tr) (:arcs pn))
+                            (some #(= (:target %) tr) (:arcs pn))))
               (map :name (:transitions pn)))
     pn
     (assoc pn :failure {:reason :enter-and-exit-trans})))
