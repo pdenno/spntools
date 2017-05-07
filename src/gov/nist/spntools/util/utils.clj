@@ -19,10 +19,8 @@
   (let [steps (map (fn [step] `(if (contains? ~name :failure) ~name ~step))
                    forms)]
     `(let [~name ~pn
-           ~@(interleave (repeat name) (butlast steps))]
-       ~(if (empty? forms)
-          name
-          (last forms)))))
+           ~@(interleave (repeat name) steps)]
+       ~name)))
 
 ;;;=== General =========================
 (defn ppp []
