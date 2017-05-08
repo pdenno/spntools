@@ -217,13 +217,9 @@
             [1.0 0.0 0.0 0.0]
             [0.0 0.0 1.0 0.0]])
 
-
-
-
-
-
-
-
-
-
-      
+(deftest timeless-trap
+  (is (= :timeless-trap
+         (-> "data/2017-05-06-five.xml"
+             run-all
+             :failure
+             :reason))))

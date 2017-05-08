@@ -337,7 +337,6 @@
   "Return a masked path of a cycle of vanishing states if a cycle is 
    detected starting with the active state."
   (loop [res {:found false
-              :explored {(vector (:M start) (:fire start)) start}
               :paths (vector (vector start))
               :init? true}]
     (cond (:found res) (:found res)
@@ -346,12 +345,11 @@
           (let [active (-> res :paths first last)
                 key (vector (:M active) (:fire active))
                 cycling? (cycling? pn (-> res :paths first))
-                nexts (next-links pn (:Mp active) #_(-> res :explored))
+                nexts (next-links pn (:Mp active))
                 tangible? (and (not-empty nexts) (tangible? pn (-> nexts first :M)))]
             (recur
              (as-> res ?r
                (assoc ?r :init? false)
-               (assoc-in ?r [:explored key] active)
                (cond cycling? (assoc ?r :found cycling?)
                      (empty? nexts) (update ?r :paths #(-> % :paths next vec)), ; move to next search path
                      tangible? (-> ?r :paths next vec) ; This path ends in tangible states. Drop it.
