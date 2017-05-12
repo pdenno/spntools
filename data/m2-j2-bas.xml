@@ -1,12 +1,9 @@
 <?xml version="1.0" encoding="ISO-8859-1"?><pnml>
 <net id="Net-One" type="P/T net">
 <token id="Default" enabled="true" red="0" green="0" blue="0"/>
-<labels x="431" y="481" width="210" height="39" border="true">
-<text>Take away the inhibitors from m2-finish-jt{1,2} and this is a *really close* net that isn't k-bounded!</text>
-</labels>
 <place id="buffer-j1">
 <graphics>
-<position x="652.0" y="41.0"/>
+<position x="653.0" y="42.0"/>
 </graphics>
 <name>
 <value>buffer-j1</value>
@@ -26,7 +23,7 @@
 </place>
 <place id="buffer-j2">
 <graphics>
-<position x="665.0" y="230.0"/>
+<position x="666.0" y="232.0"/>
 </graphics>
 <name>
 <value>buffer-j2</value>
@@ -46,7 +43,7 @@
 </place>
 <place id="buffer occupancy">
 <graphics>
-<position x="619.0" y="145.0"/>
+<position x="620.0" y="146.0"/>
 </graphics>
 <name>
 <value>buffer occupancy</value>
@@ -66,7 +63,7 @@
 </place>
 <place id="m1-blocked">
 <graphics>
-<position x="449.0" y="131.0"/>
+<position x="450.0" y="132.0"/>
 </graphics>
 <name>
 <value>m1-blocked</value>
@@ -86,7 +83,7 @@
 </place>
 <place id="m1-blocked-j1">
 <graphics>
-<position x="461.0" y="43.0"/>
+<position x="462.0" y="44.0"/>
 </graphics>
 <name>
 <value>m1-blocked-j1</value>
@@ -106,7 +103,7 @@
 </place>
 <place id="m1-blocked-j2">
 <graphics>
-<position x="456.0" y="231.0"/>
+<position x="457.0" y="232.0"/>
 </graphics>
 <name>
 <value>m1-blocked-j2</value>
@@ -126,7 +123,7 @@
 </place>
 <place id="m1-enter-job">
 <graphics>
-<position x="70.0" y="130.0"/>
+<position x="71.0" y="131.0"/>
 </graphics>
 <name>
 <value>m1-enter-job</value>
@@ -146,7 +143,7 @@
 </place>
 <place id="m1-run-jt1">
 <graphics>
-<position x="266.0" y="48.0"/>
+<position x="267.0" y="49.0"/>
 </graphics>
 <name>
 <value>m1-run-jt1</value>
@@ -166,7 +163,7 @@
 </place>
 <place id="m1-run-jt2">
 <graphics>
-<position x="258.0" y="227.0"/>
+<position x="259.0" y="228.0"/>
 </graphics>
 <name>
 <value>m1-run-jt2</value>
@@ -186,7 +183,7 @@
 </place>
 <place id="m2-run-jt1">
 <graphics>
-<position x="863.0" y="45.0"/>
+<position x="861.0" y="41.0"/>
 </graphics>
 <name>
 <value>m2-run-jt1</value>
@@ -206,7 +203,7 @@
 </place>
 <place id="m2-run-jt2">
 <graphics>
-<position x="863.0" y="225.0"/>
+<position x="866.0" y="229.0"/>
 </graphics>
 <name>
 <value>m2-run-jt2</value>
@@ -226,7 +223,7 @@
 </place>
 <place id="m2-starved">
 <graphics>
-<position x="910.0" y="129.0"/>
+<position x="911.0" y="130.0"/>
 </graphics>
 <name>
 <value>m2-starved</value>
@@ -246,7 +243,7 @@
 </place>
 <transition id="choose jt1">
 <graphics>
-<position x="164.0" y="55.0"/>
+<position x="165.0" y="50.0"/>
 </graphics>
 <name>
 <value>choose jt1</value>
@@ -272,7 +269,7 @@
 </transition>
 <transition id="choose jt2">
 <graphics>
-<position x="162.0" y="231.0"/>
+<position x="164.0" y="226.0"/>
 </graphics>
 <name>
 <value>choose jt2</value>
@@ -298,7 +295,7 @@
 </transition>
 <transition id="m1-finish-j1">
 <graphics>
-<position x="354.0" y="48.0"/>
+<position x="355.0" y="49.0"/>
 </graphics>
 <name>
 <value>m1-finish-j1</value>
@@ -324,7 +321,7 @@
 </transition>
 <transition id="m1-finish-j2">
 <graphics>
-<position x="355.0" y="227.0"/>
+<position x="356.0" y="228.0"/>
 </graphics>
 <name>
 <value>m1-finish-j2</value>
@@ -350,7 +347,7 @@
 </transition>
 <transition id="m2-finish-jt1">
 <graphics>
-<position x="956.0" y="45.0"/>
+<position x="957.0" y="39.0"/>
 </graphics>
 <name>
 <value>m2-finish-jt1</value>
@@ -376,7 +373,7 @@
 </transition>
 <transition id="m2-finish-jt2">
 <graphics>
-<position x="955.0" y="224.0"/>
+<position x="962.0" y="229.0"/>
 </graphics>
 <name>
 <value>m2-finish-jt2</value>
@@ -402,12 +399,12 @@
 </transition>
 <transition id="m2-unstarved-j1">
 <graphics>
-<position x="769.0" y="46.0"/>
+<position x="770.0" y="47.0"/>
 </graphics>
 <name>
 <value>m2-unstarved-j1</value>
 <graphics>
-<offset x="54.0" y="-9.0"/>
+<offset x="54.0" y="-13.0"/>
 </graphics>
 </name>
 <orientation>
@@ -428,12 +425,12 @@
 </transition>
 <transition id="m2-unstarved-j2">
 <graphics>
-<position x="770.0" y="225.0"/>
+<position x="771.0" y="226.0"/>
 </graphics>
 <name>
 <value>m2-unstarved-j2</value>
 <graphics>
-<offset x="62.0" y="45.0"/>
+<offset x="62.0" y="50.0"/>
 </graphics>
 </name>
 <orientation>
@@ -454,7 +451,7 @@
 </transition>
 <transition id="unblock-j1">
 <graphics>
-<position x="554.0" y="50.0"/>
+<position x="555.0" y="51.0"/>
 </graphics>
 <name>
 <value>unblock-j1</value>
@@ -480,7 +477,7 @@
 </transition>
 <transition id="unblock-j2">
 <graphics>
-<position x="554.0" y="225.0"/>
+<position x="555.0" y="226.0"/>
 </graphics>
 <name>
 <value>unblock-j2</value>
@@ -513,8 +510,8 @@
 <tagged>
 <value>false</value>
 </tagged>
-<arcpath id="000" x="678" y="53" curvePoint="false"/>
-<arcpath id="001" x="776" y="53" curvePoint="false"/>
+<arcpath id="000" x="679" y="54" curvePoint="false"/>
+<arcpath id="001" x="777" y="54" curvePoint="false"/>
 <type value="normal"/>
 </arc>
 <arc id="buffer-j2 to m2-unstarved-j2" source="buffer-j2" target="m2-unstarved-j2">
@@ -526,8 +523,8 @@
 <tagged>
 <value>false</value>
 </tagged>
-<arcpath id="000" x="691" y="242" curvePoint="false"/>
-<arcpath id="001" x="776" y="242" curvePoint="false"/>
+<arcpath id="000" x="692" y="243" curvePoint="false"/>
+<arcpath id="001" x="777" y="243" curvePoint="false"/>
 <type value="normal"/>
 </arc>
 <arc id="buffer occupancy to m2-unstarved-j1" source="buffer occupancy" target="m2-unstarved-j1">
@@ -539,8 +536,8 @@
 <tagged>
 <value>false</value>
 </tagged>
-<arcpath id="000" x="643" y="148" curvePoint="false"/>
-<arcpath id="001" x="775" y="63" curvePoint="false"/>
+<arcpath id="000" x="644" y="149" curvePoint="false"/>
+<arcpath id="001" x="776" y="64" curvePoint="false"/>
 <type value="normal"/>
 </arc>
 <arc id="buffer occupancy to m2-unstarved-j2" source="buffer occupancy" target="m2-unstarved-j2">
@@ -552,8 +549,8 @@
 <tagged>
 <value>false</value>
 </tagged>
-<arcpath id="000" x="644" y="163" curvePoint="false"/>
-<arcpath id="001" x="777" y="232" curvePoint="false"/>
+<arcpath id="000" x="645" y="164" curvePoint="false"/>
+<arcpath id="001" x="778" y="233" curvePoint="false"/>
 <type value="normal"/>
 </arc>
 <arc id="buffer occupancy to unblock-j1" source="buffer occupancy" target="unblock-j1">
@@ -565,8 +562,8 @@
 <tagged>
 <value/>
 </tagged>
-<arcpath id="000" x="622" y="144" curvePoint="false"/>
-<arcpath id="001" x="570" y="67" curvePoint="false"/>
+<arcpath id="000" x="623" y="145" curvePoint="false"/>
+<arcpath id="001" x="571" y="68" curvePoint="false"/>
 <type value="inhibitor"/>
 </arc>
 <arc id="buffer occupancy to unblock-j2" source="buffer occupancy" target="unblock-j2">
@@ -578,8 +575,8 @@
 <tagged>
 <value/>
 </tagged>
-<arcpath id="000" x="621" y="168" curvePoint="false"/>
-<arcpath id="001" x="571" y="236" curvePoint="false"/>
+<arcpath id="000" x="622" y="169" curvePoint="false"/>
+<arcpath id="001" x="572" y="237" curvePoint="false"/>
 <type value="inhibitor"/>
 </arc>
 <arc id="choose jt1 to m1-run-jt1" source="choose jt1" target="m1-run-jt1">
@@ -591,8 +588,8 @@
 <tagged>
 <value>false</value>
 </tagged>
-<arcpath id="000" x="181" y="61" curvePoint="false"/>
-<arcpath id="001" x="263" y="60" curvePoint="false"/>
+<arcpath id="000" x="182" y="61" curvePoint="false"/>
+<arcpath id="001" x="264" y="61" curvePoint="false"/>
 <type value="normal"/>
 </arc>
 <arc id="choose jt2 to m1-run-jt2" source="choose jt2" target="m1-run-jt2">
@@ -604,8 +601,8 @@
 <tagged>
 <value>false</value>
 </tagged>
-<arcpath id="000" x="179" y="238" curvePoint="false"/>
-<arcpath id="001" x="255" y="238" curvePoint="false"/>
+<arcpath id="000" x="180" y="238" curvePoint="false"/>
+<arcpath id="001" x="256" y="239" curvePoint="false"/>
 <type value="normal"/>
 </arc>
 <arc id="m1-blocked-j2 to unblock-j2" source="m1-blocked-j2" target="unblock-j2">
@@ -617,8 +614,8 @@
 <tagged>
 <value>false</value>
 </tagged>
-<arcpath id="000" x="482" y="243" curvePoint="false"/>
-<arcpath id="001" x="560" y="245" curvePoint="false"/>
+<arcpath id="000" x="483" y="244" curvePoint="false"/>
+<arcpath id="001" x="561" y="246" curvePoint="false"/>
 <type value="normal"/>
 </arc>
 <arc id="m1-blocked to m1-unblocked" source="m1-blocked-j1" target="unblock-j1">
@@ -630,8 +627,8 @@
 <tagged>
 <value>false</value>
 </tagged>
-<arcpath id="000" x="487" y="55" curvePoint="false"/>
-<arcpath id="001" x="561" y="55" curvePoint="false"/>
+<arcpath id="000" x="488" y="56" curvePoint="false"/>
+<arcpath id="001" x="562" y="56" curvePoint="false"/>
 <type value="normal"/>
 </arc>
 <arc id="m1-blocked to unblock-j1" source="m1-blocked" target="unblock-j1">
@@ -643,8 +640,8 @@
 <tagged>
 <value>false</value>
 </tagged>
-<arcpath id="000" x="472" y="133" curvePoint="false"/>
-<arcpath id="001" x="560" y="69" curvePoint="false"/>
+<arcpath id="000" x="474" y="135" curvePoint="false"/>
+<arcpath id="001" x="561" y="70" curvePoint="false"/>
 <type value="normal"/>
 </arc>
 <arc id="m1-blocked to unblock-j2" source="m1-blocked" target="unblock-j2">
@@ -656,8 +653,8 @@
 <tagged>
 <value>false</value>
 </tagged>
-<arcpath id="000" x="472" y="153" curvePoint="false"/>
-<arcpath id="001" x="561" y="231" curvePoint="false"/>
+<arcpath id="000" x="473" y="153" curvePoint="false"/>
+<arcpath id="001" x="562" y="232" curvePoint="false"/>
 <type value="normal"/>
 </arc>
 <arc id="m1-complete-job to m1-blocked" source="m1-finish-j1" target="m1-blocked-j1">
@@ -669,8 +666,8 @@
 <tagged>
 <value>false</value>
 </tagged>
-<arcpath id="000" x="371" y="54" curvePoint="false"/>
-<arcpath id="001" x="458" y="54" curvePoint="false"/>
+<arcpath id="000" x="372" y="55" curvePoint="false"/>
+<arcpath id="001" x="459" y="55" curvePoint="false"/>
 <type value="normal"/>
 </arc>
 <arc id="m1-enter-job to choose jt1" source="m1-enter-job" target="choose jt1">
@@ -682,8 +679,8 @@
 <tagged>
 <value>false</value>
 </tagged>
-<arcpath id="000" x="93" y="132" curvePoint="false"/>
-<arcpath id="001" x="171" y="66" curvePoint="false"/>
+<arcpath id="000" x="94" y="132" curvePoint="false"/>
+<arcpath id="001" x="172" y="61" curvePoint="false"/>
 <type value="normal"/>
 </arc>
 <arc id="m1-enter-job to choose jt2" source="m1-enter-job" target="choose jt2">
@@ -695,8 +692,8 @@
 <tagged>
 <value>false</value>
 </tagged>
-<arcpath id="000" x="91" y="153" curvePoint="false"/>
-<arcpath id="001" x="168" y="243" curvePoint="false"/>
+<arcpath id="000" x="93" y="154" curvePoint="false"/>
+<arcpath id="001" x="170" y="238" curvePoint="false"/>
 <type value="normal"/>
 </arc>
 <arc id="m1-finish-j1 to m1-blocked" source="m1-finish-j1" target="m1-blocked">
@@ -708,8 +705,8 @@
 <tagged>
 <value>false</value>
 </tagged>
-<arcpath id="000" x="370" y="64" curvePoint="false"/>
-<arcpath id="001" x="449" y="133" curvePoint="false"/>
+<arcpath id="000" x="371" y="65" curvePoint="false"/>
+<arcpath id="001" x="450" y="134" curvePoint="false"/>
 <type value="normal"/>
 </arc>
 <arc id="m1-finish-j2 to m1-blocked" source="m1-finish-j2" target="m1-blocked">
@@ -721,8 +718,8 @@
 <tagged>
 <value>false</value>
 </tagged>
-<arcpath id="000" x="372" y="234" curvePoint="false"/>
-<arcpath id="001" x="450" y="153" curvePoint="false"/>
+<arcpath id="000" x="373" y="235" curvePoint="false"/>
+<arcpath id="001" x="451" y="154" curvePoint="false"/>
 <type value="normal"/>
 </arc>
 <arc id="m1-finish-j2 to m1-blocked-j2" source="m1-finish-j2" target="m1-blocked-j2">
@@ -734,35 +731,9 @@
 <tagged>
 <value>false</value>
 </tagged>
-<arcpath id="000" x="371" y="244" curvePoint="false"/>
-<arcpath id="001" x="453" y="243" curvePoint="false"/>
+<arcpath id="000" x="372" y="245" curvePoint="false"/>
+<arcpath id="001" x="454" y="244" curvePoint="false"/>
 <type value="normal"/>
-</arc>
-<arc id="m1-run-jt1 to choose jt1" source="m1-run-jt1" target="choose jt1">
-<graphics/>
-<inscription>
-<value/>
-<graphics/>
-</inscription>
-<tagged>
-<value/>
-</tagged>
-<arcpath id="000" x="263" y="61" curvePoint="false"/>
-<arcpath id="001" x="180" y="71" curvePoint="false"/>
-<type value="inhibitor"/>
-</arc>
-<arc id="m1-run-jt1 to choose jt2" source="m1-run-jt1" target="choose jt2">
-<graphics/>
-<inscription>
-<value/>
-<graphics/>
-</inscription>
-<tagged>
-<value/>
-</tagged>
-<arcpath id="000" x="270" y="72" curvePoint="false"/>
-<arcpath id="001" x="174" y="228" curvePoint="false"/>
-<type value="inhibitor"/>
 </arc>
 <arc id="m1-run-jt1 to m1-finish-j1" source="m1-run-jt1" target="m1-finish-j1">
 <graphics/>
@@ -773,35 +744,9 @@
 <tagged>
 <value>false</value>
 </tagged>
-<arcpath id="000" x="292" y="59" curvePoint="false"/>
-<arcpath id="001" x="361" y="59" curvePoint="false"/>
+<arcpath id="000" x="293" y="60" curvePoint="false"/>
+<arcpath id="001" x="362" y="60" curvePoint="false"/>
 <type value="normal"/>
-</arc>
-<arc id="m1-run-jt2 to choose jt1" source="m1-run-jt2" target="choose jt1">
-<graphics/>
-<inscription>
-<value/>
-<graphics/>
-</inscription>
-<tagged>
-<value/>
-</tagged>
-<arcpath id="000" x="262" y="226" curvePoint="false"/>
-<arcpath id="001" x="175" y="81" curvePoint="false"/>
-<type value="inhibitor"/>
-</arc>
-<arc id="m1-run-jt2 to choose jt2" source="m1-run-jt2" target="choose jt2">
-<graphics/>
-<inscription>
-<value/>
-<graphics/>
-</inscription>
-<tagged>
-<value/>
-</tagged>
-<arcpath id="000" x="255" y="240" curvePoint="false"/>
-<arcpath id="001" x="178" y="248" curvePoint="false"/>
-<type value="inhibitor"/>
 </arc>
 <arc id="m1-run-jt2 to m1-finish-j2" source="m1-run-jt2" target="m1-finish-j2">
 <graphics/>
@@ -812,8 +757,8 @@
 <tagged>
 <value>false</value>
 </tagged>
-<arcpath id="000" x="284" y="239" curvePoint="false"/>
-<arcpath id="001" x="361" y="239" curvePoint="false"/>
+<arcpath id="000" x="285" y="240" curvePoint="false"/>
+<arcpath id="001" x="362" y="240" curvePoint="false"/>
 <type value="normal"/>
 </arc>
 <arc id="m1-unblocked to buffer" source="unblock-j1" target="buffer-j1">
@@ -825,8 +770,8 @@
 <tagged>
 <value>false</value>
 </tagged>
-<arcpath id="000" x="571" y="53" curvePoint="false"/>
-<arcpath id="001" x="649" y="53" curvePoint="false"/>
+<arcpath id="000" x="572" y="54" curvePoint="false"/>
+<arcpath id="001" x="650" y="54" curvePoint="false"/>
 <type value="normal"/>
 </arc>
 <arc id="m2-finish-jt1 to m2-starved" source="m2-finish-jt1" target="m2-starved">
@@ -838,8 +783,8 @@
 <tagged>
 <value>false</value>
 </tagged>
-<arcpath id="000" x="968" y="72" curvePoint="false"/>
-<arcpath id="001" x="930" y="128" curvePoint="false"/>
+<arcpath id="000" x="969" y="66" curvePoint="false"/>
+<arcpath id="001" x="930" y="129" curvePoint="false"/>
 <type value="normal"/>
 </arc>
 <arc id="m2-finish-jt2 to m2-starved" source="m2-finish-jt2" target="m2-starved">
@@ -851,8 +796,8 @@
 <tagged>
 <value>false</value>
 </tagged>
-<arcpath id="000" x="967" y="221" curvePoint="false"/>
-<arcpath id="001" x="929" y="154" curvePoint="false"/>
+<arcpath id="000" x="974" y="226" curvePoint="false"/>
+<arcpath id="001" x="930" y="154" curvePoint="false"/>
 <type value="normal"/>
 </arc>
 <arc id="m2-run-jt1 to m2-finish-jt1" source="m2-run-jt1" target="m2-finish-jt1">
@@ -864,22 +809,9 @@
 <tagged>
 <value>false</value>
 </tagged>
-<arcpath id="000" x="889" y="57" curvePoint="false"/>
-<arcpath id="001" x="962" y="57" curvePoint="false"/>
+<arcpath id="000" x="887" y="52" curvePoint="false"/>
+<arcpath id="001" x="963" y="51" curvePoint="false"/>
 <type value="normal"/>
-</arc>
-<arc id="m2-run-jt1 to m2-unstarved-j2" source="m2-run-jt1" target="m2-unstarved-j2">
-<graphics/>
-<inscription>
-<value/>
-<graphics/>
-</inscription>
-<tagged>
-<value/>
-</tagged>
-<arcpath id="000" x="867" y="70" curvePoint="false"/>
-<arcpath id="001" x="782" y="222" curvePoint="false"/>
-<type value="inhibitor"/>
 </arc>
 <arc id="m2-run-jt2 to m2-finish-jt2" source="m2-run-jt2" target="m2-finish-jt2">
 <graphics/>
@@ -890,22 +822,9 @@
 <tagged>
 <value>false</value>
 </tagged>
-<arcpath id="000" x="889" y="236" curvePoint="false"/>
-<arcpath id="001" x="961" y="236" curvePoint="false"/>
+<arcpath id="000" x="892" y="241" curvePoint="false"/>
+<arcpath id="001" x="968" y="241" curvePoint="false"/>
 <type value="normal"/>
-</arc>
-<arc id="m2-run-jt2 to m2-unstarved-j1" source="m2-run-jt2" target="m2-unstarved-j1">
-<graphics/>
-<inscription>
-<value/>
-<graphics/>
-</inscription>
-<tagged>
-<value/>
-</tagged>
-<arcpath id="000" x="867" y="223" curvePoint="false"/>
-<arcpath id="001" x="781" y="73" curvePoint="false"/>
-<type value="inhibitor"/>
 </arc>
 <arc id="m2-starved to m2-unstarved-j1" source="m2-starved" target="m2-unstarved-j1">
 <graphics/>
@@ -916,8 +835,8 @@
 <tagged>
 <value>false</value>
 </tagged>
-<arcpath id="000" x="908" y="133" curvePoint="false"/>
-<arcpath id="001" x="785" y="63" curvePoint="false"/>
+<arcpath id="000" x="909" y="134" curvePoint="false"/>
+<arcpath id="001" x="786" y="64" curvePoint="false"/>
 <type value="normal"/>
 </arc>
 <arc id="m2-starved to m2-unstarved-j2" source="m2-starved" target="m2-unstarved-j2">
@@ -929,8 +848,8 @@
 <tagged>
 <value>false</value>
 </tagged>
-<arcpath id="000" x="909" y="149" curvePoint="false"/>
-<arcpath id="001" x="787" y="232" curvePoint="false"/>
+<arcpath id="000" x="910" y="150" curvePoint="false"/>
+<arcpath id="001" x="788" y="233" curvePoint="false"/>
 <type value="normal"/>
 </arc>
 <arc id="m2-unstarved-j1 to m2-run-jt1" source="m2-unstarved-j1" target="m2-run-jt1">
@@ -942,8 +861,8 @@
 <tagged>
 <value>false</value>
 </tagged>
-<arcpath id="000" x="786" y="53" curvePoint="false"/>
-<arcpath id="001" x="860" y="57" curvePoint="false"/>
+<arcpath id="000" x="787" y="54" curvePoint="false"/>
+<arcpath id="001" x="858" y="53" curvePoint="false"/>
 <type value="normal"/>
 </arc>
 <arc id="m2-unstarved-j2 to m2-run-jt2" source="m2-unstarved-j2" target="m2-run-jt2">
@@ -955,8 +874,8 @@
 <tagged>
 <value>false</value>
 </tagged>
-<arcpath id="000" x="786" y="242" curvePoint="false"/>
-<arcpath id="001" x="860" y="237" curvePoint="false"/>
+<arcpath id="000" x="787" y="243" curvePoint="false"/>
+<arcpath id="001" x="863" y="241" curvePoint="false"/>
 <type value="normal"/>
 </arc>
 <arc id="unblock-j1 to buffer occupancy" source="unblock-j1" target="buffer occupancy">
@@ -968,8 +887,8 @@
 <tagged>
 <value>false</value>
 </tagged>
-<arcpath id="000" x="571" y="60" curvePoint="false"/>
-<arcpath id="001" x="623" y="144" curvePoint="false"/>
+<arcpath id="000" x="572" y="61" curvePoint="false"/>
+<arcpath id="001" x="624" y="145" curvePoint="false"/>
 <type value="normal"/>
 </arc>
 <arc id="unblock-j1 to m1-enter-job" source="unblock-j1" target="m1-enter-job">
@@ -981,8 +900,8 @@
 <tagged>
 <value>false</value>
 </tagged>
-<arcpath id="000" x="560" y="62" curvePoint="false"/>
-<arcpath id="001" x="96" y="139" curvePoint="false"/>
+<arcpath id="000" x="561" y="63" curvePoint="false"/>
+<arcpath id="001" x="97" y="140" curvePoint="false"/>
 <type value="normal"/>
 </arc>
 <arc id="unblock-j2 to buffer-j2" source="unblock-j2" target="buffer-j2">
@@ -994,8 +913,8 @@
 <tagged>
 <value>false</value>
 </tagged>
-<arcpath id="000" x="570" y="243" curvePoint="false"/>
-<arcpath id="001" x="662" y="242" curvePoint="false"/>
+<arcpath id="000" x="571" y="244" curvePoint="false"/>
+<arcpath id="001" x="663" y="244" curvePoint="false"/>
 <type value="normal"/>
 </arc>
 <arc id="unblock-j2 to buffer occupancy" source="unblock-j2" target="buffer occupancy">
@@ -1007,8 +926,8 @@
 <tagged>
 <value>false</value>
 </tagged>
-<arcpath id="000" x="571" y="229" curvePoint="false"/>
-<arcpath id="001" x="621" y="168" curvePoint="false"/>
+<arcpath id="000" x="572" y="230" curvePoint="false"/>
+<arcpath id="001" x="622" y="169" curvePoint="false"/>
 <type value="normal"/>
 </arc>
 <arc id="unblock-j2 to m1-enter-job" source="unblock-j2" target="m1-enter-job">
@@ -1020,8 +939,8 @@
 <tagged>
 <value>false</value>
 </tagged>
-<arcpath id="000" x="560" y="238" curvePoint="false"/>
-<arcpath id="001" x="96" y="144" curvePoint="false"/>
+<arcpath id="000" x="561" y="239" curvePoint="false"/>
+<arcpath id="001" x="97" y="145" curvePoint="false"/>
 <type value="normal"/>
 </arc>
 </net>
