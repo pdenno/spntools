@@ -547,7 +547,7 @@
                            (vec (next (into stack (next-links ?pn3 (:Mp (first stack)) (:explored-i ?pn3)))))))))
           (dissoc ?pn2 :explored-i))))))
 
-(defn follow-transitions
+#_(defn follow-transitions
   "Return a vector [<mark> <mark>...] that are the list of states followed by
    taking the argument first state and applying each trns."
   [pn mark trns]
@@ -596,7 +596,7 @@
                               :data {:m-not-mp m-mp :mp-not-m mp-m}
                               :explanation [":m-not-mp means got into this state, but we don't see how."
                                             ":mp-not-m means don't know how to get out of this state."
-                                            "If these these states are vanishing, it's a bug." ]}))
+                                            "If these states are vanishing, it's a bug." ]}))
        (if (> (count (:M2mp pn)) @+max-rs+)
          (assoc pn :failure {:reason :exceeds-max-rs :set-size (count (:M2Mp ?pn))})
          ?pn)
