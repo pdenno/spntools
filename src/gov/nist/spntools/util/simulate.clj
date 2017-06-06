@@ -36,19 +36,25 @@
    ))
 
 (declare sim-effects)
-;;; Not yet a stochastic simulation, also need to implement free choice. 
+;;; Not yet a stochastic simulation, also need to implement free choice.
+;(simulate talking-m2-bas 10)
 (defn simulate
   "Run a PN for nsteps"
   [pn nsteps]
-  (loop [mark (:initial-marking pn)
-         step nsteps
-         log []]
-    (let [links (pnr/next-links pn mark)
-          link (nth links (rand-int (count links))) ; POD NYI
-          log (into log (sim-effects pn mark link))]
-      (if (> step 0)
-        (recur (:Mp link) (dec step) log)
-        log))))
+  (let [[log mark]
+        (loop [mark (:initial-marking pn)
+               step nsteps
+               log []]
+          (if (> step 0)
+            (let [links (pnr/next-links pn mark)
+                  link (nth links (rand-int (count links))) ; POD NYI
+                  log (into log (sim-effects pn mark link))]
+              (recur (:Mp link) (dec step) log))
+            [log mark]))]
+    (-> pn
+        (assoc :sim {})
+        (assoc-in [:sim :state] mark)
+        (assoc-in [:sim :log] log))))
 
 ;(sim-effects talking-m2-bas [1 0 1 1 0] lll)
 (defn sim-effects
@@ -56,9 +62,23 @@
   [pn mark link]
   (let [mkey (:marking-key pn)
         t-fn (:fn (some #(when (= (:name %) (:fire link)) %) (:transitions pn)))
-        log (vector (t-fn :bog))]
-    log))
-    
+        log (vector (t-fn :bog))
+        place-data (filter identity
+                           (map (fn [place change] ; change here should be 'token-id / job-id' (once I have queues)
+                                  (cond (= change 0)
+                                        false
+                                        (> change 0)
+                                        [:add place change]
+                                        :else
+                                        [:rem place change]))
+                                mkey
+                                (map - mark (:Mp link))))]
+    (reduce
+     (fn [log [act place job-id]]
+       (let [p-fn (:fn (some #(when (= (:name %) place) %) (:places pn)))]
+         (conj log (p-fn [act job-id]))))
+     log place-data)))
+       
     
     
 
