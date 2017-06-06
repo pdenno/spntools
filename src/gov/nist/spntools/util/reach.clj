@@ -580,7 +580,6 @@
     (when N ; If couldn't calculate inverse, then 'timeless trap'
       (m/add Qt (m/mmul Qtv N Pvt)))))
 
-
 (defn check-reach
   "Check for reachability-related errors."
   [pn]
