@@ -4,10 +4,7 @@
             [gov.nist.spntools.util.utils :as pnu]
             [gov.nist.spntools.util.pnml  :as pnml]))
 
-;;; Purpose: Run a PN, producing a log.
-
-;;; ToDo: Think about how new jobs get defined. (Designate the :aj thing to do it?)
-(declare intro elim)
+;;; Purpose: Run a PN, producing a log of its execution.
 
 (def talking-m2-bas
   (pnr/renumber-pids 
@@ -38,25 +35,36 @@
       :bind {:type :a :act :elim}}]}))
 
 ;;; In ordinary GSPN code, a marking (:state) is just a vector of integers signifying the tokens on a place.
-;;; In our implementation, we keep instead queues of tokens. Where we need the ordinary GSPN form of a marking,
-;;; we can convert this marking to it with (map count (-> pn :sim :state)).
+;;; In our implementation, we instead keep maps of queues containing tokens. Where we need the ordinary GSPN marking,
+;;; we can convert this queue-base marking to it with (map count (queues-marking-order pn)).
 ;;; The PN is initialized with default-coloured tokens. For example where the ordinary marking might be
-;;; [2 0 0 0] ours would be [[{:type :a :id 1} {:type :a :id2}] [] [] []]. 
+;;; [2 0 0 0] ours would be [[{:type :a :id 1} {:type :a :id2}] [] [] []].
+
+;;; POD When I replace next-link with the QPN equivalent, this can go away. 
+(defn queues-marking-order
+  "Return a vector of queues in the marking order."
+  [pn]
+  (let [mk (:marking-key pn)
+        state (-> pn :sim :state)]
+    (vec (map #(% state) mk))))
 
 (def +tkn-id+ (atom 0))
 (defn next-id! []
   (swap! +tkn-id+ inc))
 
-(declare sim-effects pick-link sim-place-data step-state move-tokens)
+(declare sim-effects pick-link sim-place-data step-state move-tokens check-token-flow-balance binding-pairs)
 ;;; Not yet a stochastic simulation, also need to implement free choice.
 ;(simulate talking-m2-bas 10)
 (defn simulate
   "Run a PN for nsteps"
   [pn nsteps]
   (as-> pn ?pn
+    (pnr/renumber-pids ?pn)
     (assoc ?pn
            :sim {:log []
-                 :state (vec (map (fn [n] (vec (repeatedly n (fn [] {:type :a :id (next-id!)}))))
+                 :state (zipmap
+                         (:marking-key ?pn)
+                         (map (fn [n] (vec (repeatedly n (fn [] {:type :a :id (next-id!)}))))
                                   (:initial-marking ?pn)))})
     (reduce (fn [pn _] (sim-effects pn)) ?pn (range nsteps))))
 
@@ -66,76 +74,93 @@
 (defn sim-effects
   "Update the PN's :sim with the effects of one step."
   [pn]
-  (let [link (pick-link (pnr/next-links pn (map count (-> pn :sim :state))))]
-    (step-state ?pn link)))
-
-
+  (let [link (pick-link (pnr/next-links pn (vec (map count (queues-marking-order pn)))))]
+    (step-state pn link)))
 
 ;;; If the change in marking from :M to Mp implies that there is a difference in the number
-;;; of tokens on the net, then under this queueing PN model, then the net effect of the
+;;; of tokens on the net, then under this queueing PN model, the net effect of the
 ;;; elim and intro actions must equal this difference. New tokens are thus added and removed.
-;;; If the change in marking from :M to Mp implies that there is no difference in the number
+;;; If the change in marking from :M to :Mp implies that there is no difference in the number
 ;;; of tokens, then tokens just move.
-;;; [I'm trying to get away without bindings where the flow is obvious. ]  
 
-;;; This isn't going to be good for GP! In GP you can have new tokens springing up / being eliminated
-;;; all over the place. I think the convention will have to be that we have to pick some for 
+;;; Binding makes GP a bit more complex. In GP you can have new tokens springing up / being eliminated
+;;; anywhere. I think the need for intro/elim arises out of imbalance at a transition.
+;;; Thankfully, there is a constraint propagation task here. When introducing a free choice pick
+;;; among binding types, one can push that through the marked graph portion until a
+;;; place where there is confluence of types is reached. At that point forward arcs accept a disjunction
+;;; of the types in confluence.  When there are additional free choice (like in a buffer) there is the
+;;; opportunity to to reuse the old binding types or choose new ones.
+
+;;; BTW, there is no reason why an inhibitor can't have a binding. 
+
+;;; I think the GP convention will have to be that we have to pick some for 
 ;;; elim/intro and also assign bindings arbitrarily to pairs where transition is
 ;;; not 1 in 1 out (marked graph). An operator would be to swap bindings (thus "redirect tokens").
-;;; Ooooh kaaaay.....
-;;; There is a constraint propagation problem happening here. If introduce a free choice pick
-;;; among binding types, I can push that through the marked graph portion until I come to a
-;;; place where there is confluence of types. At that point forward it accepts a disjunction
-;;; When there are additional free choice (like in a buffer) I think it is a matter of splitting
-;;; them out. But it could also be to introduce new binding! (That gets weird!)
 ;;;  
 ;;; The mutation for MJP is going to have to be something that clones an entire line!
 
-;;; POD currently I'm ignoring colour. 
+;;; POD currently I'm ignoring colour; specifically, I'm using next-link and not evaluating bindings.
 
 (defn step-state
   "Update the (-> pn :sim :state) for the effect of firing the argument transition."
   [pn link]
   (let [trans (some #(when (= (:name %) (:fire link)) %) (:transitions pn))
         mkey (:marking-key pn)
-        diff (map - (:Mp link) (map count (-> pn :sim state)))
-        delta (reduce (fn [sum n] (+ sum n)) 0 diff)
         a-in-raw (remove #(= :inhibitor (:type %)) (pnu/arcs-into  pn (:name trans)))
         a-out-raw (pnu/arcs-outof  pn (:name trans))
         a-in   (remove #(contains? (:bind %) :act) a-in-raw)
         a-out  (remove #(contains? (:bind %) :act) a-out-raw)
         a-in-  (filter #(contains? (:bind %) :act) a-in-raw)   ; POD can only add or remove 1. OK?
         a-out+ (filter #(contains? (:bind %) :act) a-out-raw)]
-    (unless (= delta
-               (+ (apply + (map :multiplicity a-in))
-                  (apply + (map :multiplicity a-in+))
-                  (- (apply + (map :multiplicity a-out)))
-                  (- (apply + (map :multiplicity a-in-)))))
-            (throw (ex-info "token flow imbalance" {:transition (:name trans)})))
-    (as-> pn ?pn
+    (as-pn-ok-> pn ?pn
+      (check-token-flow-balance ?pn link a-in a-out a-in- a-out+)
       (update-in ?pn [:sim :log] #(conj % ((:fn trans) :bogus))) ; POD :bogus should be activating tokens
-      (update-in ?pn [:sim :state] (move-tokens ?pn a-in a-out a-in- a-out+)))))
+      (move-tokens ?pn a-in a-out a-in- a-out+))))
+
+(defn check-token-flow-balance
+  [pn link a-in a-out a-in- a-out+]
+  (let [diff (map - (:Mp link) (map count (vals (-> pn :sim :state))))
+        delta (reduce (fn [sum n] (+ sum n)) 0 diff)]
+    (if (not (= delta
+                (+ (- (apply + (map :multiplicity a-out))  (apply + (map :multiplicity a-in)))
+                   (- (apply + (map :multiplicity a-out+)) (apply + (map :multiplicity a-in-))))))
+      (assoc pn :failure {:reason "token flow imbalance" :transition (:target a-in)})
+      pn)))
+
+(defn new-token
+  "Create a new token as specified in the argument arc."
+  [arc]
+  (as-> arc ?a (:bind ?a) (dissoc ?a :act) (assoc ?a :id (next-id!))))
 
 (defn move-tokens
-  "Return (-> pn :sim :state) updated according to argument arc info."
-  [pn a-in a-out a-in- a-out+])
+  "Return (-> pn :sim :state) updated according to argument arc info which are collections of arcs."
+  [pn a-in a-out a-in- a-out+]
+  (as-> pn ?pn
+    ;; Remove tokens that are being eliminated.
+    (reduce (fn [pn arc] (update-in pn [:sim :state (:source arc)] #(vec (next %)))) ?pn a-in-)
+    ;; Add tokens that are being introduced
+    (reduce (fn [pn arc] (update-in pn [:sim :state (:target arc)] #(conj % (new-token arc)))) ?pn a-out+)
+    ;; Move remaining tokens from input places to output places.
+    (reduce (fn [pn [in out]]
+              (let [tkn (first ((:source in) (-> pn :sim :state)))]
+                (as-> pn ?pn2
+                  (update-in ?pn2 [:sim :state (:source in)] #(vec (next %)))
+                  (update-in ?pn2 [:sim :state (:target out)] #(conj % tkn)))))
+            ?pn
+            (binding-pairs a-in a-out))))
 
-
-
-(defn sim-place-data
-  "Return data [<act> <place> <change>] for the argument (-> pn :sim :state)"
-  [pn link]
-  (let 
-    (filter identity
-            (map (fn [place change] ; change here should be 'token-id / job-id' (once I have queues)
-                   (cond (= change 0)
-                         false
-                         (> change 0)
-                         [:add place change]
-                         :else
-                         [:rem place change]))
-                 mkey
-                 (map - (-> pn :sim :state) (:Mp link))))))
+;;; POD currently expects matching pairs and multiplicity=1
+(defn binding-pairs
+  "Return pairs of in/out arcs that agree on bindings."
+  [ins outs]
+  (let [matched (map (fn [i]
+                       (first ; POD should only be one. Needs to be checked?
+                        (filter (fn [o]
+                                  (and (= (set (keys (:bind o))) (set (keys (:bind i))))
+                                       (every? #(= (get o %) (get i %)) (keys (:bind i)))))
+                                outs)))
+                     ins)]
+    (map #(vector %1 %2) ins matched)))
 
 (defn pick-link
   "Return a random link according to the distribution provide by their rates."
