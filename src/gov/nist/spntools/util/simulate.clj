@@ -14,13 +14,13 @@
      {:name :m1-busy, :pid 3, :initial-tokens 1   }
      {:name :m2-busy, :pid 4, :initial-tokens 1   }
      {:name :m2-starved, :pid 5, :initial-tokens 0}],
-    :transitions
-    [{:name :m1-complete-job, :tid 6, :type :exponential, :rate 0.9 :fn (fn [tkn] {:act :bj :j tkn})}
-     {:name :m1-start-job, :tid 7, :type :immediate, :rate 1.0      :fn (fn [tkn] {:act :sj :j tkn})}
-     {:name :m2-complete-job, :tid 8, :type :exponential, :rate 1.0 :fn (fn [tkn] {:act :ej :j tkn})}
-     {:name :m2-start-job, :tid 9, :type :immediate, :rate 1.0      :fn (fn [tkn] {:act :sm :j tkn})}],
-    :arcs
-    [{:aid 10, :source :buffer, :target :m1-start-job, :name :aa-10, :type :inhibitor, :multiplicity 1 :bind {:type :a}}
+    :transitions  ; :fn here would be added by GP, associating SCADA acts with transitions.
+    [{:name :m1-complete-job, :tid 6, :type :exponential, :rate 3.9 :fn (fn [tkns] {:act :bj :tkns tkns})}
+     {:name :m1-start-job, :tid 7, :type :immediate, :rate 1.0      :fn (fn [tkns] {:act :aj :tkns tkns})}
+     {:name :m2-complete-job, :tid 8, :type :exponential, :rate 1.0 :fn (fn [tkns] {:act :ej :tkns tkns})}
+     {:name :m2-start-job, :tid 9, :type :immediate, :rate 1.0      :fn (fn [tkns] {:act :sm :tkns tkns})}],
+    :arcs ; :bind here would be added by GP, selecting where to make intro and elim, split jobtypes, etc. 
+    [{:aid 10, :source :buffer, :target :m1-start-job, :name :aa-10, :type :inhibitor, :multiplicity 5 :bind {:type :a}}
      {:aid 11, :source :buffer, :target :m2-start-job, :name :aa-11, :type :normal, :multiplicity 1 :bind {:type :a}}
      {:aid 12, :source :m1-blocked, :target :m1-start-job, :name :aa-12, :type :normal, :multiplicity 1 :bind {:type :a}}
      {:aid 13, :source :m1-busy, :target :m1-complete-job, :name :aa-13, :type :normal, :multiplicity 1 :bind {:type :a}}
@@ -52,12 +52,14 @@
 (defn next-id! []
   (swap! +tkn-id+ inc))
 
-(declare sim-effects pick-link sim-place-data step-state move-tokens check-token-flow-balance binding-pairs)
+(declare sim-effects pick-link sim-place-data step-state move-tokens check-token-flow-balance
+         binding-pairs update-log-for-move)
 ;;; Not yet a stochastic simulation, also need to implement free choice.
 ;(simulate talking-m2-bas 10)
 (defn simulate
   "Run a PN for nsteps"
   [pn nsteps]
+  (reset! +tkn-id+ 0)
   (as-> pn ?pn
     (pnr/renumber-pids ?pn)
     (assoc ?pn
@@ -104,19 +106,50 @@
 (defn step-state
   "Update the (-> pn :sim :state) for the effect of firing the argument transition."
   [pn link]
-  (let [trans (some #(when (= (:name %) (:fire link)) %) (:transitions pn))
+  (let [fire (:fire link)
         mkey (:marking-key pn)
-        a-in-raw (remove #(= :inhibitor (:type %)) (pnu/arcs-into  pn (:name trans)))
-        a-out-raw (pnu/arcs-outof  pn (:name trans))
+        a-in-raw (remove #(= :inhibitor (:type %)) (pnu/arcs-into pn fire))
+        a-out-raw (pnu/arcs-outof pn fire)
         a-in   (remove #(contains? (:bind %) :act) a-in-raw)
         a-out  (remove #(contains? (:bind %) :act) a-out-raw)
         a-in-  (filter #(contains? (:bind %) :act) a-in-raw)   ; POD can only add or remove 1. OK?
         a-out+ (filter #(contains? (:bind %) :act) a-out-raw)]
     (as-pn-ok-> pn ?pn
       (check-token-flow-balance ?pn link a-in a-out a-in- a-out+)
-      (update-in ?pn [:sim :log] #(conj % ((:fn trans) :bogus))) ; POD :bogus should be activating tokens
-      (move-tokens ?pn a-in a-out a-in- a-out+))))
+      (assoc-in ?pn [:sim :old-state] (-> ?pn :sim :state))
+      (move-tokens ?pn a-in a-out a-in- a-out+)
+      (update-log-for-move ?pn fire))))
 
+(defn update-log-for-move
+  [pn fire]
+  (let [old-state (-> pn :sim :old-state)
+        state (-> pn :sim :state)
+        old (-> old-state vals flatten set)
+        new (-> state vals flatten set)
+        added (clojure.set/difference new old)
+        removed (clojure.set/difference old new)
+        remain (clojure.set/intersection old new)
+        find-at (fn [tkn state] (some (fn [[key val]] (when (some #(= % tkn) val) key)) state))
+        moved (reduce (fn [mvd stay]
+                        (if (= (find-at stay old-state) (find-at stay state))
+                          mvd
+                          (conj mvd stay)))
+                      [] remain)]
+    (as-> pn ?pn
+      (update-in ?pn [:sim :log] #(conj % ((:fn (name2obj pn fire)) (vec (clojure.set/union added moved)))))
+      (reduce (fn [pn rem]
+                (update-in pn [:sim :log] #(conj % {:on-act fire :tkn rem :motion :remove})))
+              ?pn removed)
+      (reduce (fn [pn add]
+                (update-in pn [:sim :log] #(conj % {:on-act fire :tkn add :motion :add})))
+              ?pn added)
+      (reduce (fn [pn mv]
+                (update-in pn [:sim :log] #(conj % {:on-act fire :tkn mv :motion :move
+                                                    :from (find-at mv (-> pn :sim :old-state))
+                                                    :to (find-at mv (-> pn :sim :state))})))
+              ?pn moved))))
+
+;;; POD Maybe throw instead of this??? It is a programming mistake. 
 (defn check-token-flow-balance
   [pn link a-in a-out a-in- a-out+]
   (let [diff (map - (:Mp link) (map count (vals (-> pn :sim :state))))
@@ -172,15 +205,3 @@
         (first dist)
         (recur (rest dist)
                (+ sum (:rate (second dist))))))))
-
-       
-    
-    
-
-  
-  
-        
-    
-    
-    
-
