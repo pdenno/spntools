@@ -27,7 +27,6 @@
 (declare sim-effects pick-link sim-place-data step-state move-tokens check-token-flow-balance
          binding-pairs update-log-for-move)
 ;;; Not yet a stochastic simulation, also need to implement free choice.
-;(simulate talking-m2-bas 10)
 (defn simulate
   "Run a PN for nsteps"
   [pn nsteps]
@@ -40,11 +39,10 @@
                          (:marking-key ?pn)
                          (map (fn [n] (vec (repeatedly n (fn [] {:type :a :id (next-id!)}))))
                                   (:initial-marking ?pn)))})
-    (reduce (fn [pn _] (sim-effects pn)) ?pn (range nsteps))))
+    (reduce (fn [pn _] (sim-effects pn)) ?pn (range nsteps))
+    (assoc-in ?pn [:sim :max-tkn] @+tkn-id+)))
 
 ;;; POD: Currently I'm using next-links, because there is only one colour. 
-
-;(sim-effects talking-m2-bas [1 0 1 1 0] lll)
 (defn sim-effects
   "Update the PN's :sim with the effects of one step."
   [pn]

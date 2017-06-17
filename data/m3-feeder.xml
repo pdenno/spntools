@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="ISO-8859-1"?><pnml>
 <net id="Net-One" type="P/T net">
 <token id="Default" enabled="true" red="0" green="0" blue="0"/>
-<labels x="201" y="43" width="162" height="50" border="true">
+<labels x="190" y="36" width="162" height="40" border="true">
 <text>I would like N &gt; 1 on m2-feed-buffer, but PIPE can't do inhibitor multiplicty &gt; 1.</text>
 </labels>
-<labels x="327" y="463" width="225" height="91" border="true">
+<labels x="326" y="463" width="225" height="91" border="true">
 <text>PIPE animation and GSPN steady-state is broken on this net. If there is a token in buffer-1 and m2-busy is empty, m2-start-job should be enabled. You can force it  (to demonstrate) by starting at that state. It erroneously deadlocks as saved.</text>
 </labels>
 <labels x="35" y="122" width="187" height="78" border="true">
@@ -121,7 +121,7 @@
 </graphics>
 </name>
 <initialMarking>
-<value>Default,0</value>
+<value>Default,1</value>
 <graphics>
 <offset x="0.0" y="0.0"/>
 </graphics>
@@ -181,7 +181,7 @@
 </graphics>
 </name>
 <initialMarking>
-<value>Default,0</value>
+<value>Default,1</value>
 <graphics>
 <offset x="0.0" y="0.0"/>
 </graphics>
@@ -237,7 +237,7 @@
 <name>
 <value>m1-complete-job</value>
 <graphics>
-<offset x="99.5" y="2.5"/>
+<offset x="102.5" y="6.5"/>
 </graphics>
 </name>
 <orientation>
@@ -289,7 +289,7 @@
 <name>
 <value>m2-complete-job</value>
 <graphics>
-<offset x="119.95454545454538" y="6.875"/>
+<offset x="113.95454545454538" y="9.875"/>
 </graphics>
 </name>
 <orientation>
@@ -341,7 +341,7 @@
 <name>
 <value>m3-complete-job</value>
 <graphics>
-<offset x="54.0" y="-6.0"/>
+<offset x="102.0" y="7.0"/>
 </graphics>
 </name>
 <orientation>
@@ -580,6 +580,19 @@
 <arcpath id="000" x="252" y="400" curvePoint="false"/>
 <arcpath id="001" x="159" y="277" curvePoint="false"/>
 <type value="normal"/>
+</arc>
+<arc id="m2-blocked to m2-start-job" source="m2-blocked" target="m2-start-job">
+<graphics/>
+<inscription>
+<value/>
+<graphics/>
+</inscription>
+<tagged>
+<value/>
+</tagged>
+<arcpath id="000" x="571" y="309" curvePoint="false"/>
+<arcpath id="001" x="475" y="402" curvePoint="false"/>
+<type value="inhibitor"/>
 </arc>
 <arc id="m2-blocked to unblock-m2" source="m2-blocked" target="unblock-m2">
 <graphics/>

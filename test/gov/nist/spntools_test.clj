@@ -3,7 +3,7 @@
             [gov.nist.spntools.core :refer :all]
             [gov.nist.spntools.util.pnml :refer :all]
             [gov.nist.spntools.util.utils :refer :all]
-            [gov.nist.spntools.util.reach :refer :all]
+            [gov.nist.spntools.util.reach :as pnr :refer :all]
             [clojure.core.matrix :as m :refer :all]))
 
 ;;;==========================================================================
@@ -181,7 +181,22 @@
           "data/m2-inhib-bas.xml"
           {:buffer 0.44752 :m1-blocked 0.21198 :m1-busy 0.78802
            :m2-busy 0.70922 :m2-starved 0.29078})
+         {:fname "data/m2-inhib-bas.xml" :ok? true}))
+  (is (= (steady-state-ok? ; POD I haven't tested this one yet. 
+          "data/m3-feeder.xml"
+           {:m2-feed-buffer        0.88623
+            :m2-blocked            0.00734
+            :m2-starved            0.01424
+            :subassembly-arrival   1.0,
+            :buffer-2              0.02986
+            :m3-busy               0.10915
+            :m1-busy               0.11605
+            :m1-blocked            0.88394
+            :m2-busy               0.98575
+            :buffer-1              0.97186
+            :m3-starved            0.89084})
          {:fname "data/m2-inhib-bas.xml" :ok? true})))
+  
   
 ;;; On-the-fly reduction -- Don't need all these tests, just documentation for pnr/Q-prime calculation
 #_(def tQt [0.0 0.0 0.0])  ; 1->6 1->7 1->8 (need root, need other tangible states)
