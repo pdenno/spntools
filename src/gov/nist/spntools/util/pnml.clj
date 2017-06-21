@@ -1,15 +1,16 @@
 (ns gov.nist.spntools.util.pnml
   (:require [clojure.data.xml :as xml :refer (parse-str)]
             [clojure.pprint :refer (cl-format pprint)]
-            [gov.nist.spntools.util.utils :refer :all]))
+            [gov.nist.spntools.util.utils :refer :all]
+            [clojure.string :as str]))
+            
 
 ;;; To Do:
-;;;       - Add label info to positions-from-file.
 ;;;       - Update IMM :rate (weight) information to be probabilities so that
 ;;;         these can be used in the on-the-fly state-space generation algorithm.
 
 (defn get-id [obj]
-  (-> obj :attrs :id keyword))
+  (keyword (str/replace (-> obj :attrs :id) #"\s+" "-")))
 
 (defn get-initial-tokens [pl]
   (let [str
@@ -78,8 +79,8 @@
 (defn essential-arc
   [ar]
   {:aid (swap! +obj-cnt+ inc)
-   :source (-> ar :attrs :source keyword)
-   :target (-> ar :attrs :target keyword)
+   :source (keyword (str/replace (-> ar :attrs :source) #"\s+" "-"))
+   :target (keyword (str/replace (-> ar :attrs :target) #"\s+" "-"))
    :name (keyword (str "aa-" @+obj-cnt+)) ; POD cheezy but validate-pn checks it. 
    :type (as-> ar ?m
            (:content ?m)
@@ -89,10 +90,11 @@
            (keyword ?m))
    :multiplicity (get-multiplicity ar)})
 
+(declare rescale)
 (defn read-pnml
   "Return a map providing the useful elements of a PNML file.
   'useful' here means things used in steady-state computation."
-  [fname]
+  [fname & {:keys [geom? rescale?]}]
   (reset! +obj-cnt+ 0)
   (as-> {:raw (-> fname slurp xml/parse-str :content first :content)} ?m
     (assoc ?m :places (filter #(= :place (:tag %)) (:raw ?m)))
@@ -101,7 +103,14 @@
     (assoc ?m :transitions (vec (map essential-transition (:transitions ?m))))
     (assoc ?m :arcs (filter #(= :arc (:tag %)) (:raw ?m)))
     (assoc ?m :arcs (vec (map essential-arc (:arcs ?m))))
-    (dissoc ?m :raw)))
+    (if (or geom? rescale?)
+      (assoc ?m :pn-graph-positions
+             (reduce (fn [m elem] (assoc m (get-id elem) (get-pos elem))) 
+                     {}
+                     (filter #(or (= (:tag %) :place) (= (:tag %) :transition)) (:raw ?m))))
+      ?m)
+    (dissoc ?m :raw)
+    (if rescale? (rescale ?m) ?m)))
 
 (defn reorder-places
   "Reorder and renumber the places for easier comparison with textbook models."
@@ -231,14 +240,52 @@
                           :curvePoint "false"})
    (xml/element :type {:value (name (:type ar))})))
 
-(defn positions-from-file
-  "Read the positions of elements from the argument file, creating a map of them."
-  [fname]
-  (as-> {:raw (-> fname slurp xml/parse-str :content first :content)} ?m
-    (assoc ?m :elems (filter #(or (= (:tag %) :place) (= (:tag %) :transition)) (:raw ?m)))
-    (dissoc ?m :raw)
-    (reduce (fn [m elem] (assoc m (get-id elem) (get-pos elem)))
-            ?m
-            (:elems ?m))
-    (dissoc ?m :elems)))
+(def +graph-window-params+ (atom {:window-size {:length 1100 :height 500}
+                                  :x-start 30
+                                  :y-start 30}))
 
+(defn pn-graph-scale
+  "Return a map providing reasonable scale factor for displaying the graph,
+   given that the PN might have originated with another tool."
+  [pn]
+  (let [range
+        (reduce (fn [range xy]
+                  (as-> range ?r
+                    (assoc ?r :min-x (min (:min-x ?r) (:x xy)))
+                    (assoc ?r :max-x (max (:max-x ?r) (:x xy)))
+                    (assoc ?r :min-y (min (:min-y ?r) (:y xy)))
+                    (assoc ?r :max-y (max (:max-y ?r) (:y xy)))))
+                {:min-x 99999 :max-x -99999
+                 :min-y 99999 :max-y -99999}
+                (-> pn :pn-graph-positions vals))
+        length (- (:max-x range) (:min-x range))
+        height (- (:max-y range) (:min-y range))
+        params @+graph-window-params+]
+    (as-> {} ?r
+      (assoc ?r :scale (* 0.8 (min (/ (double (-> params :window-size :length)) length)
+                                   (/ (double (-> params :window-size :height)) height))))
+      (assoc ?r :x-off (- (:x-start params) (:min-x range)))
+      (assoc ?r :y-off (- (:y-start params) (:min-y range))))))
+
+(defn rescale
+  "Modifiy :pn-graph-positions to fit +graph-window-params+"
+  [pn]
+  (let [params (pn-graph-scale pn)
+        scale (:scale params)
+        xs (:x-off params)
+        ys (:y-off params)]
+    (assoc pn :pn-graph-positions
+           (reduce (fn [mp [key val]]
+                     (assoc mp key
+                            (-> val
+                                (assoc :x (Math/round (* scale (+ xs (-> val :x)))))
+                                (assoc :y (Math/round (* scale (+ ys (-> val :y)))))
+                                (assoc :label-x-off (max 10 (Math/round (* 0.6 scale (-> val :label-x-off)))))
+                                (assoc :label-y-off (max 10 (Math/round (* 0.6 scale (-> val :label-y-off))))))))
+                   {}
+                   (:pn-graph-positions pn)))))
+
+;;; POD belongs in testing?
+(def files ["2017-05-06-one.xml" "join2.xml" "join3.xml" "knottenbelt.xml" "m2-feeder.xml"
+            "m2-inhib-bas-colour.xml" "m2-inhib-bas.xml" "m2-inhib-bbs.xml" "m2-j2-bas.xml"
+            "m612.xml" "marsan69.xml" "qo10.xml" "qo10-simplified.xml" "simple.xml"])
