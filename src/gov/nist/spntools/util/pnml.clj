@@ -104,7 +104,7 @@
     (assoc ?m :arcs (filter #(= :arc (:tag %)) (:raw ?m)))
     (assoc ?m :arcs (vec (map essential-arc (:arcs ?m))))
     (if (or geom? rescale?)
-      (assoc ?m :pn-graph-positions
+      (assoc ?m :geom
              (reduce (fn [m elem] (assoc m (get-id elem) (get-pos elem))) 
                      {}
                      (filter #(or (= (:tag %) :place) (= (:tag %) :transition)) (:raw ?m))))
@@ -257,7 +257,7 @@
                     (assoc ?r :max-y (max (:max-y ?r) (:y xy)))))
                 {:min-x 99999 :max-x -99999
                  :min-y 99999 :max-y -99999}
-                (-> pn :pn-graph-positions vals))
+                (-> pn :geom vals))
         length (- (:max-x range) (:min-x range))
         height (- (:max-y range) (:min-y range))
         params @+graph-window-params+]
@@ -268,13 +268,13 @@
       (assoc ?r :y-off (- (:y-start params) (:min-y range))))))
 
 (defn rescale
-  "Modifiy :pn-graph-positions to fit +graph-window-params+"
+  "Modifiy :geom to fit +graph-window-params+"
   [pn]
   (let [params (pn-graph-scale pn)
         scale (:scale params)
         xs (:x-off params)
         ys (:y-off params)]
-    (assoc pn :pn-graph-positions
+    (assoc pn :geom
            (reduce (fn [mp [key val]]
                      (assoc mp key
                             (-> val
@@ -283,7 +283,7 @@
                                 (assoc :label-x-off (max 10 (Math/round (* 0.6 scale (-> val :label-x-off)))))
                                 (assoc :label-y-off (max 10 (Math/round (* 0.6 scale (-> val :label-y-off))))))))
                    {}
-                   (:pn-graph-positions pn)))))
+                   (:geom pn)))))
 
 ;;; POD belongs in testing?
 (def files ["2017-05-06-one.xml" "join2.xml" "join3.xml" "knottenbelt.xml" "m2-feeder.xml"
