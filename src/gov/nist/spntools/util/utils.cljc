@@ -2,25 +2,26 @@
   (:require [clojure.data.xml :as xml :refer (parse-str)]
             [clojure.pprint :refer (cl-format pprint pp)]))
 
-(defmacro pn-ok->
+#?(:clj
+   (defmacro pn-ok->
   "Macro to thread a Petri net through forms binding VAR until the end is reach or it picks up a :failure key."
-  [pn & forms]
-  (let [g (gensym)
-        steps (map (fn [step] `(if (contains? ~g :failure) ~g (-> ~g ~step)))
-                   forms)]
-    `(let [~g ~pn
-           ~@(interleave (repeat g) (butlast steps))]
-       ~(if (empty? steps)
-          g
-          (last steps)))))
-
-(defmacro as-pn-ok->
-  [pn name & forms]
-  (let [steps (map (fn [step] `(if (contains? ~name :failure) ~name ~step))
-                   forms)]
-    `(let [~name ~pn
-           ~@(interleave (repeat name) steps)]
-       ~name)))
+     [pn & forms]
+     (let [g (gensym)
+           steps (map (fn [step] `(if (contains? ~g :failure) ~g (-> ~g ~step)))
+                      forms)]
+       `(let [~g ~pn
+              ~@(interleave (repeat g) (butlast steps))]
+          ~(if (empty? steps)
+             g
+             (last steps))))))
+#?(:clj
+   (defmacro as-pn-ok->
+     [pn name & forms]
+     (let [steps (map (fn [step] `(if (contains? ~name :failure) ~name ~step))
+                      forms)]
+       `(let [~name ~pn
+              ~@(interleave (repeat name) steps)]
+          ~name))))
 
 ;;;=== General =========================
 (defn ppp []
