@@ -6,19 +6,21 @@
 
 ;;; Purpose: Run a PN, producing a log of its execution.
 
-;;; In ordinary GSPN code, a marking (:state) is just a vector of integers signifying the tokens on a place.
+;;; In ordinary GSPN code, a marking (:queues) is just a vector of integers signifying the tokens on a place.
 ;;; In our implementation, we instead keep maps of queues containing tokens. Where we need the ordinary GSPN marking,
 ;;; we can convert this queue-base marking to it with (map count (queues-marking-order pn)).
 ;;; The PN is initialized with default-coloured tokens. For example where the ordinary marking might be
 ;;; [2 0 0 0] ours would be [[{:type :a :id 1} {:type :a :id2}] [] [] []].
+
+(def +diag+ (atom nil))
 
 ;;; POD When I replace next-link with the QPN equivalent, this can go away. 
 (defn queues-marking-order
   "Return a vector of queues in the marking order."
   [pn]
   (let [mk (:marking-key pn)
-        state (-> pn :sim :state)]
-    (vec (map #(% state) mk))))
+        queues (-> pn :sim :queues)]
+    (vec (map #(% queues) mk))))
 
 (def +tkn-id+ (atom 0))
 (defn next-id! []
@@ -30,15 +32,16 @@
 (defn simulate
   "Run a PN for nsteps"
   [pn nsteps]
+  (when (vector? pn) (throw (ex-info "Got vector in simulate!" {:pn pn}))) ; POD
   (reset! +tkn-id+ 0)
   (as-> pn ?pn
     (pnr/renumber-pids ?pn)
     (assoc ?pn
            :sim {:log []
-                 :state (zipmap
-                         (:marking-key ?pn)
-                         (map (fn [n] (vec (repeatedly n (fn [] {:type :a :id (next-id!)}))))
-                                  (:initial-marking ?pn)))})
+                 :queues (zipmap
+                          (:marking-key ?pn) ; POD next line will need work for colour. 
+                          (map (fn [n] (vec (repeatedly n (fn [] {:jtype :blue :id (next-id!)}))))
+                               (:initial-marking ?pn)))})
     (reduce (fn [pn _] (sim-effects pn)) ?pn (range nsteps))
     (assoc-in ?pn [:sim :max-tkn] @+tkn-id+)))
 
@@ -46,8 +49,13 @@
 (defn sim-effects
   "Update the PN's :sim with the effects of one step."
   [pn]
-  (let [link (pick-link (pnr/next-links pn (vec (map count (queues-marking-order pn)))))]
-    (step-state pn link)))
+  (when (vector? pn) (throw (ex-info "Got vector in sim-effects!" {:pn pn}))) ; POD
+  (reset! +diag+ {:pn pn})
+  (let [marking (vec (map count (queues-marking-order pn)))
+        next-links (pnr/next-links pn marking)]
+    (if (empty? next-links) ; then ran out of tokens.
+      pn
+      (step-state pn (pick-link next-links)))))
 
 ;;; If the change in marking from :M to Mp implies that there is a difference in the number
 ;;; of tokens on the net, then under this queueing PN model, the net effect of the
@@ -74,7 +82,7 @@
 ;;; POD currently I'm ignoring colour; specifically, I'm using next-link and not evaluating bindings.
 
 (defn step-state
-  "Update the (-> pn :sim :state) for the effect of firing the argument transition."
+  "Update the (-> pn :sim :queues) for the effect of firing the argument transition."
   [pn link]
   (let [fire (:fire link)
         mkey (:marking-key pn)
@@ -86,27 +94,31 @@
         a-out+ (filter #(contains? (:bind %) :act) a-out-raw)]
     (as-pn-ok-> pn ?pn
       (check-token-flow-balance ?pn link a-in a-out a-in- a-out+)
-      (assoc-in ?pn [:sim :old-state] (-> ?pn :sim :state))
+      (assoc-in ?pn [:sim :old-queues] (-> ?pn :sim :queues))
       (move-tokens ?pn a-in a-out a-in- a-out+)
       (update-log-for-move ?pn fire))))
 
 (defn update-log-for-move
+  "Add to log :add :remove and :move actions."
   [pn fire]
-  (let [old-state (-> pn :sim :old-state)
-        state (-> pn :sim :state)
-        old (-> old-state vals flatten set)
-        new (-> state vals flatten set)
+  (reset! +diag+ {:pn pn :fire fire})
+  (let [old-queues (-> pn :sim :old-queues)
+        queues (-> pn :sim :queues)
+        old (-> old-queues vals flatten set)
+        new (-> queues vals flatten set)
         added (clojure.set/difference new old)
         removed (clojure.set/difference old new)
         remain (clojure.set/intersection old new)
-        find-at (fn [tkn state] (some (fn [[key val]] (when (some #(= % tkn) val) key)) state))
+        find-at (fn [tkn queues] (some (fn [[key val]] (when (some #(= % tkn) val) key)) queues))
         moved (reduce (fn [mvd stay]
-                        (if (= (find-at stay old-state) (find-at stay state))
+                        (if (= (find-at stay old-queues) (find-at stay queues))
                           mvd
                           (conj mvd stay)))
                       [] remain)]
     (as-> pn ?pn
-      (update-in ?pn [:sim :log] #(conj % ((:fn (name2obj pn fire)) (vec (clojure.set/union added moved)))))
+      (if (contains? (name2obj pn fire) :fn)
+        (update-in ?pn [:sim :log] #(conj % ((:fn (name2obj pn fire)) (vec (clojure.set/union added moved)))))
+        ?pn)
       (reduce (fn [pn rem]
                 (update-in pn [:sim :log] #(conj % {:on-act fire :tkn rem :motion :remove})))
               ?pn removed)
@@ -115,14 +127,14 @@
               ?pn added)
       (reduce (fn [pn mv]
                 (update-in pn [:sim :log] #(conj % {:on-act fire :tkn mv :motion :move
-                                                    :from (find-at mv (-> pn :sim :old-state))
-                                                    :to (find-at mv (-> pn :sim :state))})))
+                                                    :from (find-at mv (-> pn :sim :old-queues))
+                                                    :to (find-at mv (-> pn :sim :queues))})))
               ?pn moved))))
 
 ;;; POD Maybe throw instead of this??? It is a programming mistake. 
 (defn check-token-flow-balance
   [pn link a-in a-out a-in- a-out+]
-  (let [diff (map - (:Mp link) (map count (vals (-> pn :sim :state))))
+  (let [diff (map - (:Mp link) (map count (vals (-> pn :sim :queues))))
         delta (reduce (fn [sum n] (+ sum n)) 0 diff)]
     (if (not (= delta
                 (+ (- (apply + (map :multiplicity a-out))  (apply + (map :multiplicity a-in)))
@@ -133,22 +145,22 @@
 (defn new-token
   "Create a new token as specified in the argument arc."
   [arc]
-  (as-> arc ?a (:bind ?a) (dissoc ?a :act) (assoc ?a :id (next-id!))))
+  {:jtype (-> arc :bind :jtype) :id (next-id!)})
 
 (defn move-tokens
-  "Return (-> pn :sim :state) updated according to argument arc info which are collections of arcs."
+  "Return (-> pn :sim :queues) updated according to argument arc info which are collections of arcs."
   [pn a-in a-out a-in- a-out+]
   (as-> pn ?pn
     ;; Remove tokens that are being eliminated.
-    (reduce (fn [pn arc] (update-in pn [:sim :state (:source arc)] #(vec (next %)))) ?pn a-in-)
+    (reduce (fn [pn arc] (update-in pn [:sim :queues (:source arc)] #(vec (next %)))) ?pn a-in-)
     ;; Add tokens that are being introduced
-    (reduce (fn [pn arc] (update-in pn [:sim :state (:target arc)] #(conj % (new-token arc)))) ?pn a-out+)
+    (reduce (fn [pn arc] (update-in pn [:sim :queues (:target arc)] #(conj % (new-token arc)))) ?pn a-out+)
     ;; Move remaining tokens from input places to output places.
     (reduce (fn [pn [in out]]
-              (let [tkn (first ((:source in) (-> pn :sim :state)))]
+              (let [tkn (first ((:source in) (-> pn :sim :queues)))]
                 (as-> pn ?pn2
-                  (update-in ?pn2 [:sim :state (:source in)] #(vec (next %)))
-                  (update-in ?pn2 [:sim :state (:target out)] #(conj % tkn)))))
+                  (update-in ?pn2 [:sim :queues (:source in)] #(vec (next %)))
+                  (update-in ?pn2 [:sim :queues (:target out)] #(conj % tkn)))))
             ?pn
             (binding-pairs a-in a-out))))
 
@@ -168,6 +180,7 @@
 (defn pick-link
   "Return a random link according to the distribution provide by their rates."
   [links]
+  (swap! +diag+ #(assoc % :links links))
   (let [r (rand (reduce (fn [sum l] (+ sum (:rate l))) 0.0 links))]
     (loop [dist links
            sum (:rate (first links))]

@@ -659,7 +659,7 @@
 
 (defn renumber-pids
   "Number the pids from 0 so that they can be used as an index into the marker.
-   Reduction makes this necessary. ALSO (no really this is the right way) set
+   Reduction makes this necessary. ALSO (no really, this is the right way!) set
    the :marking-key and :initial-marking"
   [pn]
   (as-> pn ?pn
