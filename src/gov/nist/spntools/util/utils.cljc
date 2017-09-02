@@ -37,7 +37,7 @@
   ([text] (throw (ex-info text {})))
   ([text args] (throw (ex-info text args))))
 
-(defn testme []
+#_(defn testme []
   (binding [*ns* (find-ns 'gov.nist.spntools-test)]
     (clojure.test/run-tests)))
 
@@ -260,6 +260,42 @@
 
 (defn validate-pn
   [pn]
+  (let [arcs (filter #(= (:type %) :normal) (:arcs pn))]
+    (as-> [] ?f
+      ;; bipartite check
+      (loop [failures ?f
+             arcs (:arcs pn)]
+        ;; All arcs are between places and transitions
+        (let [ar (first arcs)]
+          (if (empty? arcs)
+            failures
+            (recur (if (or (and (:pid (name2obj pn (:source ar)))
+                                (:tid (name2obj pn (:target ar))))
+                           (and (:pid (name2obj pn (:target ar)))
+                                (:tid (name2obj pn (:source ar)))))
+                     failures
+                     (conj failures {:reason "PN not bipartite" :arc ar}))
+                   (next arcs)))))
+      ;; places have inbound and outbound
+      (reduce (fn [fails pl]
+                (let [name (:name pl)]
+                  (if (and (some #(= name (:source %)) arcs)
+                           (some #(= name (:target %)) arcs))
+                    fails
+                    (conj fails {:reason "Places without both in/outbound" :place name}))))
+              ?f (:places pn))
+      ;; transitions have inbound and outbound
+      (reduce (fn [fails tr]
+                (let [name (:name tr)]
+                  (if (and (some #(= name (:source %)) arcs)
+                           (some #(= name (:target %)) arcs))
+                    fails
+                    (conj fails {:reason "transition without both in/outbound" :trans name}))))
+              ?f (:transitions pn)))))
+
+
+#_(defn validate-pn
+  [pn]
   (let [failures (atom [])]
     (loop [arcs (:arcs pn)]
       (when-not (empty? arcs)
@@ -272,8 +308,10 @@
                        (:tid (name2obj pn (:source ar)))))
             (swap! failures conj {:reason "PN not bipartite" :arc ar})))
         (recur (rest arcs))))
+    
     ;; Every place and transition has arcs in and arcs out. 
     @failures))
+
 
 (defn pn-size
   "Calculate the size of the PN as a counting of its structural components."
@@ -286,3 +324,31 @@
 (defn avg [vals]
   (/ (float (apply + vals))
      (count vals)))
+
+(defn arc-index
+  "Return the index of the named arc in pn. (For use with assoc-in, update-in, etc.)"
+  [pn name]
+  (loop [n 0
+         arcs (:arcs pn)]
+    (if (= name (:name (first arcs)))
+      n
+      (recur (inc n) (next arcs)))))
+
+(defn trans-index
+  "Return the index of the named index in pn. (For use with assoc-in, update-in, etc.)"
+  [pn name]
+  (loop [n 0
+         trans (:transitions pn)]
+    (if (= name (:name (first trans)))
+      n
+      (recur (inc n) (next trans)))))
+
+(defn place-index
+  "Return the index of the named index in pn. (For use with assoc-in, update-in, etc.)"
+  [pn name]
+  (loop [n 0
+         places (:places pn)]
+    (if (= name (:name (first places)))
+      n
+      (recur (inc n) (next places)))))
+

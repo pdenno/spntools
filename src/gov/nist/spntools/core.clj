@@ -3,7 +3,6 @@
             [clojure.pprint :refer (cl-format pprint pp)]
             [gov.nist.spntools.util.reach :as pnr :refer (reachability)]
             [gov.nist.spntools.util.pnml :as pnml :refer (read-pnml reorder-places)]
-            [gov.nist.spntools.util.simulate :as sim :refer (simulate)]
             [gov.nist.spntools.util.utils :as pnu :refer :all]
             [clojure.core.matrix :as m :refer :all]
             [clojure.core.matrix.linear :as ml :refer (svd)]))

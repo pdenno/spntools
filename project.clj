@@ -1,5 +1,5 @@
 (defproject gov.nist/spntools "0.1.0-SNAPSHOT"
-  :description "Tools for Generalized Stochastic Petri Nets (GSPN)"
+  :description "Tools for generalized stochastic petri nets (GSPN), colored (CGSPN) and queueing PNs"
   :url "https://www.nist.gov/programs-projects/modeling-methodology-smart-manufacturing-systems"
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}

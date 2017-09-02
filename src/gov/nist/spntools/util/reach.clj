@@ -17,20 +17,22 @@
 ;;;          5) Could combine :t-rates :v-rates and :explored into ':trg' and eliminate :M2Mp
 ;;;          6) It might be better, to have explored maps nested, first indexed by
 ;;;             state :M (which would be unique) and second indexed by :fire. Needs thought.
-;;;             Look at the places where I do vals and filter in 
+;;;             Look at the places where I do vals and filter in
+(def diag (atom nil))
 
 (defn fireable? 
   "Return true if transition is fireable under the argument marking."
   [pn mark tr-name]
+  (reset! diag {:pn pn :mark mark :tr-name tr-name})
   (let [arcs (arcs-into pn tr-name)
         arc-groups (group-by :type arcs)
         ^clojure.lang.PersistentVector marking-key (:marking-key pn)]
-    (and 
+    (and
      (every? (fn [ar] (>= (nth mark (.indexOf marking-key (:source ar)))
                           (:multiplicity ar)))
              (:normal arc-groups))
-     (every? (fn [ar] (< (nth mark (.indexOf marking-key (:source ar)))
-                         (:multiplicity ar)))
+     (every? (fn [ar] (<  (nth mark (.indexOf marking-key (:source ar)))
+                          (:multiplicity ar)))
              (:inhibitor arc-groups)))))
      
 (defn next-mark

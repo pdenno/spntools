@@ -94,7 +94,7 @@
 (defn read-pnml
   "Return a map providing the useful elements of a PNML file.
   'useful' here means things used in steady-state computation."
-  [fname & {:keys [geom? rescale?]}]
+  [fname & {:keys [geom? #_rescale?]}]
   (reset! +obj-cnt+ 0)
   (as-> {:raw (-> fname slurp xml/parse-str :content first :content)} ?m
     (assoc ?m :places (filter #(= :place (:tag %)) (:raw ?m)))
@@ -103,14 +103,14 @@
     (assoc ?m :transitions (vec (map essential-transition (:transitions ?m))))
     (assoc ?m :arcs (filter #(= :arc (:tag %)) (:raw ?m)))
     (assoc ?m :arcs (vec (map essential-arc (:arcs ?m))))
-    (if (or geom? rescale?)
+    (if (or geom? #_rescale?)
       (assoc ?m :geom
              (reduce (fn [m elem] (assoc m (get-id elem) (get-pos elem))) 
                      {}
                      (filter #(or (= (:tag %) :place) (= (:tag %) :transition)) (:raw ?m))))
       ?m)
     (dissoc ?m :raw)
-    (if rescale? (rescale ?m) ?m)))
+    #_(if rescale? (rescale ?m) ?m)))
 
 (defn reorder-places
   "Reorder and renumber the places for easier comparison with textbook models."
@@ -240,52 +240,8 @@
                           :curvePoint "false"})
    (xml/element :type {:value (name (:type ar))})))
 
-(def +graph-window-params+ (atom {:window-size {:length 1100 :height 500}
-                                  :x-start 30
-                                  :y-start 30}))
-
-(defn pn-graph-scale
-  "Return a map providing reasonable scale factor for displaying the graph,
-   given that the PN might have originated with another tool."
-  [pn]
-  (let [range
-        (reduce (fn [range xy]
-                  (as-> range ?r
-                    (assoc ?r :min-x (min (:min-x ?r) (:x xy)))
-                    (assoc ?r :max-x (max (:max-x ?r) (:x xy)))
-                    (assoc ?r :min-y (min (:min-y ?r) (:y xy)))
-                    (assoc ?r :max-y (max (:max-y ?r) (:y xy)))))
-                {:min-x 99999 :max-x -99999
-                 :min-y 99999 :max-y -99999}
-                (-> pn :geom vals))
-        length (- (:max-x range) (:min-x range))
-        height (- (:max-y range) (:min-y range))
-        params @+graph-window-params+]
-    (as-> {} ?r
-      (assoc ?r :scale (* 0.8 (min (/ (double (-> params :window-size :length)) length)
-                                   (/ (double (-> params :window-size :height)) height))))
-      (assoc ?r :x-off (- (:x-start params) (:min-x range)))
-      (assoc ?r :y-off (- (:y-start params) (:min-y range))))))
-
-(defn rescale
-  "Modifiy :geom to fit +graph-window-params+"
-  [pn]
-  (let [params (pn-graph-scale pn)
-        scale (:scale params)
-        xs (:x-off params)
-        ys (:y-off params)]
-    (assoc pn :geom
-           (reduce (fn [mp [key val]]
-                     (assoc mp key
-                            (-> val
-                                (assoc :x (Math/round (* scale (+ xs (-> val :x)))))
-                                (assoc :y (Math/round (* scale (+ ys (-> val :y)))))
-                                (assoc :label-x-off (max 10 (Math/round (* 0.6 scale (-> val :label-x-off)))))
-                                (assoc :label-y-off (max 10 (Math/round (* 0.6 scale (-> val :label-y-off))))))))
-                   {}
-                   (:geom pn)))))
 
 ;;; POD belongs in testing?
-(def files ["2017-05-06-one.xml" "join2.xml" "join3.xml" "knottenbelt.xml" "m2-feeder.xml"
+#_(def files ["2017-05-06-one.xml" "join2.xml" "join3.xml" "knottenbelt.xml" "m2-feeder.xml"
             "m2-inhib-bas-colour.xml" "m2-inhib-bas.xml" "m2-inhib-bbs.xml" "m2-j2-bas.xml"
             "m612.xml" "marsan69.xml" "qo10.xml" "qo10-simplified.xml" "simple.xml"])
