@@ -259,6 +259,7 @@
     (assoc pn :failure {:reason :enter-and-exit-trans})))
 
 (defn validate-pn
+  "Return a vector of errors or [] if none."
   [pn]
   (let [arcs (filter #(= (:type %) :normal) (:arcs pn))]
     (as-> [] ?f
@@ -290,7 +291,7 @@
                   (if (and (some #(= name (:source %)) arcs)
                            (some #(= name (:target %)) arcs))
                     fails
-                    (conj fails {:reason "transition without both in/outbound" :trans name}))))
+                    (conj fails {:reason "Transition without both in/outbound" :trans name}))))
               ?f (:transitions pn)))))
 
 
