@@ -15,18 +15,18 @@
 
 (deftest distinct-markings
   (testing "markings created by reachability"
-    (= (set [[1 0 0 1 1 0 0]
-             [0 1 0 1 1 0 0]
-             [0 0 1 0 1 0 0]
-             [0 0 1 0 0 1 0]
-             [0 1 0 1 0 1 0]
-             [1 0 0 1 0 1 0]
-             [1 0 0 0 0 0 1]
-             [0 1 0 0 0 0 1]])
-       (set
-        (as-> (read-pnml "data/m6.xml") ?pn
-          (reachability ?pn)
-          (distinct (map :M (:M2Mp ?pn))))))))
+    (is (= (set [[1 0 0 1 1 0 0]
+                 [0 1 0 1 1 0 0]
+                 [0 0 1 0 1 0 0]
+                 [0 0 1 0 0 1 0]
+                 [0 1 0 1 0 1 0]
+                 [1 0 0 1 0 1 0]
+                 [1 0 0 0 0 0 1]
+                 [0 1 0 0 0 0 1]])
+           (set
+            (as-> (read-pnml "data/m6.xml") ?pn
+              (reachability ?pn)
+              (distinct (map :M (:M2Mp ?pn)))))))))
 
 #_(deftest vpaths
   (testing "vpath naviation"
