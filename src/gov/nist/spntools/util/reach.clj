@@ -18,7 +18,7 @@
 ;;;          6) It might be better, to have explored maps nested, first indexed by
 ;;;             state :M (which would be unique) and second indexed by :fire. Needs thought.
 ;;;             Look at the places where I do vals and filter in
-(def diag (atom nil))
+(def ^:private diag (atom nil))
 
 (defn fireable? 
   "Return true if transition is fireable under the argument marking."
@@ -144,7 +144,7 @@
   (let [root (:initial-tangible pn)]
     (loop [res {:spaths (vec (map vector (next-links pn root)))
                 :v-rates [], :t-rates [], :explored {}}] 
-      ;(reset! +diag+ res) ; keep
+      ;(reset! diag res) ; keep
       (let [active (-> res :spaths first last)]
         ;;(println "------- Return to toplevel ----")    ; keep 
         ;;(println ":spaths = ") (ppprint (:spaths res))
@@ -270,7 +270,7 @@
              :paths (vector vpath) :loop false :new-St [], :tang? false
              :vpath vpath :search-paths search-paths}] ; These two for debugging.
     (swap! loop-count inc)
-    ;;(reset! +diag+ fp) ; keep
+    ;;(reset! diag fp) ; keep
     ;;(when (or (> @loop-count 50) (> (count (:paths fp)) 10) (> (count (-> fp :paths first)) 10)) (break "path length")) ; keep
     ;; By not looking at :vexplored for next-links here, we'll pick up duplicate v-rates.
     ;; OTOH not doing so will result in missing rates.

@@ -167,7 +167,7 @@
         (:aid elem) ; It is an arc
         (assoc pn :arcs (conj (:arcs pn) elem))))
 
-(def diag (atom nil))
+(def ^:private diag (atom nil))
 (def +next-tid+ (atom 0))
 (def +next-aid+ (atom 0))
 (def +next-pid+ (atom 0))
