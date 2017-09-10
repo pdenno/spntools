@@ -44,30 +44,44 @@
 ;;;=== Petri Nets =========================
 (def +obj-cnt+ (atom 0))
 
+(defn pn?
+  "If the argument is a Petri net, return it; otherwise return false."
+  [obj]
+  (and (:places obj) (:transitions obj) (:arcs obj) obj))
+
 (defn tid2obj
   [pn tid]
+  (assert (keyword? tid))
   (some #(when (= (:tid %) tid) %) (:transitions pn)))
 
 (defn pid2obj
   [pn pid]
+  (assert (keyword? pid))
   (some #(when (= (:pid %) pid) %) (:places pn)))
 
 (defn aid2obj
   [pn aid]
+  (assert (keyword? aid))
   (some #(when (= (:aid %) aid) %) (:arcs pn)))
 
 (defn arcs-into
   "Return the arcs into the named object."
   [pn name]
+  (assert (keyword? name))
+  (assert (pn? pn))
   (filter #(= (:target %) name) (:arcs pn)))
 
 (defn arcs-outof
   "Return the arcs exiting the named object."
   [pn name]
+  (assert (keyword? name))
+  (assert (pn? pn))
   (filter #(= (:source %) name) (:arcs pn)))
 
 (defn name2obj
   [pn name]
+  (assert (keyword? name))
+  (assert (pn? pn))
   (or 
    (some #(when (= name (:name %)) %) (:places pn))
    (some #(when (= name (:name %)) %) (:transitions pn))
@@ -78,6 +92,7 @@
 (defn follow-path
   "Return a sequence of places, transitions, arcs forward of OBJ."
   [pn obj]
+  (assert (pn? pn))
   (cond (:tid obj) (arcs-outof pn (:name obj)),
         (:pid obj) (arcs-outof pn (:name obj)),
         (:aid obj) (if (contains? @*visited* (:target obj))
@@ -88,6 +103,7 @@
 (defn follow-path-back
   "Return a sequence of places, transitions, arcs forward of OBJ."
   [pn obj]
+  (assert (pn? pn))
   (cond (:tid obj) (arcs-into pn (:name obj)),
         (:pid obj) (arcs-into pn (:name obj)),
         (:aid obj) (if (contains? @*visited* (:source obj))
@@ -112,15 +128,11 @@
   "Return the paths from FROM to TO (both are names of places or transitions) 
    in exactly STEPS steps (counting places, transitions and arcs)."
   [pn from to nsteps & {:keys [back?]}]
+  (assert (pn? pn))
   (binding [*path-to* (atom [])
             *visited* (atom #{from})]
     (paths-to-aux pn (name2obj pn from) to nsteps :back? back?)
     @*path-to*))
-
-(defn pn?
-  "If the argument is a Petri net, return it; otherwise return false."
-  [obj]
-  (and (:places obj) (:transitions obj) (:arcs obj) obj))
 
 (defn arc? [obj] (:aid obj))
 (defn place? [obj] (:pid obj))
@@ -129,11 +141,14 @@
 
 (defn immediate?
   [pn name]
+  (assert (keyword? name) (cl-format nil "~S is not a keyword" name))
+  (assert (pn? pn))
   (= :immediate (:type (name2obj pn name))))
 
 (defn eliminate-pn
   "Transform the PN graph by eliminating the argument element."
   [pn elem]
+  (assert (pn? pn))
   (cond (:pid elem) ; It is a place.
         (assoc pn :places (vec (remove #(= % elem) (:places pn))))
         (:tid elem) ; It is a transition
@@ -144,6 +159,7 @@
 (defn add-pn
   "Transform the PN graph by adding the argument element."
   [pn elem]
+  (assert (pn? pn))
   (cond (:pid elem) ; It is a place.
         (assoc pn :places (conj (:places pn) elem))
         (:tid elem) ; It is a transition
@@ -151,7 +167,7 @@
         (:aid elem) ; It is an arc
         (assoc pn :arcs (conj (:arcs pn) elem))))
 
-(def +diag+ (atom nil))
+(def diag (atom nil))
 (def +next-tid+ (atom 0))
 (def +next-aid+ (atom 0))
 (def +next-pid+ (atom 0))
@@ -182,6 +198,8 @@
 (defn make-arc
   [pn source target & {:keys [type aid multiplicity debug]
                        :or {type :normal aid (next-aid pn) multiplicity 1}}]
+  (assert (pn? pn))
+  (assert (keyword? type))
   (as-> {:aid aid :source source :target target :name (keyword (str "aa-" aid))
          :type type :multiplicity multiplicity} ?ar
     (if debug (assoc ?ar :debug debug) ?ar)))
@@ -191,6 +209,8 @@
          :or {name (keyword (str "Place-" (inc @+next-pid+)))
               pid (next-pid pn)
               initial-tokens 0}}]
+  (assert (pn? pn))
+  (assert (number? initial-tokens))
   {:name name :pid pid :initial-tokens initial-tokens})
 
 (defn make-transition
@@ -199,12 +219,17 @@
               type :exponential
               tid (next-tid pn)
               rate 1.0}}]
+  (assert (pn? pn))
+  (assert (keyword? name))
+  (assert (keyword? type))
+  (assert (number? rate))
   {:name name :tid tid :type type :rate rate})
 
 (defn initial-marking
   "Return a map {:marking-key <vector of place names> :initial-marking <vector of integers>}
    This doesn't care what the actual pid numbers are, just there relative ordering."
   [pn]
+  (assert (pn? pn))
   (let [sorted (sort #(< (:pid %1) (:pid %2)) (:places pn))]
     {:marking-key (vec (map :name sorted))
      :initial-marking
@@ -213,6 +238,7 @@
 (defn reorder-markings
   "Reorder the markings calculated from the reachability graph so as to match a textbook example."
   [pn new-order]
+  (assert (pn? pn))
   (let [sgraph (set (:marking-key pn))
         sorder (set new-order)
         isect (clojure.set/intersection sgraph sorder)]
@@ -275,7 +301,7 @@
                            (and (:pid (name2obj pn (:target ar)))
                                 (:tid (name2obj pn (:source ar)))))
                      failures
-                     (conj failures {:reason "PN not bipartite" :arc ar}))
+                     (conj failures {:reason "PN not bipartite" :arc (:name ar)}))
                    (next arcs)))))
       ;; places have inbound and outbound
       (reduce (fn [fails pl]
@@ -283,7 +309,7 @@
                   (if (and (some #(= name (:source %)) arcs)
                            (some #(= name (:target %)) arcs))
                     fails
-                    (conj fails {:reason "Places without both in/outbound" :place name}))))
+                    (conj fails {:reason "Place without both in/outbound" :place name}))))
               ?f (:places pn))
       ;; transitions have inbound and outbound
       (reduce (fn [fails tr]
@@ -293,26 +319,6 @@
                     fails
                     (conj fails {:reason "Transition without both in/outbound" :trans name}))))
               ?f (:transitions pn)))))
-
-
-#_(defn validate-pn
-  [pn]
-  (let [failures (atom [])]
-    (loop [arcs (:arcs pn)]
-      (when-not (empty? arcs)
-        (let [ar (first arcs)]
-          (when-not
-              ;; All arcs are between places and transitions
-              (or (and (:pid (name2obj pn (:source ar)))
-                       (:tid (name2obj pn (:target ar))))
-                  (and (:pid (name2obj pn (:target ar)))
-                       (:tid (name2obj pn (:source ar)))))
-            (swap! failures conj {:reason "PN not bipartite" :arc ar})))
-        (recur (rest arcs))))
-    
-    ;; Every place and transition has arcs in and arcs out. 
-    @failures))
-
 
 (defn pn-size
   "Calculate the size of the PN as a counting of its structural components."
@@ -329,6 +335,8 @@
 (defn arc-index
   "Return the index of the named arc in pn. (For use with assoc-in, update-in, etc.)"
   [pn name]
+  (assert (keyword? name))
+  (assert (pn? pn))
   (loop [n 0
          arcs (:arcs pn)]
     (if (= name (:name (first arcs)))
@@ -338,6 +346,8 @@
 (defn trans-index
   "Return the index of the named index in pn. (For use with assoc-in, update-in, etc.)"
   [pn name]
+  (assert (keyword? name))
+  (assert (pn? pn))
   (loop [n 0
          trans (:transitions pn)]
     (if (= name (:name (first trans)))
@@ -347,6 +357,8 @@
 (defn place-index
   "Return the index of the named index in pn. (For use with assoc-in, update-in, etc.)"
   [pn name]
+  (assert (keyword? name))
+  (assert (pn? pn))
   (loop [n 0
          places (:places pn)]
     (if (= name (:name (first places)))

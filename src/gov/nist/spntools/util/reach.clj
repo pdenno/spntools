@@ -23,7 +23,7 @@
 (defn fireable? 
   "Return true if transition is fireable under the argument marking."
   [pn mark tr-name]
-  (reset! diag {:pn pn :mark mark :tr-name tr-name})
+  (assert (keyword? tr-name))
   (let [arcs (arcs-into pn tr-name)
         arc-groups (group-by :type arcs)
         ^clojure.lang.PersistentVector marking-key (:marking-key pn)]
@@ -38,6 +38,7 @@
 (defn next-mark
   "Return the mark that is at the head of the argument link."
   [pn mark tr-name]
+  (assert (keyword? tr-name))
   (as-> mark ?m
     (reduce (fn [mar arc]
               (let [indx (:pid (name2obj pn (:source arc)))] 
@@ -97,11 +98,9 @@
            (as-> (map :name (:transitions pn)) ?trns
              (filter #(fireable? pn mark %) ?trns)
              (if (some #(immediate? pn %) ?trns) (filter #(immediate? pn %) ?trns) ?trns)
-             (if clist
-               (remove #(find-link pn mark % clist) ?trns)
-               ?trns))
-           imm? (immediate? pn (first trns))
-           trs (map #(name2obj pn %) trns)
+             (if clist (remove #(find-link pn mark % clist) ?trns) ?trns))
+           imm? (and (not-empty trns) (immediate? pn (first trns)))
+           trs  (map #(name2obj pn %) trns)
            sum (when imm? (apply + (map :rate trs)))]
        (not-empty
         (vec
