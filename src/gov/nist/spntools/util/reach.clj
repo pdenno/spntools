@@ -4,7 +4,7 @@
             [clojure.core.matrix :as m :refer :all]
             [clojure.math.combinatorics :as combo]
             [gov.nist.spntools.util.utils :refer :all]
-            [gov.nist.spntools.util.pnml :refer (read-pnml)]))
+            [gov.nist.spntools.util.pnml :as pnml :refer (read-pnml)]))
 
 ;;; To Do: Implement place capacity restrictions. (maybe)
 ;;;     * Instead of all these +max-rs+ etc. might want a system wide ^:dynamic
@@ -77,13 +77,15 @@
   [pn M trn list]
   (get list (vector M trn)))
 
-(def +revisited+ "diagnostic" (atom 0))
+#_(def +revisited+ "diagnostic" (atom 0))
 (defn note-link-visited
+  "Links are tracked by :M and :fire because (1) :fire could be a path,
+   or (2) :rate might differ, or (3) good for diagnostics."
   [list link]
   (let [key (vector (:M link) (:fire link))]
-    (when (visited? list link)
+    #_(when (visited? list link)
       (swap! +revisited+ inc)
-      #_(println "Link already visited:" link)) ; keep
+      (println "Link already visited:" link)) ; keep
     (assoc list key link)))
 
 ;;; The target marking is completely specified by the source (marking at tail) and the transition.
@@ -98,7 +100,8 @@
            (as-> (map :name (:transitions pn)) ?trns
              (filter #(fireable? pn mark %) ?trns)
              (if (some #(immediate? pn %) ?trns) (filter #(immediate? pn %) ?trns) ?trns)
-             (if clist (remove #(find-link pn mark % clist) ?trns) ?trns))
+             ;; If clist specified, it tracks mark/trans already visited. Remove these.
+             (if clist (remove #(find-link pn mark % clist) ?trns) ?trns)) 
            imm? (and (not-empty trns) (immediate? pn (first trns)))
            trs  (map #(name2obj pn %) trns)
            sum (when imm? (apply + (map :rate trs)))]
@@ -124,7 +127,7 @@
    removing vanishing states on-the-fly using the algorithm of Knottenbelt, 1996.
    The links that end up in :t-states and :v-state should have tangible :M and :Mp."
   [pn]
-  (reset! +revisited+ 0)
+  #_(reset! +revisited+ 0) ; diagnostic
   (as-pn-ok-> pn ?pn
     (renumber-pids ?pn)
     (initial-tangible-state ?pn)
@@ -140,7 +143,7 @@
     (check-reach ?pn)))
 
 (defn reachability-loop [pn]
-  "Calculate reachability graph. pn is not touched except to report errors."
+  "Calculate tangible reachability graph. pn is not touched except to report errors."
   (let [root (:initial-tangible pn)]
     (loop [res {:spaths (vec (map vector (next-links pn root)))
                 :v-rates [], :t-rates [], :explored {}}] 
@@ -694,7 +697,25 @@
          (map :name (:transitions pn)))
       pn
       (assoc pn :failure {:reason :live?}))))
-    
+
+;;; Reachability Graph (includes non-tangible states).
+;;; Much simpler than tangible reachability graph! No paths. 
+(defn simple-reach
+  "Calculate the reachability graph (including non-tangible states) of the argument PN."
+  [pn]
+  (let [pn (renumber-pids pn)
+        nexts (next-links pn (:initial-marking pn))]
+    (loop [visited  (note-link-visited {} (first nexts))
+           to-visit nexts]
+      (if (empty? to-visit)
+        (vals (dissoc visited [nil nil]))
+        (let [new-links (next-links pn (-> to-visit first :Mp) visited)]
+          (recur
+           (reduce #(note-link-visited %1 %2) visited new-links)
+           (if (empty? new-links)
+             (next to-visit)
+             (into new-links (rest to-visit)))))))))
+
 #_(defn marks2links
   "Return the path vector of links corresponding to the argument path vector of marks.
    Returns a sequence of length (dec (count marks)) First mark is in :M , last in :Mp"
