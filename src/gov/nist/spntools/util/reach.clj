@@ -708,7 +708,7 @@
     (loop [visited  (note-link-visited {} (first nexts))
            to-visit nexts]
       (if (empty? to-visit)
-        (vals (dissoc visited [nil nil]))
+        (vals visited)
         (let [new-links (next-links pn (-> to-visit first :Mp) visited)]
           (recur
            (reduce #(note-link-visited %1 %2) visited new-links)

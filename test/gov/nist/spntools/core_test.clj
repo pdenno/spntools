@@ -1,98 +1,10 @@
 (ns gov.nist.spntools.core-test
   (:require [clojure.test :refer :all]
+            [clojure.core.matrix :as m :refer :all]
             [gov.nist.spntools.core :refer :all]
             [gov.nist.spntools.util.pnml :refer :all]
             [gov.nist.spntools.util.utils :refer :all]
-            [gov.nist.spntools.util.reach :as pnr :refer :all]
-            [clojure.core.matrix :as m :refer :all]))
-
-;;;==========================================================================
-;;; Reachability
-;;;==========================================================================
-(deftest reachability-test
-  (testing "Reachability graph size"
-    (is (= 8 (-> "data/qo10.xml" read-pnml reachability :M2Mp count)))))
-
-;;; POD This is failing 2017-09-26. I guess I'm not suprised since it doesn't
-;;;     force an ordering on the marking!
-#_(deftest distinct-markings
-  (testing "markings created by reachability"
-    (is (= (set [[1 0 0 1 1 0 0]
-                 [0 1 0 1 1 0 0]
-                 [0 0 1 0 1 0 0]
-                 [0 0 1 0 0 1 0]
-                 [0 1 0 1 0 1 0]
-                 [1 0 0 1 0 1 0]
-                 [1 0 0 0 0 0 1]
-                 [0 1 0 0 0 0 1]])
-           (set
-            (as-> (read-pnml "data/m6.xml") ?pn
-              (reachability ?pn)
-              (distinct (map :M (:M2Mp ?pn)))))))))
-
-#_(deftest vpaths
-  (testing "vpath naviation"
-    (let [m (run-ready "data/marsan69-2.xml")]
-      (is (= (vanish-paths m [2 0 0 0 0 0 0 0 0] [1 1 0 0 0 0 0 0 0])
-             {:new-vpath-rates [{:M [2 0 0 0 0 0 0 0 0],
-                                 :fire [:Tndata :t_start],
-                                 :Mp [1 0 1 1 0 0 0 0 0],
-                                 :rate 1.0, :loop? false}],
-              :explored [[2 0 0 0 0 0 0 0 0] [1 1 0 0 0 0 0 0 0] [1 0 1 1 0 0 0 0 0]],
-              :paths nil,
-              :new-St [[1 0 1 1 0 0 0 0 0]]})))
-    (let [q (run-ready "data/qorchard.xml")
-          paths [[[1 0 0 0 0 0 0 0] [0 1 0 0 0 0 0 0] [0 0 0 1 0 0 0 0] [0 0 0 0 0 1 0 0]]
-                 [[1 0 0 0 0 0 0 0] [0 1 0 0 0 0 0 0] [0 0 0 1 0 0 0 0] [0 0 0 0 0 0 1 0]]]]
-      (is (= (terminate-vpaths q paths)
-             (list {:M [1 0 0 0 0 0 0 0], :fire [:T1 :t1-3 :t3-5], :Mp :NA, :rate :NA, :loop? true}
-                   {:M [1 0 0 0 0 0 0 0], :fire [:T1 :t1-3 :t3-6], :Mp :NA, :rate :NA, :loop? true})))
-      (is (= (terminating-tangibles q [1 0 0 0 0 0 0 0])
-             {:root [1 0 0 0 0 0 0 0],
-              :terms ([0 0 0 0 0 0 0 1] [0 0 0 0 0 0 1 0] [0 0 0 0 1 0 0 0]),
-              :explored
-              [{:M [1 0 0 0 0 0 0 0]}
-               {:M [1 0 0 0 0 0 0 0], :fire :T1, :Mp [0 1 0 0 0 0 0 0], :rate 5.0}
-               {:M [1 0 0 0 0 0 0 0], :fire :T2, :Mp [0 0 1 0 0 0 0 0], :rate 3.0}
-               {:M [0 1 0 0 0 0 0 0], :fire :t1-3, :Mp [0 0 0 1 0 0 0 0], :rate 1.0}
-               {:M [0 0 0 1 0 0 0 0], :fire :t3-5, :Mp [0 0 0 0 0 1 0 0], :rate 0.5}
-               {:M [0 0 0 1 0 0 0 0], :fire :t3-6, :Mp [0 0 0 0 0 0 1 0], :rate 0.5}
-               {:M [0 0 0 0 0 1 0 0], :fire :t5-2, :Mp [0 1 0 0 0 0 0 0], :rate 0.4}
-               {:M [0 0 0 0 0 1 0 0], :fire :t5-7, :Mp [0 0 0 0 0 0 0 1], :rate 0.6}
-               {:M [0 0 1 0 0 0 0 0], :fire :t2-3, :Mp [0 0 0 1 0 0 0 0], :rate 0.4}
-               {:M [0 0 1 0 0 0 0 0], :fire :t2-4, :Mp [0 0 0 0 1 0 0 0], :rate 0.6}]}))
-      (is (every? (fn [[correct mine]] (=* correct mine) 0.0001)
-                  (map #(list %1 %2)
-                       [2.325,3.875,1.8]
-                       (:loop-rates (vanish-paths q [1 0 0 0 0 0 0 0] [0 1 0 0 0 0 0 0]))))))))
-        
-;;;========================================================
-;;; Infinitesimal Generator
-;;;========================================================
-(deftest infinitesimal-generator-matrix
-  (testing "Marsan section 6.1 example, infinitesimal generator"
-    (is (= (-> (read-pnml "data/m6.xml")
-               (reorder-places [:Pact1 :Preq1 :Pacc1 :Pidle :Pact2 :Preq2 :Pacc2])
-               (reachability)
-               (Q-matrix :force-ordering
-                         [[1 0 0 1 1 0 0]
-                          [0 1 0 1 1 0 0]
-                          [0 0 1 0 1 0 0]
-                          [0 0 1 0 0 1 0]
-                          [0 1 0 1 0 1 0]
-                          [1 0 0 1 0 1 0]
-                          [1 0 0 0 0 0 1]
-                          [0 1 0 0 0 0 1]])
-               :Q
-               m/to-nested-vectors)
-           [[-3.0 1.0 0.0 0.0 0.0 2.0 0.0 0.0]
-            [0.0 -102.0 100.0 0.0 2.0 0.0 0.0 0.0]
-            [10.0 0.0 -12.0 2.0 0.0 0.0 0.0 0.0]
-            [0.0 0.0 0.0 -10.0 0.0 10.0 0.0 0.0]
-            [0.0 0.0 0.0 100.0 -200.0 0.0 0.0 100.0]
-            [0.0 0.0 0.0 0.0 1.0 -101.0 100.0 0.0]
-            [5.0 0.0 0.0 0.0 0.0 0.0 -6.0 1.0]
-            [0.0 5.0 0.0 0.0 0.0 0.0 0.0 -5.0]]))))
+            [gov.nist.spntools.util.reach :as pnr :refer :all]))
 
 #_(deftest gauss-jordan-elimination
   (testing "Gauss-Jordan elimination solution, inverse and determinant"
@@ -240,35 +152,3 @@
              run-all
              :failure
              :reason))))
-
-;;;=====================================================================================================
-;;; QPN Simulation
-;;;=====================================================================================================
-(def talking-m2-bas
-  (pnr/renumber-pids 
-   {:places                                         
-    [{:name :buffer, :pid 1, :initial-tokens 1    }
-     {:name :m1-blocked, :pid 2, :initial-tokens 0}
-     {:name :m1-busy, :pid 3, :initial-tokens 1   }
-     {:name :m2-busy, :pid 4, :initial-tokens 1   }
-     {:name :m2-starved, :pid 5, :initial-tokens 0}],
-    :transitions  ; :fn here would be added by GP, associating SCADA acts with transitions.
-    [{:name :m1-complete-job, :tid 6, :type :exponential, :rate 3.9 :fn (fn [tkns] {:act :bj :tkns tkns})}
-     {:name :m1-start-job, :tid 7, :type :immediate, :rate 1.0      :fn (fn [tkns] {:act :aj :tkns tkns})}
-     {:name :m2-complete-job, :tid 8, :type :exponential, :rate 1.0 :fn (fn [tkns] {:act :ej :tkns tkns})}
-     {:name :m2-start-job, :tid 9, :type :immediate, :rate 1.0      :fn (fn [tkns] {:act :sm :tkns tkns})}],
-    :arcs ; :bind here would be added by GP, selecting where to make intro and elim, split jobtypes, etc. 
-    [{:aid 10, :source :buffer, :target :m1-start-job, :name :aa-10, :type :inhibitor, :multiplicity 5 :bind {:type :a}}
-     {:aid 11, :source :buffer, :target :m2-start-job, :name :aa-11, :type :normal, :multiplicity 1 :bind {:type :a}}
-     {:aid 12, :source :m1-blocked, :target :m1-start-job, :name :aa-12, :type :normal, :multiplicity 1 :bind {:type :a}}
-     {:aid 13, :source :m1-busy, :target :m1-complete-job, :name :aa-13, :type :normal, :multiplicity 1 :bind {:type :a}}
-     {:aid 14, :source :m1-complete-job, :target :m1-blocked, :name :aa-14, :type :normal, :multiplicity 1 :bind {:type :a}}
-     {:aid 15, :source :m1-start-job, :target :buffer, :name :aa-15, :type :normal, :multiplicity 1 :bind {:type :a}}
-     {:aid 16, :source :m1-start-job, :target :m1-busy, :name :aa-16, :type :normal, :multiplicity 1
-      :bind {:type :a :act :intro}}
-     {:aid 17, :source :m2-busy, :target :m2-complete-job, :name :aa-17, :type :normal, :multiplicity 1 :bind {:type :a}}
-     {:aid 18, :source :m2-complete-job, :target :m2-starved, :name :aa-18, :type :normal, :multiplicity 1 :bind {:type :a}}
-     {:aid 19, :source :m2-start-job, :target :m2-busy, :name :aa-19, :type :normal, :multiplicity 1 :bind {:type :a}}
-     {:aid 20, :source :m2-starved, :target :m2-start-job, :name :aa-20, :type :normal, :multiplicity 1
-      :bind {:type :a :act :elim}}]}))
-
