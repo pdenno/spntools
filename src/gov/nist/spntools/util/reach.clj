@@ -81,12 +81,12 @@
 (defn note-link-visited
   "Links are tracked by :M and :fire because (1) :fire could be a path,
    or (2) :rate might differ, or (3) good for diagnostics."
-  [list link]
+  [lis link]
   (let [key (vector (:M link) (:fire link))]
     #_(when (visited? list link)
       (swap! +revisited+ inc)
       (println "Link already visited:" link)) ; keep
-    (assoc list key link)))
+    (assoc lis key link)))
 
 ;;; The target marking is completely specified by the source (marking at tail) and the transition.
 (defn next-links
@@ -701,17 +701,21 @@
 ;;; Reachability Graph (includes non-tangible states).
 ;;; Much simpler than tangible reachability graph! No paths. 
 (defn simple-reach
-  "Calculate the reachability graph (including non-tangible states) of the argument PN."
+  "Calculate the reachability graph (including non-tangible states) of 
+   the argument PN, treating all transitions as timed."
   [pn]
-  (let [pn (renumber-pids pn)
+  (let [pn (-> pn 
+               renumber-pids
+               (update :transitions
+                       #(vec (map (fn [t] (assoc t :type :exponential)) %))))
         nexts (next-links pn (:initial-marking pn))]
-    (loop [visited  (note-link-visited {} (first nexts))
+    (loop [visited  {}
            to-visit nexts]
       (if (empty? to-visit)
         (vals visited)
         (let [new-links (next-links pn (-> to-visit first :Mp) visited)]
           (recur
-           (reduce #(note-link-visited %1 %2) visited new-links)
+           (note-link-visited visited (first to-visit))
            (if (empty? new-links)
              (next to-visit)
              (into new-links (rest to-visit)))))))))
