@@ -1,6 +1,7 @@
 (ns gov.nist.spntools.core
   (:require [clojure.data.xml :as xml :refer (parse-str)]
             [clojure.pprint :refer (cl-format pprint pp)]
+            [clojure.spec.alpha :as s]
             [gov.nist.spntools.util.reach :as pnr :refer (reachability)]
             [gov.nist.spntools.util.pnml :as pnml :refer (read-pnml reorder-places)]
             [gov.nist.spntools.util.utils :as pnu :refer :all]

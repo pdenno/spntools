@@ -1,6 +1,7 @@
 (ns gov.nist.spntools.util.utils
   (:require [clojure.data.xml :as xml :refer (parse-str)]
-            [clojure.pprint :refer (cl-format pprint pp)]))
+            [clojure.pprint :refer (cl-format pprint pp)]
+            [clojure.spec.alpha :as s]))
 
 #?(:clj
    (defmacro pn-ok->
@@ -43,6 +44,22 @@
 
 ;;;=== Petri Nets =========================
 (def +obj-cnt+ (atom 0))
+
+(s/def ::type keyword?)
+(s/def ::target keyword?)
+(s/def ::source keyword?)
+(s/def ::multiplicity (s/and integer? pos?))
+(s/def ::aid (s/and integer? pos?))
+(s/def ::tid (s/and integer? pos?))
+(s/def ::pid (s/and integer? pos?))
+(s/def ::name keyword?)
+(s/def ::arc (s/keys :req-un [::aid ::source ::target ::name ::multiplicity]))
+(s/def ::transition (s/keys :req-un [::name ::tid ::type ::rate]))
+(s/def ::place (s/keys :req-un [::name ::pid ::initial-tokens]))
+(s/def ::transitions (s/coll-of ::transition :kind vector?))
+(s/def ::arcs (s/coll-of ::arc :kind vector?))
+(s/def ::places (s/coll-of ::place :kind vector?))
+(s/def ::pn (s/keys :req-un [::places ::arcs ::transitions]))
 
 (defn pn?
   "If the argument is a Petri net, return it; otherwise return false."
