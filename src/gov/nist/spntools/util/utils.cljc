@@ -45,24 +45,27 @@
 ;;;=== Petri Nets =========================
 (def +obj-cnt+ (atom 0))
 
-(s/def ::type keyword?)
+;;; POD clojure.spec question. How do I handle the same keyword :type used for mulitple purposes?
+;;; :type in arcs is (:normal / :inhibitor). :type in transitions is (:exponential / :immediate). 
+(s/def ::type (fn [t] (some #(= t %) [:normal :inhibitor :exponential :immediate])))
 (s/def ::target keyword?)
 (s/def ::source keyword?)
 (s/def ::multiplicity (s/and integer? pos?))
-(s/def ::aid (s/and integer? pos?))
-(s/def ::tid (s/and integer? pos?))
-(s/def ::pid (s/and integer? pos?))
+(s/def ::aid (s/and integer? #(not (neg? %))))
+(s/def ::tid (s/and integer? #(not (neg? %))))
+(s/def ::pid (s/and integer? #(not (neg? %))))
 (s/def ::name keyword?)
 (s/def ::arc (s/keys :req-un [::aid ::source ::target ::name ::multiplicity]))
 (s/def ::transition (s/keys :req-un [::name ::tid ::type ::rate]))
 (s/def ::place (s/keys :req-un [::name ::pid ::initial-tokens]))
-(s/def ::transitions (s/coll-of ::transition :kind vector?))
-(s/def ::arcs (s/coll-of ::arc :kind vector?))
-(s/def ::places (s/coll-of ::place :kind vector?))
+(s/def ::transitions (s/coll-of ::transition :kind vector? :min-count 1))
+(s/def ::arcs (s/coll-of ::arc :kind vector? :min-count 1))
+(s/def ::places (s/coll-of ::place :kind vector? :min-count 1))
 (s/def ::pn (s/keys :req-un [::places ::arcs ::transitions]))
 
 (defn pn?
-  "If the argument is a Petri net, return it; otherwise return false."
+  "If the argument is a Petri net, return it; otherwise return false
+   Used where s/spec would be too demanding (eg. when building PNs)."
   [obj]
   (and (:places obj) (:transitions obj) (:arcs obj) obj))
 
@@ -85,20 +88,20 @@
   "Return the arcs into the named object."
   [pn name]
   (assert (keyword? name))
-  (assert (pn? pn))
+  (s/assert ::pn pn)
   (filter #(= (:target %) name) (:arcs pn)))
 
 (defn arcs-outof
   "Return the arcs exiting the named object."
   [pn name]
   (assert (keyword? name))
-  (assert (pn? pn))
+  (s/assert ::pn pn)
   (filter #(= (:source %) name) (:arcs pn)))
 
 (defn name2obj
   [pn name]
   (assert (keyword? name))
-  (assert (pn? pn))
+  (s/assert ::pn pn)
   (or 
    (some #(when (= name (:name %)) %) (:places pn))
    (some #(when (= name (:name %)) %) (:transitions pn))
@@ -109,7 +112,7 @@
 (defn follow-path
   "Return a sequence of places, transitions, arcs forward of OBJ."
   [pn obj]
-  (assert (pn? pn))
+  (s/assert ::pn pn)
   (cond (:tid obj) (arcs-outof pn (:name obj)),
         (:pid obj) (arcs-outof pn (:name obj)),
         (:aid obj) (if (contains? @*visited* (:target obj))
@@ -120,7 +123,7 @@
 (defn follow-path-back
   "Return a sequence of places, transitions, arcs forward of OBJ."
   [pn obj]
-  (assert (pn? pn))
+  (s/assert ::pn pn)
   (cond (:tid obj) (arcs-into pn (:name obj)),
         (:pid obj) (arcs-into pn (:name obj)),
         (:aid obj) (if (contains? @*visited* (:source obj))
@@ -145,7 +148,7 @@
   "Return the paths from FROM to TO (both are names of places or transitions) 
    in exactly STEPS steps (counting places, transitions and arcs)."
   [pn from to nsteps & {:keys [back?]}]
-  (assert (pn? pn))
+  (s/assert ::pn pn)
   (binding [*path-to* (atom [])
             *visited* (atom #{from})]
     (paths-to-aux pn (name2obj pn from) to nsteps :back? back?)
@@ -159,13 +162,13 @@
 (defn immediate?
   [pn name]
   (assert (keyword? name) (cl-format nil "~S is not a keyword" name))
-  (assert (pn? pn))
+  (s/assert ::pn pn)
   (= :immediate (:type (name2obj pn name))))
 
 (defn eliminate-pn
   "Transform the PN graph by eliminating the argument element."
   [pn elem]
-  (assert (pn? pn))
+  (s/assert ::pn pn)
   (cond (:pid elem) ; It is a place.
         (assoc pn :places (vec (remove #(= % elem) (:places pn))))
         (:tid elem) ; It is a transition
@@ -176,7 +179,7 @@
 (defn add-pn
   "Transform the PN graph by adding the argument element."
   [pn elem]
-  (assert (pn? pn))
+  (s/assert ::pn pn)
   (cond (:pid elem) ; It is a place.
         (assoc pn :places (conj (:places pn) elem))
         (:tid elem) ; It is a transition
@@ -189,9 +192,9 @@
 (def +next-aid+ (atom 0))
 (def +next-pid+ (atom 0))
 (defn reset-ids! [pn]
-  (reset! +next-tid+ (if (empty? (:transitions pn)) 0 (apply max (map :tid (:transitions pn)))))
-  (reset! +next-aid+ (if (empty? (:arcs pn)) 0 (apply max (map :aid (:arcs pn)))))
-  (reset! +next-pid+ (if (empty? (:places pn)) 0 (apply max (map :pid (:places pn))))))
+  (reset! +next-tid+ (if (empty? (:transitions pn)) 1 (apply max (map :tid (:transitions pn)))))
+  (reset! +next-aid+ (if (empty? (:arcs pn)) 1 (apply max (map :aid (:arcs pn)))))
+  (reset! +next-pid+ (if (empty? (:places pn)) 1 (apply max (map :pid (:places pn))))))
 
 (defn next-tid [pn] (swap! +next-tid+ inc))
 (defn next-aid [pn] (swap! +next-aid+ inc))
@@ -246,7 +249,7 @@
   "Return a map {:marking-key <vector of place names> :initial-marking <vector of integers>}
    This doesn't care what the actual pid numbers are, just there relative ordering."
   [pn]
-  (assert (pn? pn))
+  (s/assert ::pn pn)
   (let [sorted (sort #(< (:pid %1) (:pid %2)) (:places pn))]
     {:marking-key (vec (map :name sorted))
      :initial-marking
@@ -255,7 +258,7 @@
 (defn reorder-markings
   "Reorder the markings calculated from the reachability graph so as to match a textbook example."
   [pn new-order]
-  (assert (pn? pn))
+  (s/assert ::pn pn)
   (let [sgraph (set (:marking-key pn))
         sorder (set new-order)
         isect (clojure.set/intersection sgraph sorder)]
@@ -353,7 +356,7 @@
   "Return the index of the named arc in pn. (For use with assoc-in, update-in, etc.)"
   [pn name]
   (assert (keyword? name))
-  (assert (pn? pn))
+  (s/assert ::pn pn)
   (loop [n 0
          arcs (:arcs pn)]
     (if (= name (:name (first arcs)))
@@ -364,7 +367,7 @@
   "Return the index of the named index in pn. (For use with assoc-in, update-in, etc.)"
   [pn name]
   (assert (keyword? name))
-  (assert (pn? pn))
+  (s/assert ::pn pn)
   (loop [n 0
          trans (:transitions pn)]
     (if (= name (:name (first trans)))
@@ -375,7 +378,7 @@
   "Return the index of the named index in pn. (For use with assoc-in, update-in, etc.)"
   [pn name]
   (assert (keyword? name))
-  (assert (pn? pn))
+  (s/assert ::pn pn)
   (loop [n 0
          places (:places pn)]
     (if (= name (:name (first places)))
