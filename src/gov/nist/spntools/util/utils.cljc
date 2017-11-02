@@ -46,7 +46,9 @@
 (def +obj-cnt+ (atom 0))
 
 ;;; POD clojure.spec question. How do I handle the same keyword :type used for mulitple purposes?
-;;; :type in arcs is (:normal / :inhibitor). :type in transitions is (:exponential / :immediate). 
+;;; :type in arcs is (:normal / :inhibitor). :type in transitions is (:exponential / :immediate).
+
+
 (s/def ::type (fn [t] (some #(= t %) [:normal :inhibitor :exponential :immediate])))
 (s/def ::target keyword?)
 (s/def ::source keyword?)
@@ -62,6 +64,8 @@
 (s/def ::arcs (s/coll-of ::arc :kind vector? :min-count 1))
 (s/def ::places (s/coll-of ::place :kind vector? :min-count 1))
 (s/def ::pn (s/keys :req-un [::places ::arcs ::transitions]))
+
+(s/def ::marking (s/coll-of ::multiplicity :kind vector?))
 
 (defn pn?
   "If the argument is a Petri net, return it; otherwise return false
@@ -385,3 +389,19 @@
       n
       (recur (inc n) (next places)))))
 
+(defn set-marking
+  "Set the marking to the argument value."
+  [pn marking]
+  (s/assert ::pn pn)
+  (as-> pn ?pn
+    (assoc ?pn :initial-marking marking)
+    (update ?pn :places
+            #(mapv (fn [pl val] (assoc pl :initial-tokens val))
+                   %
+                   marking))))
+
+(s/fdef set-marking
+        :args (s/cat :pn ::pn :m ::marking)
+        :ret ::pn
+        :fn #(== (-> % :args :pn :places count)
+                 (-> % :args :m count)))

@@ -3,7 +3,9 @@
             [clojure.pprint :refer (cl-format pprint pp)]
             [clojure.core.matrix :as m :refer :all]
             [clojure.math.combinatorics :as combo]
-            [gov.nist.spntools.util.utils :refer :all]
+            [clojure.spec.alpha :as s]
+            [clojure.spec.test.alpha :as stest]
+            [gov.nist.spntools.util.utils :as util :refer :all]
             [gov.nist.spntools.util.pnml :as pnml :refer (read-pnml)]))
 
 ;;; To Do: Implement place capacity restrictions. (maybe)
@@ -77,7 +79,15 @@
   [pn M trn list]
   (get list (vector M trn)))
 
-#_(def +revisited+ "diagnostic" (atom 0))
+(s/def ::visited map?)
+(s/def ::trn keyword?)
+(s/def ::m vector?)
+(s/def ::pn ::util/pn)
+(s/fdef find-link
+        :args (s/cat :pn ::pn :M ::m :trn ::trn :list ::visited)
+        :ret  (s/or :map map? :nil nil?))
+
+;(def +revisited+ "diagnostic" (atom 0))
 (defn note-link-visited
   "Links are tracked by :M and :fire because (1) :fire could be a path,
    or (2) :rate might differ, or (3) good for diagnostics."
@@ -94,14 +104,14 @@
    which contain the argument state :M and unexplored states, :Mp reachable by firing :trans.
    Returned links have adjusted weights when transitions are immediate."
   ([pn mark] (next-links pn mark false))
-  ([pn mark clist]
+  ([pn mark visited]
    (if mark
      (let [trns
            (as-> (map :name (:transitions pn)) ?trns
              (filter #(fireable? pn mark %) ?trns)
              (if (some #(immediate? pn %) ?trns) (filter #(immediate? pn %) ?trns) ?trns)
-             ;; If clist specified, it tracks mark/trans already visited. Remove these.
-             (if clist (remove #(find-link pn mark % clist) ?trns) ?trns)) 
+             ;; If visited specified, it tracks mark/trans already visited. Remove these.
+             (if visited (remove #(find-link pn mark % visited) ?trns) ?trns))
            imm? (and (not-empty trns) (immediate? pn (first trns)))
            trs  (map #(name2obj pn %) trns)
            sum (when imm? (apply + (map :rate trs)))]
@@ -698,27 +708,43 @@
       pn
       (assoc pn :failure {:reason :live?}))))
 
+(defn k-bounding
+  "Filter links, returning only those for which :M and :Mp <= k."
+  [links k]
+  (->> links
+      (filter (fn [link] (every? #(<= % k) (:M  link))))
+      (filter (fn [link] (every? #(<= % k) (:Mp link))))
+      vec))
+
 ;;; Reachability Graph (includes non-tangible states).
 ;;; Much simpler than tangible reachability graph! No paths. 
 (defn simple-reach
   "Calculate the reachability graph (including non-tangible states) of 
-   the argument PN, treating all transitions as timed."
-  [pn]
-  (let [pn (-> pn 
-               renumber-pids
-               (update :transitions
-                       #(vec (map (fn [t] (assoc t :type :exponential)) %))))
-        nexts (next-links pn (:initial-marking pn))]
-    (loop [visited  {}
-           to-visit nexts]
-      (if (empty? to-visit)
-        (vals visited)
-        (let [new-links (next-links pn (-> to-visit first :Mp) visited)]
-          (recur
-           (note-link-visited visited (first to-visit))
-           (if (empty? new-links)
-             (next to-visit)
-             (into new-links (rest to-visit)))))))))
+   the argument PN, treating all transitions as timed and bounding k."
+  ([pn] (simple-reach pn 10))
+  ([pn max-k]
+   (let [k-limited? (atom false)
+         pn (-> pn 
+                renumber-pids
+                (update :transitions
+                        #(vec (map (fn [t] (assoc t :type :exponential)) %))))
+         nexts1 (next-links pn (:initial-marking pn))
+         nexts2 (k-bounding nexts1 max-k)]
+     (when (not= (count nexts1) (count nexts2))
+       (reset! k-limited? true))
+     (loop [visited  {}
+            to-visit nexts2]
+       (if (empty? to-visit)
+         {:rgraph (vals visited) :k-limited? @k-limited?}
+         (let [nexts1 (next-links pn (-> to-visit first :Mp) visited)
+               nexts2 (k-bounding nexts1 max-k)]
+           (when (not= (count nexts1) (count nexts2))
+             (reset! k-limited? true))
+           (recur
+            (note-link-visited visited (first to-visit))
+            (if (empty? nexts2)
+              (next to-visit)
+              (into nexts2 (rest to-visit))))))))))
 
 #_(defn marks2links
   "Return the path vector of links corresponding to the argument path vector of marks.
@@ -733,5 +759,3 @@
     (if (every? identity result)
       result
       (throw (ex-info "Bad link-path" {:marks marks})))))
-
-
