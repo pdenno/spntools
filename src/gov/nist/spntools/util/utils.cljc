@@ -405,3 +405,15 @@
         :ret ::pn
         :fn #(== (-> % :args :pn :places count)
                  (-> % :args :m count)))
+
+(defn m-mp-mp-m-valid?
+  "Check a reachability graph for m-mp and mp-m errors. 
+   Okay, the name is a bit silly."
+  [rgraph]
+   (let [m  (set (distinct (map #(:M %)  rgraph)))
+         mp (set (distinct (map #(:Mp %) rgraph)))
+         m-mp (clojure.set/difference m mp)
+         mp-m (clojure.set/difference mp m)]
+     (and (empty? m-mp)
+          (empty? mp-m))))
+

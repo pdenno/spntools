@@ -193,7 +193,6 @@
                            :set-size (count (:explored res))}),
       :else res)))
 
-
 ;;; If there is a point to saving the whole path, rather than just starting a new one for each next,
 ;;; it is that you might want to travel up it to find the root for cycles of vanishing states.
 ;;; However, I think I'll have to rebuild this from t-rates/:explored since otherwise I'm creating long
