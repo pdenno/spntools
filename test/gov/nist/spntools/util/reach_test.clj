@@ -30,6 +30,7 @@
              pnr/renumber-pids
              pnr/simple-reach
              :rgraph
+             (->> (map #(dissoc % :rate-fn)))
              set)))))
 
 (deftest reachability-test
