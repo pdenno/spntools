@@ -29,6 +29,7 @@
              pnml/read-pnml
              pnr/renumber-pids
              pnr/simple-reach
+             :rgraph
              set)))))
 
 (deftest reachability-test

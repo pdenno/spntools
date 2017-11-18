@@ -2,8 +2,8 @@
   (:require [clojure.test :refer :all]
             [clojure.core.matrix :as m :refer :all]
             [gov.nist.spntools.core :refer :all]
-            [gov.nist.spntools.util.pnml :refer :all]
-            [gov.nist.spntools.util.utils :refer :all]
+            [gov.nist.spntools.util.pnml :as pnml :refer :all]
+            [gov.nist.spntools.util.utils :as pnu :refer :all]
             [gov.nist.spntools.util.reach :as pnr :refer :all]))
 
 #_(deftest gauss-jordan-elimination
@@ -69,7 +69,7 @@
           "data/join3-reduce-v2.xml"
           {:P1 0.29412 :P2 0.29412 :P3 0.29412 :Pjoin 0.35294 :Pstart 1.05882})
          {:fname "data/join3-reduce-v2.xml" :ok? true}))
-    (is (= (steady-state-ok?
+  (is (= (steady-state-ok?
           "data/marsan69.xml"
           {:P1 0.16667 :P2 0 :P3 0.33333 :P4 0.33333 :P5 0.16667
            :P6 0.16667 :P7 0 :P8 0.16667 :P9 0.16667})
@@ -96,7 +96,7 @@
           {:buffer 0.44752 :m1-blocked 0.21198 :m1-busy 0.78802
            :m2-busy 0.70922 :m2-starved 0.29078})
          {:fname "data/m2-inhib-bas.xml" :ok? true}))
-  (is (= (steady-state-ok? ; POD I haven't tested this one yet. 
+  (is (= (steady-state-ok? 
           "data/m3-feeder.xml"
            {:m2-feed-buffer        0.88623
             :m2-blocked            0.00734
@@ -147,8 +147,38 @@
             [0.0 0.0 1.0 0.0]])
 
 (deftest timeless-trap
-  (is (= :timeless-trap
-         (-> "data/2017-05-06-five.xml"
-             run-all
-             :failure
-             :reason))))
+  (testing "that timeless traps are identified."
+    (is (= :timeless-trap
+           (-> "data/2017-05-06-five.xml"
+               run-all
+               :failure
+               :reason)))))
+
+(deftest parametric-Q-matrix
+  (testing "that the parametric code works, at least on a PN with no immediate transitions."
+    (let [pn (-> (pnml/read-pnml "data/m6.xml")
+                 (pnml/reorder-places [:Pact1 :Preq1 :Pacc1 :Pidle :Pact2 :Preq2 :Pacc2])
+                 (pnr/reachability)) 
+          rate-table (reduce (fn [t e] (assoc t (:name e) (:rate e))) {} (:transitions pn))
+          ordering [[1 0 0 1 1 0 0] [0 1 0 1 1 0 0] [0 0 1 0 1 0 0] [0 0 1 0 0 1 0]
+                    [0 1 0 1 0 1 0] [1 0 0 1 0 1 0] [1 0 0 0 0 0 1] [0 1 0 0 0 0 1]]]
+      (is (= (-> (Q-matrix pn :force-ordering ordering :rates rate-table)
+                 :Q
+                 m/to-nested-vectors)
+             [[-3.0 1.0 0.0 0.0 0.0 2.0 0.0 0.0]
+              [0.0 -102.0 100.0 0.0 2.0 0.0 0.0 0.0]
+              [10.0 0.0 -12.0 2.0 0.0 0.0 0.0 0.0]
+              [0.0 0.0 0.0 -10.0 0.0 10.0 0.0 0.0]
+              [0.0 0.0 0.0 100.0 -200.0 0.0 0.0 100.0]
+              [0.0 0.0 0.0 0.0 1.0 -101.0 100.0 0.0]
+              [5.0 0.0 0.0 0.0 0.0 0.0 -6.0 1.0]
+              [0.0 5.0 0.0 0.0 0.0 0.0 0.0 -5.0]]))))
+  (testing "that the parametric code works for PNs with vanishing states."
+    (let [pn (-> (pnml/read-pnml "data/marsan69.xml")
+                 (pnr/reachability))
+          rate-table (reduce (fn [t e] (assoc t (:name e) (:rate e))) {} (:transitions pn))]
+      (is (= (Q-matrix pn) (Q-matrix pn :rates rate-table))))))
+
+  
+
+    

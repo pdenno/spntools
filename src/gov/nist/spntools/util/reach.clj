@@ -121,13 +121,18 @@
                 {:M mark
                  :fire (:name tr)
                  :Mp (next-mark pn mark (:name tr))
+                 :rate-fn (if imm?
+                            (fn [rates]
+                              (/ ((:name tr) rates)
+                                 (apply + (map (fn [r] (r rates)) trns))))
+                            (fn [rates] ((:name tr) rates)))
                  :rate (if imm? (/ (:rate tr) sum) (:rate tr))})
               trs))))
      nil)))
 
 (def +k-bounded+ (atom 10)) ; Maybe better than (or addition to) k-bounded would be size of :explored
 (def +max-rs+  "reachability set size" (atom 5000)) 
-(declare renumber-pids check-reach tangible? vanishing? in-loop-checks initial-tangible-state reachability-loop
+(declare renumber-pids check-reach tangible? vanishing? in-loop-checks initial-tangible-state tangible-reach-graph
          summarize-reach reach-reduce-vpaths reach-step-tangible conj-t-rate into-v-rates)
 
 (def ^:dynamic *loop-count* (atom 0))
@@ -142,7 +147,7 @@
     (renumber-pids ?pn)
     (initial-tangible-state ?pn)
     (binding [*loop-count* (atom 0)]
-      (let [res (reachability-loop ?pn)]
+      (let [res (tangible-reach-graph ?pn)]
         (as-> ?pn ?pn2
             (if (contains? res :failure)
               (assoc ?pn2 :failure (:failure res))
@@ -152,7 +157,7 @@
     (summarize-reach ?pn)
     (check-reach ?pn)))
 
-(defn reachability-loop [pn]
+(defn tangible-reach-graph [pn]
   "Calculate tangible reachability graph. pn is not touched except to report errors."
   (let [root (:initial-tangible pn)]
     (loop [res {:spaths (vec (map vector (next-links pn root)))
@@ -276,7 +281,7 @@
   vpath is a path of links, all elements of which are tangible. 
   Calls out for loops and calculation when a terminal is reached. 
   Return a map with :new-vpath-rates and :new-St. DOES NOT CHANGE pn.
-  Argument search-paths is the 'global' search path used by the reachability-loop."
+  Argument search-paths is the 'global' search path used by the tangible-reach-graph."
   [pn vpath search-paths explored] ; POD setting :vexplored to explored is going to print revisited warnings.
   (loop [fp {:new-vpath-rates [] :vexplored explored :cycle? false, :init? true, 
              :paths (vector vpath) :loop false :new-St [], :tang? false
@@ -435,6 +440,16 @@
                            (:rate (some #(when (= (:fire %) f) %)
                                         (next-links pn (:M l)))))
                          path fired))
+
+     :rate-fn (fn [rates] ; POD new, this was ":vrate-fn"
+                (apply * (map (fn [l f]
+                                ;; The some returns a link that has a rate-fn.
+                                ;; *That* rate-fn can be used -- not the direct one that does
+                                ;; not consider competition for rates among immediate trans. 
+                                ((:rate-fn (some #(when (= (:fire %) f) %)
+                                                 (next-links pn (:M l))))
+                                 rates))
+                              path fired)))
      :cycle? false}))
 
 (defn clip-head-to-root
@@ -453,7 +468,7 @@
 
 (declare vanish-matrices Q-prime)
 ;;;================================================================================
-;;; This is toplevel for reduction of loops; called from vanish-paths.
+;;; This is toplevel for reduction of loops; called from follow-vpath-loop.
 (defn loop-reduce-vpath
   "Top-level calculation of vpaths for loops. Creates a structure for use by vanish-paths"
   [pn vpath]
@@ -463,43 +478,74 @@
       (as-> (vanish-matrices pn vpath tt) ?lp
         (assoc ?lp :lv-rates ; :loop! is used later on to identify loops.
                (map (fn [mp r] {:M (-> vpath first :M) :fire :loop! :Mp mp :rate r})
-                    (:Qt-states ?lp)
+                    (:Qt-states ?lp)  ; <--- Ha! 2017-11-17
                     (:loop-rates ?lp)))
         (assoc ?lp :lv-St (:terms tt))
         (assoc ?lp :vexplored (:texplored tt))))))
 
 (defn vanish-matrices
-  "Compute rates between a root a every tangible terminated in paths with cycles."
+  "Compute rates between a root and every tangible terminated in paths with cycles."
   [pn root-path tt]
-  (let [texplored (-> tt :texplored vals)]
+  (let [texplored (-> tt :texplored vals)
+        Qt-states (map :M (:terms tt))
+        Qtv-states (distinct (filter #(vanishing? pn %) (map :M texplored)))]
     (as-> {} ?calc
-      (assoc ?calc :Qt-states (map :M (:terms tt)))
       (assoc ?calc :Qt (map (fn [target]
                               (reduce (fn [r link] (+ r (:rate link)))
                                       0.0
                                       (filter #(and (= (first root-path) (:M %)) (= target (:Mp %)))
                                               texplored)))
-                            (:Qt-states ?calc)))
-      (assoc ?calc :Qtv-states (distinct (filter #(vanishing? pn %) (map :M texplored))))
+                            Qt-states))
+      (assoc ?calc :Qt-fn (fn [rates] ; POD new
+                            (map (fn [target]
+                                   (reduce (fn [r link] (+ r (:rate link)))
+                                           0.0
+                                           (filter #(and (= (first root-path) (:M %)) (= target (:Mp %)))
+                                                   texplored)))
+                                 Qt-states)))
       (assoc ?calc :Qtv (map (fn [target] (reduce (fn [r link] (+ r (:rate link)))
                                                   0.0 
                                                   (filter #(and (= (:M (first root-path)) (:M %)) (= target (:Mp %)))
                                                           texplored)))
-                                  (:Qtv-states ?calc)))
+                             Qtv-states))
+      (assoc ?calc :Qtv-fn (fn [rates] ; POD new
+                             (map (fn [target] (reduce (fn [r link] (+ r ((:fire link) rates)))
+                                                       0.0 
+                                                       (filter #(and (= (:M (first root-path)) (:M %)) (= target (:Mp %)))
+                                                               texplored)))
+                                  Qtv-states)))
       (assoc ?calc :Pv (map (fn [r]
                               (map (fn [c] (reduce (fn [sum link] (+ sum (:rate link)))
                                                    0.0
                                                    (filter #(and (= (:M %) r) (= (:Mp %) c))
                                                            texplored)))
-                                   (:Qtv-states ?calc)))
-                            (:Qtv-states ?calc)))
+                                   Qtv-states))
+                            Qtv-states))
+      (assoc ?calc :Pv-fn (fn [rates] ; POD new
+                            (map (fn [r]
+                                   (map (fn [c] (reduce (fn [sum link] (+ sum ((:fire link) rates)))
+                                                        0.0
+                                                        (filter #(and (= (:M %) r) (= (:Mp %) c))
+                                                                texplored)))
+                                        Qtv-states))
+                                 Qtv-states)))
       (assoc ?calc :Pvt (map (fn [r]
                                (map (fn [c] (reduce (fn [sum link] (+ sum (:rate link)))
                                                     0.0
                                                     (filter #(and (= (:M %) r) (= (:Mp %) c))
                                                             texplored)))
-                                    (:Qt-states ?calc)))
-                             (:Qtv-states ?calc)))
+                                    Qt-states))
+                             Qtv-states))
+      (assoc ?calc :Pvt-fn (fn [rates] ; POD new
+                             (map (fn [r] 
+                                    (map (fn [c] (reduce (fn [sum link] (+ sum ((:fire link) rates)))
+                                                         0.0
+                                                         (filter #(and (= (:M %) r) (= (:Mp %) c))
+                                                                 texplored)))
+                                         Qt-states)
+                                    Qtv-states))))
+      (assoc ?calc :Qt-states Qt-states) ; Needed elsewhere
+      ;; POD next step for parametric loops is to follow through with a :loop-rates-fn
       (assoc ?calc :loop-rates (Q-prime (:Qt ?calc) (:Qtv ?calc) (:Pv ?calc) (:Pvt ?calc))))))
 
 (def +max-steps-for-tt+ "Max number of steps to take in terminating-tangibles before
