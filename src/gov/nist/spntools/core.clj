@@ -131,12 +131,3 @@
                              0.0
                              steady)))
                  mk))))
-
-(defn quick-test []
-  (let [result (:avg-tokens-on-place (pn-steady-state (read-pnml "data/qo10.xml")))
-        correct  {:P1 0.111111, :P2 0.0, :P3 0.0, :P4 0.0, :P5 0.416667, 
-                  :P6 0.333333, :P7 0.083333,  :P8 0.055556}]
-        (every? (fn [[key val]]
-                  (=* val (get correct key) 0.0001))
-                result)))
-
