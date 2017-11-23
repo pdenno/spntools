@@ -363,9 +363,9 @@
   (s/assert ::pn pn)
   (loop [n 0
          arcs (:arcs pn)]
-    (if (= name (:name (first arcs)))
-      n
-      (recur (inc n) (next arcs)))))
+    (cond (empty? arcs) nil
+          (= name (:name (first arcs))) n
+          true (recur (inc n) (next arcs)))))
 
 (defn trans-index
   "Return the index of the named index in pn. (For use with assoc-in, update-in, etc.)"
@@ -374,9 +374,9 @@
   (s/assert ::pn pn)
   (loop [n 0
          trans (:transitions pn)]
-    (if (= name (:name (first trans)))
-      n
-      (recur (inc n) (next trans)))))
+    (cond (empty? trans) nil
+          (= name (:name (first trans))) n
+          true (recur (inc n) (next trans)))))
 
 (defn place-index
   "Return the index of the named index in pn. (For use with assoc-in, update-in, etc.)"
@@ -385,9 +385,9 @@
   (s/assert ::pn pn)
   (loop [n 0
          places (:places pn)]
-    (if (= name (:name (first places)))
-      n
-      (recur (inc n) (next places)))))
+    (cond (empty? places) nil
+          (= name (:name (first places))) n
+          true (recur (inc n) (next places)))))
 
 (defn set-marking
   "Set the marking to the argument value."
