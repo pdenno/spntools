@@ -755,41 +755,40 @@
 
 (defn k-bounding
   "Filter links, returning only those for which :M and :Mp <= k."
-  [links k]
+  [links max-marks]
   (->> links
-      (filter (fn [link] (every? #(<= % k) (:M  link))))
-      (filter (fn [link] (every? #(<= % k) (:Mp link))))
+      (filter (fn [link] (every? identity (map #(<= %1 %2) (:M  link) max-marks))))
+      (filter (fn [link] (every? identity (map #(<= %1 %2) (:Mp link) max-marks))))
       vec))
 
 ;;; Reachability Graph (includes non-tangible states).
 ;;; Much simpler than tangible reachability graph! No paths. 
 (defn simple-reach
   "Calculate the reachability graph (including non-tangible states) of 
-   the argument PN, treating all transitions as timed and bounding k."
-  ([pn] (simple-reach pn 10))
-  ([pn max-k]
-   (let [k-limited? (atom false)
-         pn (-> pn 
-                renumber-pids
-                (update :transitions
-                        #(vec (map (fn [t] (assoc t :type :exponential)) %))))
-         nexts1 (next-links pn (:initial-marking pn))
-         nexts2 (k-bounding nexts1 max-k)]
-     (when (not= (count nexts1) (count nexts2))
-       (reset! k-limited? true))
-     (loop [visited  {}
-            to-visit nexts2]
-       (if (empty? to-visit)
-         {:rgraph (vals visited) :k-limited? @k-limited?}
-         (let [nexts1 (next-links pn (-> to-visit first :Mp) visited)
-               nexts2 (k-bounding nexts1 max-k)]
-           (when (not= (count nexts1) (count nexts2))
-             (reset! k-limited? true))
-           (recur
-            (note-link-visited visited (first to-visit))
-            (if (empty? nexts2)
-              (next to-visit)
-              (into nexts2 (rest to-visit))))))))))
+   the argument PN, treating all transitions as timed and bounding k.
+   max-marks is a vector providing the max-k value for each place in the 
+   :marking-key."
+  [pn max-marks]
+  (let [k-limited? (atom false)
+        pn (update pn :transitions
+                   #(vec (map (fn [t] (assoc t :type :exponential)) %)))
+        nexts1 (next-links pn (:initial-marking pn))
+        nexts2 (k-bounding nexts1 max-marks)]
+    (when (not= (count nexts1) (count nexts2))
+      (reset! k-limited? true))
+    (loop [visited  {}
+           to-visit nexts2]
+      (if (empty? to-visit)
+        {:rgraph (vals visited) :k-limited? @k-limited?}
+        (let [nexts1 (next-links pn (-> to-visit first :Mp) visited)
+              nexts2 (k-bounding nexts1 max-marks)]
+          (when (not= (count nexts1) (count nexts2))
+            (reset! k-limited? true))
+          (recur
+           (note-link-visited visited (first to-visit))
+           (if (empty? nexts2)
+             (next to-visit)
+             (into nexts2 (rest to-visit)))))))))
 
 #_(defn marks2links
   "Return the path vector of links corresponding to the argument path vector of marks.
