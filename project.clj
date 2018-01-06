@@ -4,7 +4,7 @@
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   ;:global-vars {*warn-on-reflection* true}
-  :dependencies [[org.clojure/clojure "1.8.0"]
+  :dependencies [[org.clojure/clojure "1.9.0"]
                  [org.clojure/data.xml "0.0.8"]
                  [org.clojure/math.combinatorics "0.1.4"]
                  [net.mikera/vectorz-clj "0.47.0"]

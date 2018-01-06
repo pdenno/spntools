@@ -14,14 +14,14 @@
   (testing "whether simple reach calculates the right graph."
     (is (=
          #{{:M [0 0 1 1 0], :fire :m1-complete-job, :Mp [0 1 0 1 0], :rate 0.9}
-           {:M [1 1 0 0 1], :fire :m2-start-job, :Mp [0 1 0 1 0], :rate 1.0}
+           {:M [1 1 0 0 1], :fire :m2-start-job,    :Mp [0 1 0 1 0], :rate 1.0}
            {:M [1 0 1 0 1], :fire :m1-complete-job, :Mp [1 1 0 0 1], :rate 0.9}
-           {:M [0 1 0 1 0], :fire :m1-start-job, :Mp [1 0 1 1 0], :rate 1.0}
+           {:M [0 1 0 1 0], :fire :m1-start-job,    :Mp [1 0 1 1 0], :rate 1.0}
            {:M [0 0 1 0 1], :fire :m1-complete-job, :Mp [0 1 0 0 1], :rate 0.9}
            {:M [1 0 1 1 0], :fire :m1-complete-job, :Mp [1 1 0 1 0], :rate 0.9}
-           {:M [1 0 1 0 1], :fire :m2-start-job, :Mp [0 0 1 1 0], :rate 1.0}
+           {:M [1 0 1 0 1], :fire :m2-start-job,    :Mp [0 0 1 1 0], :rate 1.0}
            {:M [1 0 1 1 0], :fire :m2-complete-job, :Mp [1 0 1 0 1], :rate 1.0}
-           {:M [0 1 0 0 1], :fire :m1-start-job, :Mp [1 0 1 0 1], :rate 1.0}
+           {:M [0 1 0 0 1], :fire :m1-start-job,    :Mp [1 0 1 0 1], :rate 1.0}
            {:M [1 1 0 1 0], :fire :m2-complete-job, :Mp [1 1 0 0 1], :rate 1.0}
            {:M [0 1 0 1 0], :fire :m2-complete-job, :Mp [0 1 0 0 1], :rate 1.0}
            {:M [0 0 1 1 0], :fire :m2-complete-job, :Mp [0 0 1 0 1], :rate 1.0}}
