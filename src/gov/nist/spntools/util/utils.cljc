@@ -209,6 +209,26 @@
   [imm key suffix]
   (keyword (str (name imm) "-" (name key) suffix)))
 
+(defn name-with-prefix
+  "Return the next name string with PREFIX thus 
+   (name-with-prefix pn 'wait') might return 'wait-1'.
+   AVOID is other names (keywords) to avoid, perhaps because they
+   are about to be added to the PN."
+  ([pn prefix] (name-with-prefix pn prefix []))
+  ([pn prefix avoid] 
+   (let [regex (re-pattern (format "^%s-(\\d+)" prefix))
+         used (-> (map :name (:places pn))
+                  (into (map :name (:arcs pn)))
+                  (into (map :name (:transitions pn)))
+                  (into avoid)
+                  (->>
+                   (map name)
+                   (filter #(re-matches regex %))
+                   (map #(re-matches regex %))
+                   (map #(-> % second read-string))))
+         id (if (empty? used) 1 (inc (apply max used)))]
+     (keyword (format "%s-%s" prefix id)))))
+
 ;;; Naming convention for transitions: who is ahead of you?
 (defn new-name-ahead
   [imm owner ahead]
