@@ -221,11 +221,12 @@
                   (into (map :name (:arcs pn)))
                   (into (map :name (:transitions pn)))
                   (into avoid)
-                  (->>
-                   (map name)
-                   (filter #(re-matches regex %))
-                   (map #(re-matches regex %))
-                   (map #(-> % second read-string))))
+                  (->> (transduce ; POD overkill, but...
+                        (comp
+                         (map name)
+                         (filter #(re-matches regex %))
+                         (map #(re-matches regex %))
+                         (map #(-> % second read-string))))))
          id (if (empty? used) 1 (inc (apply max used)))]
      (keyword (format "%s-%s" prefix id)))))
 
