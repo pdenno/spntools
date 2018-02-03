@@ -1,7 +1,9 @@
 (ns gov.nist.spntools.util.utils
-  (:require [clojure.data.xml :as xml :refer (parse-str)]
-            [clojure.pprint :refer (cl-format pprint pp)]
-            [clojure.spec.alpha :as s]))
+  (:require [clojure.spec.alpha :as s]
+            [clojure.spec.test.alpha :as stest]
+            [clojure.data.xml :as xml :refer (parse-str)]
+            [clojure.pprint :refer (cl-format pprint pp)]))
+
 
 #?(:clj
    (defmacro pn-ok->
@@ -438,3 +440,5 @@
      (and (empty? m-mp)
           (empty? mp-m))))
 
+;;; instrument works best down here.
+(stest/instrument)

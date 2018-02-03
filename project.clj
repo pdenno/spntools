@@ -1,9 +1,9 @@
-(defproject gov.nist/spntools "0.1.0-SNAPSHOT"
+(defproject gov.nist/spntools "0.1.0"
   :description "Tools for generalized stochastic petri nets (GSPN), colored (CGSPN) and queueing PNs"
   :url "https://www.nist.gov/programs-projects/modeling-methodology-smart-manufacturing-systems"
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
-  ;:global-vars {*warn-on-reflection* true}
+  #_ #_ :global-vars {*warn-on-reflection* true}
   :dependencies [[org.clojure/clojure "1.9.0"]
                  [org.clojure/data.xml "0.0.8"]
                  [org.clojure/math.combinatorics "0.1.4"]
