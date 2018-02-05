@@ -1,8 +1,10 @@
 (ns gov.nist.spntools.util.pnml
-  (:require [clojure.data.xml :as xml :refer (parse-str)]
+  (:require #?(:cljs-problem [clojure.data.xml :as xml :refer (parse-str)])
             [clojure.pprint :refer (cl-format pprint)]
             [gov.nist.spntools.util.utils :refer :all]
             [clojure.string :as str]))
+
+;;; -------- 2018-02-05: Since I can't load clojure.data.xml in cljs, this file is rather useless. -------------
             
 ;;; To Do:
 ;;;       - Update IMM :rate (weight) information to be probabilities so that
@@ -90,26 +92,27 @@
    :multiplicity (get-multiplicity ar)})
 
 (declare rescale)
-(defn read-pnml
-  "Return a map providing the useful elements of a PNML file.
-  'useful' here means things used in steady-state computation."
-  [fname & {:keys [geom? #_rescale?]}]
-  (reset! +obj-cnt+ 0)
-  (as-> {:raw (-> fname slurp xml/parse-str :content first :content)} ?m
-    (assoc ?m :places (filter #(= :place (:tag %)) (:raw ?m)))
-    (assoc ?m :places (vec (map essential-place (:places ?m))))
-    (assoc ?m :transitions (filter #(= :transition (:tag %)) (:raw ?m)))
-    (assoc ?m :transitions (vec (map essential-transition (:transitions ?m))))
-    (assoc ?m :arcs (filter #(= :arc (:tag %)) (:raw ?m)))
-    (assoc ?m :arcs (vec (map essential-arc (:arcs ?m))))
-    (if (or geom? #_rescale?)
-      (assoc ?m :geom
-             (reduce (fn [m elem] (assoc m (get-id elem) (get-pos elem))) 
-                     {}
-                     (filter #(or (= (:tag %) :place) (= (:tag %) :transition)) (:raw ?m))))
-      ?m)
-    (dissoc ?m :raw)
-    #_(if rescale? (rescale ?m) ?m)))
+#?(:clj-problem
+   (defn read-pnml ; POD xml
+     "Return a map providing the useful elements of a PNML file.
+     'useful' here means things used in steady-state computation."
+     [fname & {:keys [geom? #_rescale?]}]
+     (reset! +obj-cnt+ 0)
+     (as-> {:raw (-> fname slurp xml/parse-str :content first :content)} ?m
+       (assoc ?m :places (filter #(= :place (:tag %)) (:raw ?m)))
+       (assoc ?m :places (vec (map essential-place (:places ?m))))
+       (assoc ?m :transitions (filter #(= :transition (:tag %)) (:raw ?m)))
+       (assoc ?m :transitions (vec (map essential-transition (:transitions ?m))))
+       (assoc ?m :arcs (filter #(= :arc (:tag %)) (:raw ?m)))
+       (assoc ?m :arcs (vec (map essential-arc (:arcs ?m))))
+       (if (or geom? #_rescale?)
+         (assoc ?m :geom
+                (reduce (fn [m elem] (assoc m (get-id elem) (get-pos elem))) 
+                        {}
+                        (filter #(or (= (:tag %) :place) (= (:tag %) :transition)) (:raw ?m))))
+         ?m)
+       (dissoc ?m :raw)
+       #_(if rescale? (rescale ?m) ?m))))
 
 (defn reorder-places
   "Reorder and renumber the places for easier comparison with textbook models."
@@ -132,26 +135,28 @@
 (def +given-pos+ (atom nil))
 
 (declare pn2xml place2xml transition2xml arc2xml)
-(defn write-pnml [pn & {:keys [file positions] :or {file "./data/foo.xml"}}]
-  (reset! +next-trans-pos+ {:x 0.0 :y 400.0})
-  (reset! +next-place-pos+ {:x 0.0 :y 20.0})
-  (reset! +given-pos+ (or positions {}))
-  (let [xml (pn2xml pn)] 
-    (with-open [writer (java.io.FileWriter. file)]
-      (xml/emit xml writer)))
-  true)
+#?(:cljs-problem
+   (defn write-pnml [pn & {:keys [file positions] :or {file "./data/foo.xml"}}] 
+     (reset! +next-trans-pos+ {:x 0.0 :y 400.0})
+     (reset! +next-place-pos+ {:x 0.0 :y 20.0})
+     (reset! +given-pos+ (or positions {}))
+     (let [xml (pn2xml pn)] 
+       (with-open [writer (java.io.FileWriter. file)]
+         (xml/emit xml writer)))
+     true))
 
-(defn pn2xml
-  [pn]
-  (xml/element
-   :pnml {}
-   (xml/element
-    :net {:id "Net-POD" :type "P/T net"}
-    (as-> [] ?xml
-      (conj ?xml (xml/element :token {:id "Default" :enabled "true" :red "0" :green "0" :blue "0"}))
-      (into ?xml (vec (map place2xml (:places pn))))
-      (into ?xml (vec (map transition2xml (:transitions pn))))
-      (into ?xml (vec (map arc2xml (:arcs pn))))))))
+#?(:cljs-problem
+   (defn pn2xml 
+     [pn]
+     (xml/element
+      :pnml {}
+      (xml/element
+       :net {:id "Net-POD" :type "P/T net"}
+       (as-> [] ?xml
+         (conj ?xml (xml/element :token {:id "Default" :enabled "true" :red "0" :green "0" :blue "0"}))
+         (into ?xml (vec (map place2xml (:places pn))))
+         (into ?xml (vec (map transition2xml (:transitions pn))))
+         (into ?xml (vec (map arc2xml (:arcs pn)))))))))
 
 ;;; The position of elements can be established by looking at 
 ;;; a file you want you PN to look like.
@@ -174,50 +179,51 @@
                        (assoc :label-x-off 20.0)
                        (assoc :label-y-off 5.0))))))
 
-(defn place2xml
-  [pl & {:keys [pos] :or {pos (pos!-or-given (:name pl))}}]
-  "Serialize a place. Optional pos is {:x <x-pos> :y <y-pos>}."
-  (update-pos! pl pos)
-  (xml/element
-   :place {:id (name (:name pl))}
-   (xml/element :graphics {}
-                (xml/element :position {:x (:x pos) :y (:y pos)}))
-   (xml/element :name {}
-                (xml/element :value {} (str (name (:name pl))))
-                (xml/element :graphics {}
-                             (xml/element :offset {:x (or (:label-x-off pos) 20.0)
-                                                   :y (or (:label-y-off pos) 5.0)})))
-   (xml/element :initialMarking {}
-                (xml/element :value {} (str "Default," (:initial-tokens pl)))
-                (xml/element :graphics {}
-                             (xml/element :offset {:x 0.0 :y 0.0})))
-   (xml/element :capacity {}
-                (xml/element :value {} "0"))))
+#?(:cljs-problem 
+   (defn place2xml
+     [pl & {:keys [pos] :or {pos (pos!-or-given (:name pl))}}]
+     "Serialize a place. Optional pos is {:x <x-pos> :y <y-pos>}."
+     (update-pos! pl pos)
+     (xml/element
+      :place {:id (name (:name pl))}
+      (xml/element :graphics {}
+                   (xml/element :position {:x (:x pos) :y (:y pos)}))
+      (xml/element :name {}
+                   (xml/element :value {} (str (name (:name pl))))
+                   (xml/element :graphics {}
+                                (xml/element :offset {:x (or (:label-x-off pos) 20.0)
+                                                      :y (or (:label-y-off pos) 5.0)})))
+      (xml/element :initialMarking {}
+                   (xml/element :value {} (str "Default," (:initial-tokens pl)))
+                   (xml/element :graphics {}
+                                (xml/element :offset {:x 0.0 :y 0.0})))
+      (xml/element :capacity {}
+                   (xml/element :value {} "0")))))
+#?(:cljs-problem
+   (defn transition2xml
+     [tr & {:keys [pos] :or {pos (pos!-or-given (:name tr) :trans? true)}}]
+     (update-pos! tr pos)
+     (xml/element
+      :transition {:id (name (:name tr))}
+      (xml/element :graphics {}
+                   (xml/element :position {:x (:x pos) :y (:y pos)}))
+      (xml/element :name {}
+                   (xml/element :value {} (str (name (:name tr))))
+                   (xml/element :graphics {}
+                                (xml/element :offset {:x (or (:label-x-off pos) 20.0)
+                                                      :y (or (:label-y-off pos) 5.0)})))
+      (xml/element :orientation {}
+                   (xml/element :value {} "90"))
+      (xml/element :rate {}
+                   (xml/element :value {} (:rate tr)))
+      (xml/element :timed {}
+                   (xml/element :value {} (if (= (:type tr) :immediate) "false" "true")))
+      (xml/element :infiniteServer {}
+                   (xml/element :value {} "false"))
+      (xml/element :priority {}
+                   (xml/element :value {} 1)))))
 
-(defn transition2xml
-  [tr & {:keys [pos] :or {pos (pos!-or-given (:name tr) :trans? true)}}]
-  (update-pos! tr pos)
-  (xml/element
-   :transition {:id (name (:name tr))}
-   (xml/element :graphics {}
-                (xml/element :position {:x (:x pos) :y (:y pos)}))
-   (xml/element :name {}
-                (xml/element :value {} (str (name (:name tr))))
-                (xml/element :graphics {}
-                             (xml/element :offset {:x (or (:label-x-off pos) 20.0)
-                                                   :y (or (:label-y-off pos) 5.0)})))
-   (xml/element :orientation {}
-                (xml/element :value {} "90"))
-   (xml/element :rate {}
-                (xml/element :value {} (:rate tr)))
-   (xml/element :timed {}
-                (xml/element :value {} (if (= (:type tr) :immediate) "false" "true")))
-   (xml/element :infiniteServer {}
-                (xml/element :value {} "false"))
-   (xml/element :priority {}
-                (xml/element :value {} 1))))
-
-(defn arc2xml
+#_(defn arc2xml
   [ar]
   (xml/element
    :arc {:id (str (name (:source ar)) " to " (name (:target ar)))

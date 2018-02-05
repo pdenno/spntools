@@ -1,9 +1,8 @@
 (ns gov.nist.spntools.core
-  (:require [clojure.data.xml :as xml :refer (parse-str)]
-            [clojure.pprint :refer (cl-format pprint pp)]
+  (:require [clojure.pprint :refer (cl-format pprint pp)]
             [clojure.spec.alpha :as s]
-            [gov.nist.spntools.util.reach :as pnr :refer (reachability)]
-            [gov.nist.spntools.util.pnml :as pnml :refer (read-pnml reorder-places)]
+            [gov.nist.spntools.util.reach :as pnr]
+            [gov.nist.spntools.util.pnml :as pnml]
             [gov.nist.spntools.util.utils :as pnu :refer :all]
             [clojure.core.matrix :as m :refer :all]
             [clojure.core.matrix.linear :as ml :refer (svd)]))
@@ -35,22 +34,23 @@
   (assoc pn :classification
          {:free-choice? (free-choice? pn)}))
 
-
 (declare pn-steady-state)
-(defn run-all
-  [filename]
-  "Diagnostic"
-  (-> filename
-      read-pnml
-      pn-steady-state))
+#?(:cljs-xml-problem
+   (defn run-all
+     [filename]
+     "Diagnostic"
+     (-> filename
+         read-pnml
+         pn-steady-state)))
 
-(defn run-ready
-  [filename]
-  "Diagnostic"
-  (-> filename
-      read-pnml
-      pnr/renumber-pids
-      pnr/initial-tangible-state))
+#?(:cljs-xml-problem
+   (defn run-ready
+     [filename]
+     "Diagnostic"
+     (-> filename
+         read-pnml
+         pnr/renumber-pids
+         pnr/initial-tangible-state)))
 
 ;(def m (run-ready "data/weights.xml"))
 
@@ -64,7 +64,7 @@
            Q-matrix
            steady-state-props))
 
-(def +max-states+ (atom 500)) ; 2017-04-29, initial-3.xml is 205 states. ; 2017-05-01 9-token.xml is 715. 
+(def +max-states+ 500) ; 2017-04-29, initial-3.xml is 205 states. ; 2017-05-01 9-token.xml is 715. 
 
 (defn Q-matrix
   "Calculate the infinitesimal generator matrix from the reachability graph.
@@ -74,7 +74,7 @@
         size (count states)
         state2ix (zipmap states (range size))]
     (as-pn-ok-> pn ?pn
-      (if (> size @+max-states+) (assoc ?pn :failure {:reason :Q-exceeds-max-states :states size}) ?pn)
+      (if (> size +max-states+) (assoc ?pn :failure {:reason :Q-exceeds-max-states :states size}) ?pn)
       (if (< size 2) (assoc ?pn :failure {:reason :Q-matrix-just-one-state}) ?pn)
       (assoc ?pn :Q (as-> (m/mutable (m/zero-matrix size size)) ?Q
                       (reduce (fn [q link]

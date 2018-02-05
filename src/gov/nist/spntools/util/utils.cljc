@@ -1,9 +1,7 @@
 (ns gov.nist.spntools.util.utils
   (:require [clojure.spec.alpha :as s]
             [clojure.spec.test.alpha :as stest]
-            [clojure.data.xml :as xml :refer (parse-str)]
             [clojure.pprint :refer (cl-format pprint pp)]))
-
 
 #?(:clj
    (defmacro pn-ok->
@@ -67,7 +65,8 @@
 (s/def ::places (s/coll-of ::place :kind vector? :min-count 1))
 (s/def ::pn (s/keys :req-un [::places ::arcs ::transitions]))
 
-(s/def ::marking (s/coll-of ::multiplicity :kind vector?))
+(s/def ::mark-val (s/int-in 0 ##Inf))
+(s/def ::marking (s/coll-of ::mark-val :kind vector?))
 
 (defn pn?
   "If the argument is a Petri net, return it; otherwise return false
@@ -212,7 +211,7 @@
   (keyword (str (name imm) "-" (name key) suffix)))
 
 (defn name-with-prefix
-  "Return the next name string with PREFIX thus 
+  "Return the 'next' name string with PREFIX. Thus 
    (name-with-prefix pn 'wait') might return 'wait-1'.
    AVOID is other names (keywords) to avoid, perhaps because they
    are about to be added to the PN."

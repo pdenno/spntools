@@ -1,12 +1,10 @@
 (ns gov.nist.spntools.util.reach
-  (:require [clojure.data.xml :as xml :refer (parse-str)]
-            [clojure.pprint :refer (cl-format pprint pp)]
+  (:require [clojure.pprint :refer (cl-format pprint pp)]
             [clojure.core.matrix :as m :refer :all]
             [clojure.math.combinatorics :as combo]
             [clojure.spec.alpha :as s]
             [clojure.spec.test.alpha :as stest]
-            [gov.nist.spntools.util.utils :as util :refer :all]
-            [gov.nist.spntools.util.pnml :as pnml :refer (read-pnml)]))
+            [gov.nist.spntools.util.utils :as util :refer :all]))
 
 ;;; To Do: Implement place capacity restrictions. (maybe)
 ;;;     * Instead of all these +max-rs+ etc. might want a system wide ^:dynamic
@@ -87,14 +85,14 @@
         :args (s/cat :pn ::pn :M ::m :trn ::trn :list ::visited)
         :ret  (s/or :map map? :nil nil?))
 
-;(def +revisited+ "diagnostic" (atom 0))
+;(def +revisited+ "diagnostic" 0)
 (defn note-link-visited
   "Links are tracked by :M and :fire because (1) :fire could be a path,
    or (2) :rate might differ, or (3) good for diagnostics."
   [lis link]
   (let [key (vector (:M link) (:fire link))]
     #_(when (visited? list link)
-      (swap! +revisited+ inc)
+      (alter-var-root #'+revisited+ inc)
       (println "Link already visited:" link)) ; keep
     (assoc lis key link)))
 
@@ -130,12 +128,13 @@
               trs))))
      nil)))
 
+;;; POD - Fix +k-bounded+, +max-rs+ (use of atom is misleading). 
 (def +k-bounded+ (atom 10)) ; Maybe better than (or addition to) k-bounded would be size of :explored
 (def +max-rs+  "reachability set size" (atom 5000)) 
 (declare renumber-pids check-reach tangible? vanishing? in-loop-checks initial-tangible-state tangible-reach-graph
          summarize-reach reach-reduce-vpaths reach-step-tangible conj-t-rate into-v-rates)
 
-(def ^:dynamic *loop-count* (atom 0))
+(def ^:dynamic *loop-count* 0) 
 
 (defn reachability
   "Compute the reachability graph (:M2Mp) depth-first starting at the initial marking, 
@@ -146,7 +145,7 @@
   (as-pn-ok-> pn ?pn
     (renumber-pids ?pn)
     (initial-tangible-state ?pn)
-    (binding [*loop-count* (atom 0)]
+    (binding [*loop-count* 0]
       (let [res (tangible-reach-graph ?pn)]
         (as-> ?pn ?pn2
             (if (contains? res :failure)
@@ -184,12 +183,12 @@
                        (reach-reduce-vpaths ?r pn)))))))))
 
 (defn in-loop-checks [res]
-  (swap! *loop-count* inc)
+  (set! *loop-count* (inc *loop-count*))
   (let [state (-> res :spaths first last :M)] 
     (cond
       (:timeless-trap? res)
       (assoc res :failure {:reason :timeless-trap}),
-      (> @*loop-count* 400) ; POD
+      (> *loop-count* 400) ; POD
       (assoc res :failure {:reason :loop-count-exceeded}),
       (and state (some #(> % @+k-bounded+) state))
       (assoc res :failure {:reason :not-k-bounded :marking state}),
@@ -273,7 +272,6 @@
     ;;    ?r)
     (dissoc ?r :collected-terms)))
 
-(def loop-count (atom 0))
 (declare follow-vpath-loop follow-vpath-to-tang cycle?)
 
 (defn follow-vpath
@@ -283,35 +281,36 @@
   Return a map with :new-vpath-rates and :new-St. DOES NOT CHANGE pn.
   Argument search-paths is the 'global' search path used by the tangible-reach-graph."
   [pn vpath search-paths explored] ; POD setting :vexplored to explored is going to print revisited warnings.
-  (loop [fp {:new-vpath-rates [] :vexplored explored :cycle? false, :init? true, 
-             :paths (vector vpath) :loop false :new-St [], :tang? false
-             :vpath vpath :search-paths search-paths}] ; These two for debugging.
-    (swap! loop-count inc)
-    ;;(reset! diag fp) ; keep
-    ;;(when (or (> @loop-count 50) (> (count (:paths fp)) 10) (> (count (-> fp :paths first)) 10)) (break "path length")) ; keep
-    ;; By not looking at :vexplored for next-links here, we'll pick up duplicate v-rates.
-    ;; OTOH not doing so will result in missing rates.
-    (if (contains? fp :failure) fp
-        (let [nexts (and (not-empty (:paths fp))
-                         (next-links pn (-> fp :paths first last :Mp)))
-              tang? (and (not-empty nexts) (tangible? pn (-> nexts first :M)))]
-          (as-> fp ?fp
-            (assoc ?fp :paths
-                   (cond (empty? nexts) (next (:paths ?fp)),
-                         ;; We don't call follow-vpath-to-tang with a tangible on the path
-                         (and (not (= 1 (count (-> ?fp :paths first)))) tang?) (:paths ?fp), 
-                         :else (into (vec (map #(conj (-> ?fp :paths first) %) nexts))
-                                     (rest (:paths ?fp)))))
-            (assoc ?fp :cycle? (cycle? pn (-> ?fp :paths first last)))
-            (assoc ?fp :tang? (if (:init? ?fp) false tang?))
-            ;; Don't put terminating tangibles on explored. Need to search from those. 
-            (reduce (fn [fp l] (update fp :vexplored #(note-link-visited % l))) ?fp (if (:tang? ?fp) [] nexts))
-            (assoc ?fp :init? false)
-            (if (empty? (:paths ?fp)) ?fp
-                (recur
-                 (cond (:cycle? ?fp) (follow-vpath-loop ?fp pn)
-                       (:tang? ?fp)  (follow-vpath-to-tang ?fp pn) 
-                       :else ?fp))))))))
+  (with-local-vars [loop-count 0]
+    (loop [fp {:new-vpath-rates [] :vexplored explored :cycle? false, :init? true, 
+               :paths (vector vpath) :loop false :new-St [], :tang? false
+               :vpath vpath :search-paths search-paths}] ; These two for debugging.
+      (var-set loop-count (inc @loop-count))
+      ;;(reset! diag fp) ; keep
+      ;;(when (or (> @loop-count 50) (> (count (:paths fp)) 10) (> (count (-> fp :paths first)) 10)) (break "path length")) ; keep
+      ;; By not looking at :vexplored for next-links here, we'll pick up duplicate v-rates.
+      ;; OTOH not doing so will result in missing rates.
+      (if (contains? fp :failure) fp
+          (let [nexts (and (not-empty (:paths fp))
+                           (next-links pn (-> fp :paths first last :Mp)))
+                tang? (and (not-empty nexts) (tangible? pn (-> nexts first :M)))]
+            (as-> fp ?fp
+              (assoc ?fp :paths
+                     (cond (empty? nexts) (next (:paths ?fp)),
+                           ;; We don't call follow-vpath-to-tang with a tangible on the path
+                           (and (not (= 1 (count (-> ?fp :paths first)))) tang?) (:paths ?fp), 
+                           :else (into (vec (map #(conj (-> ?fp :paths first) %) nexts))
+                                       (rest (:paths ?fp)))))
+              (assoc ?fp :cycle? (cycle? pn (-> ?fp :paths first last)))
+              (assoc ?fp :tang? (if (:init? ?fp) false tang?))
+              ;; Don't put terminating tangibles on explored. Need to search from those. 
+              (reduce (fn [fp l] (update fp :vexplored #(note-link-visited % l))) ?fp (if (:tang? ?fp) [] nexts))
+              (assoc ?fp :init? false)
+              (if (empty? (:paths ?fp)) ?fp
+                  (recur
+                   (cond (:cycle? ?fp) (follow-vpath-loop ?fp pn)
+                         (:tang? ?fp)  (follow-vpath-to-tang ?fp pn) 
+                         :else ?fp)))))))))
 
 (defn follow-vpath-to-tang
   "Hit a tangible. End this path."
@@ -456,11 +455,11 @@
   "Return a path (links with all the front tangibles except last removed.
    All the states on the end of the path are vanishing."
   [path pn]
-  (let [stop? (atom false)]
+  (with-local-vars [stop? false]
     (vec (reverse (reduce (fn [path link]
                             (cond @stop? path,
                                   (tangible? pn (:M link))
-                                  (do (reset! stop? true)
+                                  (do (var-set stop? true)
                                       (conj path link)),
                                   :else (conj path link)))
                           []
@@ -771,23 +770,24 @@
    :marking-key."
   ([pn] (simple-reach pn false))
   ([pn max-marks]
-   (let [k-limited? (atom false)
-         pn (update pn :transitions
-                    #(vec (map (fn [t] (assoc t :type :exponential)) %)))
-         nexts1 (next-links pn (:initial-marking pn))
-         nexts2 (k-bounding nexts1 max-marks)]
-     (when (not= (count nexts1) (count nexts2))
-       (reset! k-limited? true))
-     (loop [visited  {}
-            to-visit nexts2]
-       (if (empty? to-visit)
-         {:rgraph (vals visited) :k-limited? @k-limited?}
-         (let [nexts1 (next-links pn (-> to-visit first :Mp) visited)
-               nexts2 (k-bounding nexts1 max-marks)]
-           (when (not= (count nexts1) (count nexts2))
-             (reset! k-limited? true))
-           (recur
-            (note-link-visited visited (first to-visit))
-            (if (empty? nexts2)
-              (next to-visit)
-              (into nexts2 (rest to-visit))))))))))
+   (with-local-vars [k-limited? false]
+     (let [pn (update pn :transitions
+                      #(vec (map (fn [t] (assoc t :type :exponential)) %)))
+           nexts1 (next-links pn (:initial-marking pn))
+           nexts2 (k-bounding nexts1 max-marks)]
+       (when (not= (count nexts1) (count nexts2))
+         (var-set k-limited? true))
+       (loop [visited  {}
+              to-visit nexts2]
+         (if (empty? to-visit)
+           {:rgraph (vals visited) :k-limited? @k-limited?}
+           (let [nexts1 (next-links pn (-> to-visit first :Mp) visited)
+                 nexts2 (k-bounding nexts1 max-marks)]
+             (when (not= (count nexts1) (count nexts2))
+               (var-set k-limited? true))
+             (recur
+              (note-link-visited visited (first to-visit))
+              (if (empty? nexts2)
+                (next to-visit)
+                (into nexts2 (rest to-visit)))))))))))
+  
