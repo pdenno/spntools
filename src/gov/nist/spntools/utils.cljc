@@ -1,4 +1,4 @@
-(ns gov.nist.spntools.util.utils
+(ns gov.nist.spntools.utils
   (:require [clojure.spec.alpha :as s]
             [clojure.spec.test.alpha :as stest]
             [clojure.pprint :refer (cl-format pprint pp)]))
@@ -438,5 +438,22 @@
      (and (empty? m-mp)
           (empty? mp-m))))
 
-;;; instrument works best down here.
-(stest/instrument)
+;;; POD Does this have to consider multiplicity? 
+(defn free-choice?
+  "A PN is a free choice PN if every arc from a place to a transition is either
+    -  the only arc from that place or 
+    -  the only arc to that transition. 
+   Either concurrently enabled transitions or conflict but not both at the same marking."
+  [pn]
+  (let [normal (filter #(= :normal (:type %)) (:arcs pn))
+        pl2tr  (filter #(place? (name2obj pn (:source %))) normal)]
+    (every? (fn [p2t]
+              (let [the-place (:source p2t)
+                    the-trans (:target p2t)]
+                (or (= 1 (count (filter #(= (:source %) the-place) normal)))
+                    (= 1 (count (filter #(= (:target %) the-trans) normal))))))
+            pl2tr)))
+
+
+
+

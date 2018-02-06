@@ -1,7 +1,7 @@
-(ns gov.nist.spntools.util.pnml
-  (:require #?(:cljs-problem [clojure.data.xml :as xml :refer (parse-str)])
+(ns gov.nist.spntools.pnml
+  (:require #?(:clj [clojure.data.xml :as xml :refer (parse-str)])
             [clojure.pprint :refer (cl-format pprint)]
-            [gov.nist.spntools.util.utils :refer :all]
+            [gov.nist.spntools.utils :refer :all]
             [clojure.string :as str]))
 
 ;;; -------- 2018-02-05: Since I can't load clojure.data.xml in cljs, this file is rather useless. -------------
@@ -92,7 +92,7 @@
    :multiplicity (get-multiplicity ar)})
 
 (declare rescale)
-#?(:clj-problem
+#?(:clj
    (defn read-pnml ; POD xml
      "Return a map providing the useful elements of a PNML file.
      'useful' here means things used in steady-state computation."
@@ -135,7 +135,7 @@
 (def +given-pos+ (atom nil))
 
 (declare pn2xml place2xml transition2xml arc2xml)
-#?(:cljs-problem
+#?(:clj
    (defn write-pnml [pn & {:keys [file positions] :or {file "./data/foo.xml"}}] 
      (reset! +next-trans-pos+ {:x 0.0 :y 400.0})
      (reset! +next-place-pos+ {:x 0.0 :y 20.0})
@@ -145,7 +145,7 @@
          (xml/emit xml writer)))
      true))
 
-#?(:cljs-problem
+#?(:clj
    (defn pn2xml 
      [pn]
      (xml/element
@@ -179,7 +179,7 @@
                        (assoc :label-x-off 20.0)
                        (assoc :label-y-off 5.0))))))
 
-#?(:cljs-problem 
+#?(:clj
    (defn place2xml
      [pl & {:keys [pos] :or {pos (pos!-or-given (:name pl))}}]
      "Serialize a place. Optional pos is {:x <x-pos> :y <y-pos>}."
@@ -199,7 +199,7 @@
                                 (xml/element :offset {:x 0.0 :y 0.0})))
       (xml/element :capacity {}
                    (xml/element :value {} "0")))))
-#?(:cljs-problem
+#?(:clj
    (defn transition2xml
      [tr & {:keys [pos] :or {pos (pos!-or-given (:name tr) :trans? true)}}]
      (update-pos! tr pos)
@@ -245,8 +245,3 @@
                           :curvePoint "false"})
    (xml/element :type {:value (name (:type ar))})))
 
-
-;;; POD belongs in testing?
-#_(def files ["2017-05-06-one.xml" "join2.xml" "join3.xml" "knottenbelt.xml" "m2-feeder.xml"
-            "m2-inhib-bas-colour.xml" "m2-inhib-bas.xml" "m2-inhib-bbs.xml" "m2-j2-bas.xml"
-            "m612.xml" "marsan69.xml" "qo10.xml" "qo10-simplified.xml" "simple.xml"])
