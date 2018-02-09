@@ -1,6 +1,7 @@
 (ns gov.nist.spntools.utils
   (:require [clojure.spec.alpha :as s]
-            [clojure.spec.test.alpha :as stest]
+            #?(:cljs [cljs.reader :refer (read-string)])
+            [clojure.set :as set]
             [clojure.pprint :refer (cl-format pprint pp)]))
 
 #?(:clj
@@ -217,7 +218,7 @@
    are about to be added to the PN."
   ([pn prefix] (name-with-prefix pn prefix []))
   ([pn prefix avoid] 
-   (let [regex (re-pattern (format "^%s-(\\d+)" prefix))
+   (let [regex (re-pattern (str "^" prefix "-(\\d+)"))
          used (-> (map :name (:places pn))
                   (into (map :name (:arcs pn)))
                   (into (map :name (:transitions pn)))
@@ -228,7 +229,7 @@
                    (map #(re-matches regex %))
                    (map #(-> % second read-string))))
          id (if (empty? used) 1 (inc (apply max used)))]
-     (keyword (format "%s-%s" prefix id)))))
+     (keyword (str prefix "-" id)))))
 
 ;;; Naming convention for transitions: who is ahead of you?
 (defn new-name-ahead
@@ -286,10 +287,10 @@
   (s/assert ::pn pn)
   (let [sgraph (set (:marking-key pn))
         sorder (set new-order)
-        isect (clojure.set/intersection sgraph sorder)]
+        isect (set/intersection sgraph sorder)]
     (when (not (= (count sgraph) (count isect))) 
       (throw (ex-info "new-order invalid (count)"
-                      {:diff (clojure.set/difference sgraph sorder)})))
+                      {:diff (set/difference sgraph sorder)})))
     (assoc pn :marking-key new-order)))
 
 (defn =*
@@ -433,8 +434,8 @@
   [rgraph]
    (let [m  (set (distinct (map #(:M %)  rgraph)))
          mp (set (distinct (map #(:Mp %) rgraph)))
-         m-mp (clojure.set/difference m mp)
-         mp-m (clojure.set/difference mp m)]
+         m-mp (set/difference m mp)
+         mp-m (set/difference mp m)]
      (and (empty? m-mp)
           (empty? mp-m))))
 

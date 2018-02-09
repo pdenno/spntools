@@ -1,8 +1,7 @@
 (ns gov.nist.spntools.reach
   "reachability, excluding GSPN calculations."
   (:require [clojure.pprint :refer (cl-format pprint pp)]
-            [clojure.spec.alpha :as s]
-            [clojure.spec.test.alpha :as stest]
+            #?(:clj [clojure.spec.alpha :as s])
             [gov.nist.spntools.utils :as util]))
 
 (declare next-mark)
@@ -37,13 +36,13 @@
   [pn M trn list]
   (get list (vector M trn)))
 
-(s/def ::visited map?)
-(s/def ::trn keyword?)
-(s/def ::m vector?)
-(s/def ::pn ::util/pn)
-(s/fdef find-link
+#?(:clj (s/def ::visited map?))
+#?(:clj (s/def ::trn keyword?))
+#?(:clj (s/def ::m vector?))
+#?(:clj (s/def ::pn ::util/pn))
+#?(:clj (s/fdef find-link
         :args (s/cat :pn ::pn :M ::m :trn ::trn :list ::visited)
-        :ret  (s/or :map map? :nil nil?))
+        :ret  (s/or :map map? :nil nil?)))
 
 ;;; The target marking is completely specified by the source (marking at tail) and the transition.
 (defn next-links
@@ -145,13 +144,13 @@
    :marking-key."
   ([pn] (simple-reach pn false))
   ([pn max-marks]
-   (with-local-vars [k-limited? false]
+   (let [k-limited? (atom false)] ; No with-local-vars in cljs
      (let [pn (update pn :transitions
                       #(vec (map (fn [t] (assoc t :type :exponential)) %)))
            nexts1 (next-links pn (:initial-marking pn))
            nexts2 (k-bounding nexts1 max-marks)]
        (when (not= (count nexts1) (count nexts2))
-         (var-set k-limited? true))
+         (reset! k-limited? true))
        (loop [visited  {}
               to-visit nexts2]
          (if (empty? to-visit)
@@ -159,7 +158,7 @@
            (let [nexts1 (next-links pn (-> to-visit first :Mp) visited)
                  nexts2 (k-bounding nexts1 max-marks)]
              (when (not= (count nexts1) (count nexts2))
-               (var-set k-limited? true))
+               (reset! k-limited? true))
              (recur
               (note-link-visited visited (first to-visit))
               (if (empty? nexts2)
