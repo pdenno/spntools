@@ -3,7 +3,8 @@
   (:require [clojure.spec.alpha :as s]
             [clojure.set :as set]
             [uncomplicate.fluokitten.core :as flc]
-            [uncomplicate.fluokitten.jvm :as flm]            
+            [uncomplicate.fluokitten.jvm  :as flj]
+            [uncomplicate.fluokitten.protocols :as flp]            
             [gov.nist.spntools.utils :refer (ppprint ppp)]))
 
 (def test-pn
@@ -87,3 +88,11 @@
 
 
 
+;;;===========================================================================
+;;; https://wiki.haskell.org/Category_theory/Natural_transformation
+;;;===========================================================================
+
+(defn maybeToList
+  "Misnomer in clojure..."
+  [x]
+  (when x [x]))

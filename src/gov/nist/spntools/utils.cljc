@@ -44,7 +44,7 @@
 
 ;;; POD clojure.spec question. How do I handle the same keyword :type used for mulitple purposes?
 ;;; :type in arcs is (:normal / :inhibitor). :type in transitions is (:exponential / :immediate).
-
+(declare pn-names)
 
 (s/def ::type (fn [t] (some #(= t %) [:normal :inhibitor :exponential :immediate])))
 (s/def ::target keyword?)
@@ -60,7 +60,8 @@
 (s/def ::transitions (s/coll-of ::transition :kind vector? :min-count 1))
 (s/def ::arcs (s/coll-of ::arc :kind vector? :min-count 1))
 (s/def ::places (s/coll-of ::place :kind vector? :min-count 1))
-(s/def ::pn (s/keys :req-un [::places ::arcs ::transitions]))
+(s/def ::pn (s/and (s/keys :req-un [::places ::arcs ::transitions])
+                   #(apply distinct? (pn-names %))))
 
 (s/def ::mark-val (s/int-in 0 ##Inf))
 (s/def ::marking (s/coll-of ::mark-val :kind vector?))
@@ -207,6 +208,12 @@
   [imm key suffix]
   (keyword (str (name imm) "-" (name key) suffix)))
 
+(defn pn-names [pn]
+  "Return a collection of the names used in PN."
+  (-> (map :name (:places pn))
+      (into (map :name (:arcs pn)))
+      (into (map :name (:transitions pn)))))
+
 (defn name-with-prefix
   "Return the 'next' name string with PREFIX. Thus 
    (name-with-prefix pn 'wait') might return 'wait-1'.
@@ -215,15 +222,11 @@
   ([pn prefix] (name-with-prefix pn prefix []))
   ([pn prefix avoid] 
    (let [regex (re-pattern (str "^" prefix "-(\\d+)"))
-         used (-> (map :name (:places pn))
-                  (into (map :name (:arcs pn)))
-                  (into (map :name (:transitions pn)))
-                  (into avoid)
-                  (->>
+         used (->> (into (pn-names pn) avoid)
                    (map name)
                    (filter #(re-matches regex %))
                    (map #(re-matches regex %))
-                   (map #(-> % second read-string))))
+                   (map #(-> % second read-string)))
          id (if (empty? used) 1 (inc (apply max used)))]
      (keyword (str prefix "-" id)))))
 
