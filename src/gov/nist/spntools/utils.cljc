@@ -241,11 +241,14 @@
         "-before")))
 
 (defn make-arc
-  [pn source target & {:keys [type aid multiplicity debug]
-                       :or {type :normal aid (next-aid pn) multiplicity 1}}]
+  [pn source target & {:keys [type aid multiplicity debug name]
+                       :or {type :normal
+                            name (keyword (str "aa-" aid))
+                            aid (next-aid pn)
+                            multiplicity 1}}]
   (assert (pn? pn))
   (assert (keyword? type))
-  (as-> {:aid aid :source source :target target :name (keyword (str "aa-" aid))
+  (as-> {:aid aid :source source :target target :name name
          :type type :multiplicity multiplicity} ?ar
     (if debug (assoc ?ar :debug debug) ?ar)))
 
