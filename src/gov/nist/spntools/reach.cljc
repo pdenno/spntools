@@ -1,6 +1,7 @@
 (ns gov.nist.spntools.reach
   "reachability, excluding GSPN calculations."
   (:require [clojure.pprint :refer (cl-format pprint pp)]
+            [clojure.set :as set]
             #?(:clj [clojure.spec.alpha :as s])
             [gov.nist.spntools.utils :as util]))
 
@@ -226,8 +227,6 @@
   ([pn max-marks]
    (let [k-limited? (atom false)] ; No with-local-vars in cljs
      (let [pn (as-> pn ?pn
-                  (update ?pn :transitions
-                          #(vec (map (fn [t] (assoc t :type :exponential)) %)))
                   (assoc ?pn :trns (map :name (:transitions ?pn)))
                   (assoc ?pn :into (calc-into ?pn))
                   (assoc ?pn :outof (calc-outof ?pn))
@@ -256,3 +255,17 @@
               (if (empty? nexts2)
                 (next to-visit)
                 (into nexts2 (rest to-visit)))))))))))
+
+(defn simple-reach-valid?
+  "Check a reachability graph for m-mp and mp-m errors."
+  [rgraph]
+   (let [m  (set (keys rgraph))
+         mp (reduce-kv (fn [accum k v]
+                         (into accum (map second v)))
+                       #{}
+                       rgraph)
+         m-mp (set/difference m mp)
+         mp-m (set/difference mp m)]
+     (and (empty? m-mp)
+          (empty? mp-m))))
+
