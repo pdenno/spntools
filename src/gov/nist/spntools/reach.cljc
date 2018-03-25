@@ -143,10 +143,9 @@
   [pn M trn list]
   (get list (vector M trn)))
 
-(defn simple-fireable? ; POD *MEMOIZE* -- or something like it. 
+(defn simple-fireable? 
   "Return true if transition is fireable under the argument marking."
   [pn mark tr-name]
-  (assert (keyword? tr-name)) ; POD remove. 
   (let [^clojure.lang.PersistentVector marking-key (:marking-key pn)]
     (and
      (every? (fn [ar] (>= (nth mark (.indexOf marking-key (:source ar)))
@@ -159,15 +158,16 @@
 (defn simple-next-mark
   "Return the mark that is at the head of the argument link."
   [pn mark tr-name]
-  (assert (keyword? tr-name)) ; POD remove
   (as-> mark ?m
     (reduce (fn [mar arc]
-              (let [indx (:pid (util/name2obj pn (:source arc)))] 
+              (let [src (:source arc)
+                    indx (-> pn :place-map src :pid)]
                 (update mar indx #(- % (:multiplicity arc)))))
             ?m
             (-> pn :into tr-name :normal))
     (reduce (fn [mar arc] 
-              (let [indx (:pid (util/name2obj pn (:target arc)))] 
+              (let [tar (:target arc)
+                    indx (-> pn :place-map tar :pid)]
                 (update mar indx #(+ % (:multiplicity arc)))))
             ?m ; inhibitors don't exit transitions
             (-> pn :outof tr-name))))
@@ -177,12 +177,13 @@
   ([pn mark] (simple-next-links pn mark false))
   ([pn mark visited]
    (if mark
-     (let [trns
+     (let [tr-map (:trans-map pn)
+           trns
            (as-> (:trns pn) ?trns
              (filter #(simple-fireable? pn mark %) ?trns)
              ;; If visited specified, it tracks mark/trans already visited. Remove these.
              (if visited (remove #(simple-find-link pn mark % visited) ?trns) ?trns))
-           trs  (map #(util/name2obj pn %) trns)]
+           trs (map tr-map trns)]
        (not-empty
         (vec
          (map (fn [tr]
@@ -229,7 +230,11 @@
                           #(vec (map (fn [t] (assoc t :type :exponential)) %)))
                   (assoc ?pn :trns (map :name (:transitions ?pn)))
                   (assoc ?pn :into (calc-into ?pn))
-                  (assoc ?pn :outof (calc-outof ?pn)))
+                  (assoc ?pn :outof (calc-outof ?pn))
+                  (assoc ?pn :place-map (zipmap (->> ?pn :places (map :name))
+                                                (:places ?pn)))
+                  (assoc ?pn :trans-map (zipmap (->> ?pn :transitions (map :name))
+                                                (:transitions ?pn))))
            nexts1 (simple-next-links pn (:initial-marking pn))
            nexts2 (k-bounding nexts1 max-marks)]
        (when (not= (count nexts1) (count nexts2))
@@ -237,7 +242,11 @@
        (loop [visited  {}
               to-visit nexts2]
          (if (empty? to-visit)
-           {:rgraph (vals visited) :k-limited? @k-limited?}
+           {:k-limited? @k-limited? ; done
+            :rgraph (reduce (fn [result [[mark trans] link]]
+                              (update result mark #(conj % [trans (:Mp link)])))
+                            {}
+                            visited)}
            (let [nexts1 (simple-next-links pn (-> to-visit first :Mp) visited)
                  nexts2 (k-bounding nexts1 max-marks)]
              (when (not= (count nexts1) (count nexts2))
@@ -247,7 +256,3 @@
               (if (empty? nexts2)
                 (next to-visit)
                 (into nexts2 (rest to-visit)))))))))))
-  
-;;; FIRST: Make sure that marking-key / :pid is consistent! <++++++++++++++++++
-;;; NEXT: name2obj
-;;; THEN: memoize simple-fireable?
