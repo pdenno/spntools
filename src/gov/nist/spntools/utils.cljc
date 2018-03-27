@@ -74,65 +74,79 @@
 
 (defn tid2obj
   [pn tid]
-  (assert (keyword? tid))
   (some #(when (= (:tid %) tid) %) (:transitions pn)))
 
 (defn pid2obj
   [pn pid]
-  (assert (keyword? pid))
   (some #(when (= (:pid %) pid) %) (:places pn)))
 
 (defn aid2obj
   [pn aid]
-  (assert (keyword? aid))
   (some #(when (= (:aid %) aid) %) (:arcs pn)))
 
 (defn arcs-into
   "Return the arcs into the named object."
   [pn name]
-  (assert (keyword? name))
-  (s/assert ::pn pn)
   (filter #(= (:target %) name) (:arcs pn)))
 
 (defn arcs-outof
   "Return the arcs exiting the named object."
   [pn name]
-  (assert (keyword? name))
-  (s/assert ::pn pn)
   (filter #(= (:source %) name) (:arcs pn)))
 
 (defn name2obj
+  "Return the object named by the argument. Avoid using this in critical code!"
   [pn name]
-  (assert (keyword? name))
-  (s/assert ::pn pn)
   (or 
    (some #(when (= name (:name %)) %) (:places pn))
    (some #(when (= name (:name %)) %) (:transitions pn))
    (some #(when (= name (:name %)) %) (:arcs pn))))
+
+(defn follow-path-preprocess
+  "Set up some properties in the PN to make path-following go faster.
+   Note that :arcs-into has entries :normal and :inhibitor
+   (e.g. index to name, then :normal)."
+  [pn]
+  (let [tr-names (map :name (:transitions pn))]
+     (as-> pn ?pn
+       (assoc ?pn :arcs-into  (zipmap tr-names (map #(group-by :type (arcs-into pn %)) tr-names)))
+       (assoc ?pn :arcs-outof (zipmap tr-names (map #(arcs-outof pn %) tr-names)))
+       (assoc ?pn :place-map  (zipmap (->> ?pn :places (map :name))
+                                     (:places ?pn)))
+       (assoc ?pn :trans-map  (zipmap (->> ?pn :transitions (map :name))
+                                      (:transitions ?pn))))))
+(defn path-preprocessed?
+  "Check that the requite properties for path following are set."
+  [pn]
+  (and (contains? pn :arcs-into)
+       (contains? pn :arcs-outof)
+       (contains? pn :place-map)
+       (contains? pn :trans-map)))
 
 (def ^:dynamic *path-to* nil)
 (def ^:dynamic *visited* nil)
 (defn follow-path
   "Return a sequence of places, transitions, arcs forward of OBJ."
   [pn obj]
-  (s/assert ::pn pn)
-  (cond (:tid obj) (arcs-outof pn (:name obj)),
-        (:pid obj) (arcs-outof pn (:name obj)),
-        (:aid obj) (if (contains? @*visited* (:target obj))
-                     nil
-                     (do (swap! *visited* conj (:target obj))
-                         (list (name2obj pn (:target obj)))))))
+  (let [pn (cond-> pn (path-preprocessed? pn) (follow-path-preprocess))]
+    (cond (:tid obj) (-> pn :arcs-outof (:name obj)),
+          (:pid obj) (-> pn :arcs-outof (:name obj)),
+          (:aid obj) (if (contains? @*visited* (:target obj))
+                       nil
+                       (do (swap! *visited* conj (:target obj))
+                           (list (or (-> pn :place-map (:target obj)) 
+                                     (-> pn :trans-map (:target obj)))))))))
 
 (defn follow-path-back
   "Return a sequence of places, transitions, arcs forward of OBJ."
   [pn obj]
-  (s/assert ::pn pn)
-  (cond (:tid obj) (arcs-into pn (:name obj)),
-        (:pid obj) (arcs-into pn (:name obj)),
-        (:aid obj) (if (contains? @*visited* (:source obj))
-                     nil
-                     (do (swap! *visited* conj (:source obj))
-                         (list (name2obj pn (:source obj)))))))
+  (let [pn (cond-> pn (path-preprocessed? pn) (follow-path-preprocess))]
+    (cond (:tid obj) (-> pn :arcs-into (:name obj) :normal), 
+          (:pid obj) (-> pn :arcs-into (:name obj) :normal),
+          (:aid obj) (if (contains? @*visited* (:source obj))
+                       nil
+                       (do (swap! *visited* conj (:source obj))
+                           (list (name2obj pn (:source obj))))))))
 
 (defn paths-to-aux
   [pn here to nsteps & {:keys [so-far back?] :or {so-far []}}]
@@ -151,11 +165,11 @@
   "Return the paths from FROM to TO (both are names of places or transitions) 
    in exactly STEPS steps (counting places, transitions and arcs)."
   [pn from to nsteps & {:keys [back?]}]
-  (s/assert ::pn pn)
   (binding [*path-to* (atom [])
             *visited* (atom #{from})]
-    (paths-to-aux pn (name2obj pn from) to nsteps :back? back?)
-    @*path-to*))
+    (let [pn (cond-> pn (path-preprocessed? pn) (follow-path-preprocess))]
+      (paths-to-aux pn (name2obj pn from) to nsteps :back? back?)
+      @*path-to*)))
 
 (defn arc? [obj] (:aid obj))
 (defn place? [obj] (:pid obj))
@@ -164,14 +178,11 @@
 
 (defn immediate?
   [pn name]
-  (assert (keyword? name) (cl-format nil "~S is not a keyword" name))
-  (s/assert ::pn pn)
   (= :immediate (:type (name2obj pn name))))
 
 (defn eliminate-pn
   "Transform the PN graph by eliminating the argument element."
   [pn elem]
-  (s/assert ::pn pn)
   (cond (:pid elem) ; It is a place.
         (assoc pn :places (vec (remove #(= % elem) (:places pn))))
         (:tid elem) ; It is a transition
@@ -182,7 +193,6 @@
 (defn add-pn
   "Transform the PN graph by adding the argument element."
   [pn elem]
-  (s/assert ::pn pn)
   (cond (:pid elem) ; It is a place.
         (assoc pn :places (conj (:places pn) elem))
         (:tid elem) ; It is a transition
@@ -277,7 +287,6 @@
   "Return a map {:marking-key <vector of place names> :initial-marking <vector of integers>}
    This doesn't care what the actual pid numbers are, just there relative ordering."
   [pn]
-  (s/assert ::pn pn)
   (let [sorted (sort #(< (:pid %1) (:pid %2)) (:places pn))]
     {:marking-key (vec (map :name sorted))
      :initial-marking
@@ -286,7 +295,6 @@
 (defn reorder-markings
   "Reorder the markings calculated from the reachability graph so as to match a textbook example."
   [pn new-order]
-  (s/assert ::pn pn)
   (let [sgraph (set (:marking-key pn))
         sorder (set new-order)
         isect (set/intersection sgraph sorder)]
@@ -383,8 +391,6 @@
 (defn arc-index
   "Return the index of the named arc in pn. (For use with assoc-in, update-in, etc.)"
   [pn name]
-  (assert (keyword? name))
-  (s/assert ::pn pn)
   (loop [n 0
          arcs (:arcs pn)]
     (cond (empty? arcs) nil
@@ -394,8 +400,6 @@
 (defn trans-index
   "Return the index of the named index in pn. (For use with assoc-in, update-in, etc.)"
   [pn name]
-  (assert (keyword? name))
-  (s/assert ::pn pn)
   (loop [n 0
          trans (:transitions pn)]
     (cond (empty? trans) nil
@@ -405,8 +409,6 @@
 (defn place-index
   "Return the index of the named index in pn. (For use with assoc-in, update-in, etc.)"
   [pn name]
-  (assert (keyword? name))
-  (s/assert ::pn pn)
   (loop [n 0
          places (:places pn)]
     (cond (empty? places) nil
@@ -416,7 +418,6 @@
 (defn set-marking
   "Set the marking to the argument value."
   [pn marking]
-  (s/assert ::pn pn)
   (as-> pn ?pn
     (assoc ?pn :initial-marking marking)
     (update ?pn :places

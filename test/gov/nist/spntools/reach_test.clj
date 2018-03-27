@@ -3,27 +3,31 @@
             [gov.nist.spntools.utils :refer :all]
             [gov.nist.spntools.reach :as pnr :refer :all]))
 
+(defn map-with-set-vals
+  "Change the values of the map into sets."
+  [m]
+  (reduce-kv (fn [accum k v] (assoc accum k (set v)))
+             {}
+             m))
+
+(def rgraph
+   {[0 0 1 1 0] #{[:m2-complete-job [0 0 1 0 1]] [:m1-complete-job [0 1 0 1 0]]},
+    [1 1 0 0 1] #{[:m2-start-job [0 1 0 1 0]]},
+    [1 0 1 0 1] #{[:m2-start-job [0 0 1 1 0]] [:m1-complete-job [1 1 0 0 1]]},
+    [0 1 0 1 0] #{[:m2-complete-job [0 1 0 0 1]] [:m1-start-job [1 0 1 1 0]]},
+    [0 0 1 0 1] #{[:m1-complete-job [0 1 0 0 1]]},
+    [1 0 1 1 0] #{[:m2-complete-job [1 0 1 0 1]] [:m1-complete-job [1 1 0 1 0]]},
+    [0 1 0 0 1] #{[:m1-start-job [1 0 1 0 1]]},
+    [1 1 0 1 0] #{[:m2-complete-job [1 1 0 0 1]]}})
+
 ;;;  POD This will give a false negative if the marking key changes!
 ;;;  Marking key should be forced. Better yet, stop using .xml! Save the EDN. 
 (deftest test-simple-reach
   (testing "whether simple reach calculates the right graph."
-    (is (=
-         #{{:M [0 0 1 1 0], :fire :m1-complete-job, :Mp [0 1 0 1 0], :rate 0.9}
-           {:M [1 1 0 0 1], :fire :m2-start-job,    :Mp [0 1 0 1 0], :rate 1.0}
-           {:M [1 0 1 0 1], :fire :m1-complete-job, :Mp [1 1 0 0 1], :rate 0.9}
-           {:M [0 1 0 1 0], :fire :m1-start-job,    :Mp [1 0 1 1 0], :rate 1.0}
-           {:M [0 0 1 0 1], :fire :m1-complete-job, :Mp [0 1 0 0 1], :rate 0.9}
-           {:M [1 0 1 1 0], :fire :m1-complete-job, :Mp [1 1 0 1 0], :rate 0.9}
-           {:M [1 0 1 0 1], :fire :m2-start-job,    :Mp [0 0 1 1 0], :rate 1.0}
-           {:M [1 0 1 1 0], :fire :m2-complete-job, :Mp [1 0 1 0 1], :rate 1.0}
-           {:M [0 1 0 0 1], :fire :m1-start-job,    :Mp [1 0 1 0 1], :rate 1.0}
-           {:M [1 1 0 1 0], :fire :m2-complete-job, :Mp [1 1 0 0 1], :rate 1.0}
-           {:M [0 1 0 1 0], :fire :m2-complete-job, :Mp [0 1 0 0 1], :rate 1.0}
-           {:M [0 0 1 1 0], :fire :m2-complete-job, :Mp [0 0 1 0 1], :rate 1.0}}
-         (-> "data/m2-inhib-bas.clj"
+    (is (= rgraph
+         (-> "data/tests/m2-inhib-bas.clj"
              load-file
              pnr/renumber-pids
              pnr/simple-reach
              :rgraph
-             (->> (map #(dissoc % :rate-fn)))
-             set)))))
+             map-with-set-vals)))))

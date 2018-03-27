@@ -151,10 +151,10 @@
     (and
      (every? (fn [ar] (>= (nth mark (.indexOf marking-key (:source ar)))
                           (:multiplicity ar)))
-             (-> pn :into tr-name :normal))
+             (-> pn :arcs-into tr-name :normal))
      (every? (fn [ar] (<  (nth mark (.indexOf marking-key (:source ar)))
                           (:multiplicity ar)))
-             (-> pn :into tr-name :inhibitor)))))
+             (-> pn :arcs-into tr-name :inhibitor)))))
 
 (defn simple-next-mark
   "Return the mark that is at the head of the argument link."
@@ -165,13 +165,13 @@
                     indx (-> pn :place-map src :pid)]
                 (update mar indx #(- % (:multiplicity arc)))))
             ?m
-            (-> pn :into tr-name :normal))
+            (-> pn :arcs-into tr-name :normal))
     (reduce (fn [mar arc] 
               (let [tar (:target arc)
                     indx (-> pn :place-map tar :pid)]
                 (update mar indx #(+ % (:multiplicity arc)))))
             ?m ; inhibitors don't exit transitions
-            (-> pn :outof tr-name))))
+            (-> pn :arcs-outof tr-name))))
 
 (defn simple-next-links
   "next-links with no rates, no immediate transition checking."
@@ -194,21 +194,6 @@
               trs))))
      nil)))
 
-(defn calc-outof
-  "Make a map of arcs out-of a transition."
-  [pn]
-  (let [tr-names (:trns pn)]
-    (zipmap tr-names (map #(util/arcs-outof pn %)
-                          tr-names))))
-
-(defn calc-into
-  "Make a map of arcs out-of a transition, partitioned by :normal/:inhibitor."
-  [pn]
-  (let [tr-names (:trns pn)]
-    (zipmap tr-names
-            (map #(group-by :type (util/arcs-into pn %))
-                 tr-names))))
-
 (defn simple-note-link-visited
   "Links are tracked by :M and :fire because (1) :fire could be a path,
    or (2) :rate might differ, or (3) good for diagnostics."
@@ -227,13 +212,8 @@
   ([pn max-marks]
    (let [k-limited? (atom false)] ; No with-local-vars in cljs
      (let [pn (as-> pn ?pn
-                  (assoc ?pn :trns (map :name (:transitions ?pn)))
-                  (assoc ?pn :into (calc-into ?pn))
-                  (assoc ?pn :outof (calc-outof ?pn))
-                  (assoc ?pn :place-map (zipmap (->> ?pn :places (map :name))
-                                                (:places ?pn)))
-                  (assoc ?pn :trans-map (zipmap (->> ?pn :transitions (map :name))
-                                                (:transitions ?pn))))
+                (assoc ?pn :trns (map :name (:transitions ?pn)))
+                (util/follow-path-preprocess ?pn))
            nexts1 (simple-next-links pn (:initial-marking pn))
            nexts2 (k-bounding nexts1 max-marks)]
        (when (not= (count nexts1) (count nexts2))
