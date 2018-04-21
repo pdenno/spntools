@@ -63,7 +63,7 @@
 (s/def ::pn (s/and (s/keys :req-un [::places ::arcs ::transitions])
                    #(apply distinct? (pn-names %))))
 
-(s/def ::mark-val (s/int-in 0 ##Inf))
+(s/def ::mark-val (s/int-in 0 10000)) ; cljs doesn't have ##Inf. 
 (s/def ::marking (s/coll-of ::mark-val :kind vector?))
 
 (defn pn?
