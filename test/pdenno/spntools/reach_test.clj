@@ -1,7 +1,7 @@
-(ns gov.nist.spntools.reach-test
+(ns pdenno.spntools.reach-test
   (:require [clojure.test :refer :all]
-            [gov.nist.spntools.utils :refer :all]
-            [gov.nist.spntools.reach :as pnr :refer :all]))
+            [pdenno.spntools.utils :refer :all]
+            [pdenno.spntools.reach :as pnr :refer :all]))
 
 (defn map-with-set-vals
   "Change the values of the map into sets."

@@ -1,9 +1,9 @@
-(ns gov.nist.spntools.reach
+(ns pdenno.spntools.reach
   "reachability, excluding GSPN calculations."
   (:require [clojure.pprint :refer (cl-format pprint pp)]
             [clojure.set :as set]
             #?(:clj [clojure.spec.alpha :as s])
-            [gov.nist.spntools.utils :as util]))
+            [pdenno.spntools.utils :as util]))
 
 (declare next-mark)
 

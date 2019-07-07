@@ -1,4 +1,4 @@
-(ns gov.nist.spntools.utils
+(ns pdenno.spntools.utils
   (:require [clojure.spec.alpha :as s]
             #?(:cljs [cljs.reader :refer (read-string)])
             [clojure.set :as set]

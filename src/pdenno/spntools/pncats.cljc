@@ -1,11 +1,11 @@
-(ns gov.nist.spntools.pncats
+(ns pdenno.spntools.pncats
   "Categorical modeling of Petri nets"
   (:require [clojure.spec.alpha :as s]
             [clojure.set :as set]
             [uncomplicate.fluokitten.core :as flc]
             [uncomplicate.fluokitten.jvm  :as flj]
             [uncomplicate.fluokitten.protocols :as flp]            
-            [gov.nist.spntools.utils :refer (ppprint ppp)]))
+            [pdenno.spntools.utils :refer (ppprint ppp)]))
 
 (def test-pn
   {:places [{:name :p1 :initial-tokens 0},

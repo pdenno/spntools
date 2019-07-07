@@ -1,7 +1,7 @@
-(ns gov.nist.spntools.pnml
+(ns pdenno.spntools.pnml
   (:require #?(:clj [clojure.data.xml :as xml :refer (parse-str)])
             [clojure.pprint :refer (cl-format pprint)]
-            [gov.nist.spntools.utils :refer :all]
+            [pdenno.spntools.utils :refer :all]
             [clojure.string :as str]))
 
 ;;; -------- 2018-02-05: Since I can't load clojure.data.xml in cljs, this file is rather useless. -------------
