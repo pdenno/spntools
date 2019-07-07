@@ -1,4 +1,4 @@
-(defproject gov.nist/spntools "0.1.0"
+(defproject pdenno/spntools "0.1.0"
   :description "Basic tools for Generalized Stochastic Petri Nets (GSPN), colored (CGSPN) and queueing PNs.
                 Excludes steady-state calculation. (See pdenno/gspn for that.)"
   :url "https://www.nist.gov/programs-projects/modeling-methodology-smart-manufacturing-systems"
