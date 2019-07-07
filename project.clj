@@ -8,7 +8,7 @@
   :dependencies [[org.clojure/clojure "1.9.0"]
                  [org.clojure/data.xml "0.0.8"] ; POD cljs xml problem
                  [uncomplicate/fluokitten "0.6.1"]]
-  :repl-options {:init-ns gov.nist.spntools.reach})
+  :repl-options {:init-ns pdenno.spntools.reach})
 
 
 
