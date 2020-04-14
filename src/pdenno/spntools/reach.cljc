@@ -201,7 +201,7 @@
   (let [key (vector (:M link) (:fire link))]
     (assoc lis key link)))
 
-;;; Reachability Graph (includes non-tangible states).
+;;; Reachability Graph (includes vanishing markings).
 ;;; Much simpler than tangible reachability graph! No paths. 
 (defn simple-reach
   "Return {:rgraph ... :k-limited? true/false} where :rgraph is the reachability graph 
